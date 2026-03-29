@@ -1,0 +1,84 @@
+[
+  { "id": 1001, "dramaId": 101, "episodeNumber": 1, "title": "Episode 1", "duration": "02:10", "slug": "suamiku-direbut-adikku-ep-1", "description": "Awal mula pengkhianatan terungkap.", "sortOrder": 1 },
+  { "id": 1002, "dramaId": 101, "episodeNumber": 2, "title": "Episode 2", "duration": "02:08", "slug": "suamiku-direbut-adikku-ep-2", "description": "Konflik keluarga mulai memanas.", "sortOrder": 2 },
+  { "id": 1003, "dramaId": 101, "episodeNumber": 3, "title": "Episode 3", "duration": "02:15", "slug": "suamiku-direbut-adikku-ep-3", "description": "Rahasia lama akhirnya dibuka.", "sortOrder": 3 },
+  { "id": 1004, "dramaId": 101, "episodeNumber": 4, "title": "Episode 4", "duration": "02:12", "slug": "suamiku-direbut-adikku-ep-4", "description": "Keputusan besar mulai diambil.", "sortOrder": 4 },
+
+  { "id": 2001, "dramaId": 102, "episodeNumber": 1, "title": "Episode 1", "duration": "01:58", "slug": "cinta-datang-terlambat-ep-1", "sortOrder": 1 },
+  { "id": 2002, "dramaId": 102, "episodeNumber": 2, "title": "Episode 2", "duration": "02:04", "slug": "cinta-datang-terlambat-ep-2", "sortOrder": 2 },
+  { "id": 2003, "dramaId": 102, "episodeNumber": 3, "title": "Episode 3", "duration": "02:01", "slug": "cinta-datang-terlambat-ep-3", "sortOrder": 3 },
+
+  { "id": 3001, "dramaId": 103, "episodeNumber": 1, "title": "Episode 1", "duration": "02:20", "slug": "rahasia-di-balik-pernikahan-ep-1", "sortOrder": 1 },
+  { "id": 3002, "dramaId": 103, "episodeNumber": 2, "title": "Episode 2", "duration": "02:11", "slug": "rahasia-di-balik-pernikahan-ep-2", "sortOrder": 2 },
+  { "id": 3003, "dramaId": 103, "episodeNumber": 3, "title": "Episode 3", "duration": "02:16", "slug": "rahasia-di-balik-pernikahan-ep-3", "sortOrder": 3 },
+
+  { "id": 4001, "dramaId": 104, "episodeNumber": 1, "title": "Episode 1", "duration": "02:05", "slug": "jodoh-tidak-lari-kemana-ep-1", "sortOrder": 1 },
+  { "id": 4002, "dramaId": 104, "episodeNumber": 2, "title": "Episode 2", "duration": "02:09", "slug": "jodoh-tidak-lari-kemana-ep-2", "sortOrder": 2 },
+  { "id": 4003, "dramaId": 104, "episodeNumber": 3, "title": "Episode 3", "duration": "02:14", "slug": "jodoh-tidak-lari-kemana-ep-3", "sortOrder": 3 },
+
+  { "id": 5001, "dramaId": 105, "episodeNumber": 1, "title": "Episode 1", "duration": "02:07", "slug": "pernah-tunggu-indahnya-cinta-ep-1", "sortOrder": 1 },
+  { "id": 5002, "dramaId": 105, "episodeNumber": 2, "title": "Episode 2", "duration": "02:03", "slug": "pernah-tunggu-indahnya-cinta-ep-2", "sortOrder": 2 },
+
+  { "id": 6001, "dramaId": 106, "episodeNumber": 1, "title": "Episode 1", "duration": "02:06", "slug": "hanya-kau-yang-pantas-kucintai-ep-1", "sortOrder": 1 },
+  { "id": 6002, "dramaId": 106, "episodeNumber": 2, "title": "Episode 2", "duration": "02:10", "slug": "hanya-kau-yang-pantas-kucintai-ep-2", "sortOrder": 2 },
+
+  { "id": 7001, "dramaId": 107, "episodeNumber": 1, "title": "Episode 1", "duration": "02:18", "slug": "merajut-kembali-kehangatan-ep-1", "sortOrder": 1 },
+  { "id": 7002, "dramaId": 107, "episodeNumber": 2, "title": "Episode 2", "duration": "02:12", "slug": "merajut-kembali-kehangatan-ep-2", "sortOrder": 2 },
+
+  { "id": 8001, "dramaId": 108, "episodeNumber": 1, "title": "Episode 1", "duration": "02:02", "slug": "getar-cinta-sang-bos-mafia-ep-1", "sortOrder": 1 },
+  { "id": 8002, "dramaId": 108, "episodeNumber": 2, "title": "Episode 2", "duration": "02:09", "slug": "getar-cinta-sang-bos-mafia-ep-2", "sortOrder": 2 },
+
+  { "id": 9001, "dramaId": 201, "episodeNumber": 1, "title": "Episode 1", "duration": "02:05", "slug": "kontrak-cinta-semalam-ep-1", "sortOrder": 1 },
+  { "id": 9002, "dramaId": 201, "episodeNumber": 2, "title": "Episode 2", "duration": "02:09", "slug": "kontrak-cinta-semalam-ep-2", "sortOrder": 2 },
+
+  { "id": 10001, "dramaId": 202, "episodeNumber": 1, "title": "Episode 1", "duration": "02:11", "slug": "ceo-dingin-jatuh-hati-ep-1", "sortOrder": 1 },
+  { "id": 10002, "dramaId": 202, "episodeNumber": 2, "title": "Episode 2", "duration": "02:14", "slug": "ceo-dingin-jatuh-hati-ep-2", "sortOrder": 2 },
+
+  { "id": 11001, "dramaId": 203, "episodeNumber": 1, "title": "Episode 1", "duration": "01:59", "slug": "takdir-kedua-di-musim-hujan-ep-1", "sortOrder": 1 },
+  { "id": 11002, "dramaId": 203, "episodeNumber": 2, "title": "Episode 2", "duration": "02:03", "slug": "takdir-kedua-di-musim-hujan-ep-2", "sortOrder": 2 },
+
+  { "id": 12001, "dramaId": 204, "episodeNumber": 1, "title": "Episode 1", "duration": "02:00", "slug": "dubbing-cintaku-tak-bisa-diam-ep-1", "isLocked": false, "isVipOnly": false, "sortOrder": 1 },
+  { "id": 12002, "dramaId": 204, "episodeNumber": 2, "title": "Episode 2", "duration": "02:06", "slug": "dubbing-cintaku-tak-bisa-diam-ep-2", "isLocked": false, "isVipOnly": false, "sortOrder": 2 },
+
+  { "id": 13001, "dramaId": 301, "episodeNumber": 1, "title": "Episode 1", "duration": "02:08", "slug": "mantan-suamiku-menyesal-ep-1", "sortOrder": 1 },
+  { "id": 13002, "dramaId": 301, "episodeNumber": 2, "title": "Episode 2", "duration": "02:10", "slug": "mantan-suamiku-menyesal-ep-2", "sortOrder": 2 },
+
+  { "id": 14001, "dramaId": 302, "episodeNumber": 1, "title": "Episode 1", "duration": "02:15", "slug": "pewaris-rahasia-keluarga-besar-ep-1", "sortOrder": 1 },
+  { "id": 14002, "dramaId": 302, "episodeNumber": 2, "title": "Episode 2", "duration": "02:11", "slug": "pewaris-rahasia-keluarga-besar-ep-2", "sortOrder": 2 },
+
+  { "id": 15001, "dramaId": 303, "episodeNumber": 1, "title": "Episode 1", "duration": "02:01", "slug": "salah-kirim-pesan-ke-tuan-muda-ep-1", "sortOrder": 1 },
+  { "id": 15002, "dramaId": 303, "episodeNumber": 2, "title": "Episode 2", "duration": "02:04", "slug": "salah-kirim-pesan-ke-tuan-muda-ep-2", "sortOrder": 2 },
+
+  { "id": 16001, "dramaId": 304, "episodeNumber": 1, "title": "Episode 1", "duration": "02:07", "slug": "dubbing-pernikahan-palsu-terlalu-nyata-ep-1", "isLocked": false, "isVipOnly": false, "sortOrder": 1 },
+  { "id": 16002, "dramaId": 304, "episodeNumber": 2, "title": "Episode 2", "duration": "02:02", "slug": "dubbing-pernikahan-palsu-terlalu-nyata-ep-2", "isLocked": false, "isVipOnly": false, "sortOrder": 2 },
+
+  { "id": 17001, "dramaId": 401, "episodeNumber": 1, "title": "Episode 1", "duration": "02:13", "slug": "istri-bayaran-sang-konglomerat-ep-1", "sortOrder": 1 },
+  { "id": 17002, "dramaId": 401, "episodeNumber": 2, "title": "Episode 2", "duration": "02:09", "slug": "istri-bayaran-sang-konglomerat-ep-2", "sortOrder": 2 },
+
+  { "id": 18001, "dramaId": 402, "episodeNumber": 1, "title": "Episode 1", "duration": "02:06", "slug": "rahasia-anak-kembar-yang-tertukar-ep-1", "sortOrder": 1 },
+  { "id": 18002, "dramaId": 402, "episodeNumber": 2, "title": "Episode 2", "duration": "02:03", "slug": "rahasia-anak-kembar-yang-tertukar-ep-2", "sortOrder": 2 },
+
+  { "id": 19001, "dramaId": 501, "episodeNumber": 1, "title": "Episode 1", "duration": "02:04", "slug": "tuan-muda-mencari-cinta-ep-1", "sortOrder": 1 },
+  { "id": 19002, "dramaId": 501, "episodeNumber": 2, "title": "Episode 2", "duration": "02:08", "slug": "tuan-muda-mencari-cinta-ep-2", "sortOrder": 2 },
+
+  { "id": 20001, "dramaId": 502, "episodeNumber": 1, "title": "Episode 1", "duration": "02:01", "slug": "dubbing-terlanjur-menikahi-musuhku-ep-1", "isLocked": false, "isVipOnly": false, "sortOrder": 1 },
+  { "id": 20002, "dramaId": 502, "episodeNumber": 2, "title": "Episode 2", "duration": "02:05", "slug": "dubbing-terlanjur-menikahi-musuhku-ep-2", "isLocked": false, "isVipOnly": false, "sortOrder": 2 },
+
+  { "id": 21001, "dramaId": 601, "episodeNumber": 1, "title": "Episode 1", "duration": "02:12", "slug": "malam-pertama-bersama-pewaris-ep-1", "sortOrder": 1 },
+  { "id": 21002, "dramaId": 601, "episodeNumber": 2, "title": "Episode 2", "duration": "02:14", "slug": "malam-pertama-bersama-pewaris-ep-2", "sortOrder": 2 },
+
+  { "id": 22001, "dramaId": 602, "episodeNumber": 1, "title": "Episode 1", "duration": "02:07", "slug": "demi-ibuku-aku-menikah-ep-1", "sortOrder": 1 },
+  { "id": 22002, "dramaId": 602, "episodeNumber": 2, "title": "Episode 2", "duration": "02:09", "slug": "demi-ibuku-aku-menikah-ep-2", "sortOrder": 2 },
+
+  { "id": 23001, "dramaId": 701, "episodeNumber": 1, "title": "Episode 1", "duration": "02:03", "slug": "cinta-kontrak-penuh-bahaya-ep-1", "sortOrder": 1 },
+  { "id": 23002, "dramaId": 701, "episodeNumber": 2, "title": "Episode 2", "duration": "02:06", "slug": "cinta-kontrak-penuh-bahaya-ep-2", "sortOrder": 2 },
+
+  { "id": 24001, "dramaId": 702, "episodeNumber": 1, "title": "Episode 1", "duration": "02:02", "slug": "dubbing-aku-menikahi-bosku-ep-1", "isLocked": false, "isVipOnly": false, "sortOrder": 1 },
+  { "id": 24002, "dramaId": 702, "episodeNumber": 2, "title": "Episode 2", "duration": "02:04", "slug": "dubbing-aku-menikahi-bosku-ep-2", "isLocked": false, "isVipOnly": false, "sortOrder": 2 },
+
+  { "id": 25001, "dramaId": 801, "episodeNumber": 1, "title": "Episode 1", "duration": "02:05", "slug": "senyum-terakhir-di-kota-kecil-ep-1", "sortOrder": 1 },
+  { "id": 25002, "dramaId": 801, "episodeNumber": 2, "title": "Episode 2", "duration": "02:01", "slug": "senyum-terakhir-di-kota-kecil-ep-2", "sortOrder": 2 },
+
+  { "id": 26001, "dramaId": 901, "episodeNumber": 1, "title": "Episode 1", "duration": "02:06", "slug": "pengantin-dadakan-milik-ceo-ep-1", "sortOrder": 1 },
+  { "id": 26002, "dramaId": 901, "episodeNumber": 2, "title": "Episode 2", "duration": "02:09", "slug": "pengantin-dadakan-milik-ceo-ep-2", "sortOrder": 2 }
+]

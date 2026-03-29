@@ -1,0 +1,161 @@
+[
+  {
+    "id": 1,
+    "name": "DramaBox",
+    "badge": "HOT",
+    "cardClass": "from-rose-500/25 via-pink-500/10 to-white/5",
+    "logo": "/sources/dramabox.png",
+    "slug": "dramabox",
+    "description": "Source populer untuk drama pendek romansa dan konflik keluarga.",
+    "sortOrder": 1,
+    "isPopular": true
+  },
+  {
+    "id": 2,
+    "name": "ReelShort",
+    "badge": "NEW",
+    "cardClass": "from-orange-500/25 via-rose-500/10 to-white/5",
+    "logo": "/sources/reelshort.png",
+    "slug": "reelshort",
+    "description": "Drama pendek modern dengan ritme cepat dan tema CEO romance.",
+    "sortOrder": 2,
+    "isPopular": true
+  },
+  {
+    "id": 3,
+    "name": "Melolo",
+    "badge": "HOT",
+    "cardClass": "from-yellow-500/25 via-amber-500/10 to-white/5",
+    "logo": "/sources/melolo.png",
+    "slug": "melolo",
+    "description": "Koleksi drama pendek populer dengan konflik emosional kuat.",
+    "sortOrder": 3,
+    "isPopular": true
+  },
+  {
+    "id": 4,
+    "name": "DramaWave",
+    "cardClass": "from-amber-500/25 via-orange-500/10 to-white/5",
+    "logo": "/sources/dramawave.png",
+    "slug": "dramawave",
+    "description": "Source drama keluarga dan rahasia identitas.",
+    "sortOrder": 4
+  },
+  {
+    "id": 5,
+    "name": "Netshort",
+    "cardClass": "from-emerald-500/25 via-green-500/10 to-white/5",
+    "logo": "/sources/netshort.png",
+    "slug": "netshort",
+    "description": "Drama pendek romantis dengan tempo cepat.",
+    "sortOrder": 5
+  },
+  {
+    "id": 6,
+    "name": "FlickReels",
+    "cardClass": "from-yellow-500/25 via-amber-500/10 to-white/5",
+    "logo": "/sources/flickreels.png",
+    "slug": "flickreels",
+    "description": "Source klip drama pendek dengan gaya visual ringan.",
+    "sortOrder": 6
+  },
+  {
+    "id": 7,
+    "name": "ShortMax",
+    "cardClass": "from-red-500/25 via-rose-500/10 to-white/5",
+    "logo": "/sources/shortmax.png",
+    "slug": "shortmax",
+    "description": "Drama pendek intens dengan konflik mafia dan romansa.",
+    "sortOrder": 7
+  },
+  {
+    "id": 8,
+    "name": "GoodShort",
+    "cardClass": "from-red-500/25 via-orange-500/10 to-white/5",
+    "logo": "/sources/goodshort.png",
+    "slug": "goodshort",
+    "description": "Source drama cepat dengan tema keluarga dan cinta.",
+    "sortOrder": 8
+  },
+  {
+    "id": 9,
+    "name": "iDrama",
+    "cardClass": "from-sky-500/25 via-blue-500/10 to-white/5",
+    "logo": "/sources/idrama.png",
+    "slug": "idrama",
+    "description": "Source drama mobile dengan gaya modern.",
+    "sortOrder": 9
+  },
+  {
+    "id": 10,
+    "name": "StardustTV",
+    "cardClass": "from-violet-500/25 via-fuchsia-500/10 to-white/5",
+    "logo": "/sources/stardusttv.png",
+    "slug": "stardusttv",
+    "description": "Drama pendek dengan tone glamor dan konflik besar.",
+    "sortOrder": 10
+  },
+  {
+    "id": 11,
+    "name": "DramaBite",
+    "cardClass": "from-rose-500/25 via-red-500/10 to-white/5",
+    "logo": "/sources/dramabite.png",
+    "slug": "dramabite",
+    "description": "Katalog drama singkat dengan tema romansa tajam.",
+    "sortOrder": 11
+  },
+  {
+    "id": 12,
+    "name": "FlexTV",
+    "cardClass": "from-yellow-500/25 via-amber-500/10 to-white/5",
+    "logo": "/sources/flextv.png",
+    "slug": "flextv",
+    "description": "Source hiburan drama ringan dan cepat.",
+    "sortOrder": 12
+  },
+  {
+    "id": 13,
+    "name": "FunDrama",
+    "cardClass": "from-pink-500/25 via-rose-500/10 to-white/5",
+    "logo": "/sources/fundrama.png",
+    "slug": "fundrama",
+    "description": "Drama pendek dengan nuansa fun dan romantis.",
+    "sortOrder": 13
+  },
+  {
+    "id": 14,
+    "name": "MicroDrama",
+    "cardClass": "from-orange-500/25 via-red-500/10 to-white/5",
+    "logo": "/sources/microdrama.png",
+    "slug": "microdrama",
+    "description": "Cerita ultra-singkat dengan cliffhanger cepat.",
+    "sortOrder": 14
+  },
+  {
+    "id": 15,
+    "name": "Reelife",
+    "cardClass": "from-orange-500/25 via-pink-500/10 to-white/5",
+    "logo": "/sources/reelife.png",
+    "slug": "reelife",
+    "description": "Source drama emosional dengan konflik relasi.",
+    "sortOrder": 15
+  },
+  {
+    "id": 16,
+    "name": "Vigloo",
+    "cardClass": "from-emerald-500/25 via-teal-500/10 to-white/5",
+    "logo": "/sources/vigloo.png",
+    "slug": "vigloo",
+    "description": "Drama pendek melodrama dengan nuansa hangat.",
+    "sortOrder": 16
+  },
+  {
+    "id": 17,
+    "name": "Reelala",
+    "cardClass": "from-pink-500/25 via-fuchsia-500/10 to-white/5",
+    "logo": "/sources/Reelala.png",
+    "slug": "reelala",
+    "description": "Source drama pendek romantis dengan tempo ringan.",
+    "sortOrder": 17
+  }
+]
