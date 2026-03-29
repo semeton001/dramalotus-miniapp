@@ -97,7 +97,7 @@ export default function HistoryScreen({
           )}
         </div>
 
-        <nav className="fixed bottom-4 left-1/2 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-3xl border border-white/10 bg-[#14141b]/95 p-3 backdrop-blur">
+        <nav className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-3xl border border-white/10 bg-[#14141b]/95 p-3 backdrop-blur">
           <div className="grid grid-cols-4 gap-2 text-center text-sm">
             <button
               onClick={onBack}

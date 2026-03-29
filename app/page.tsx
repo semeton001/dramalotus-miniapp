@@ -12,11 +12,56 @@ import type { Episode } from "@/types/episode";
 import type { Source } from "@/types/source";
 import Image from "next/image";
 
+declare global {
+  interface Window {
+    Telegram?: {
+      WebApp?: {
+        ready: () => void;
+        expand: () => void;
+        backgroundColor?: string;
+        headerColor?: string;
+        colorScheme?: "light" | "dark";
+        BackButton?: {
+          show: () => void;
+          hide: () => void;
+          onClick: (callback: () => void) => void;
+          offClick: (callback: () => void) => void;
+        };
+        initDataUnsafe?: {
+          user?: {
+            id?: number;
+            first_name?: string;
+            last_name?: string;
+            username?: string;
+          };
+        };
+        themeParams?: {
+          bg_color?: string;
+          text_color?: string;
+          hint_color?: string;
+          button_color?: string;
+          button_text_color?: string;
+          secondary_bg_color?: string;
+        };
+      };
+    };
+  }
+}
+
+const isArray = <T,>(value: unknown): value is T[] => Array.isArray(value);
+
 export default function Home() {
+  const FAVORITES_STORAGE_KEY = "dramalotus.favoriteIds";
+  const HISTORY_STORAGE_KEY = "dramalotus.historyItems";
+  const MEMBERSHIP_STORAGE_KEY = "dramalotus.membershipStatus";
+
+  const [telegramUserName, setTelegramUserName] = useState<string | null>(null);
+  const [telegramUserId, setTelegramUserId] = useState<number | null>(null);
   const [sources, setSources] = useState<Source[]>([]);
   const [dramas, setDramas] = useState<Drama[]>([]);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [dataError, setDataError] = useState<string | null>(null);
 
   const [selectedSource, setSelectedSource] = useState<Source | null>(null);
   const [selectedDrama, setSelectedDrama] = useState<Drama | null>(null);
@@ -28,6 +73,14 @@ export default function Home() {
   const [sourceTab, setSourceTab] = useState<
     "Beranda" | "Terbaru" | "Dubbing" | "Acak"
   >("Beranda");
+
+  const shouldShowTelegramBackButton =
+    !!selectedDrama ||
+    !!selectedSource ||
+    activeTab === "history" ||
+    activeTab === "favorites" ||
+    activeTab === "profile";
+
   const [searchQuery, setSearchQuery] = useState("");
   const [favoriteIds, setFavoriteIds] = useState<number[]>([]);
   const [historyItems, setHistoryItems] = useState<
@@ -37,6 +90,30 @@ export default function Home() {
     "free",
   );
   const [showSplash, setShowSplash] = useState(true);
+
+  const handleTelegramBack = () => {
+    if (selectedDrama) {
+      setSelectedDrama(null);
+      setSelectedEpisode(null);
+      setShowEpisodes(false);
+      return;
+    }
+
+    if (selectedSource) {
+      setSelectedSource(null);
+      setSearchQuery("");
+      setSourceTab("Beranda");
+      return;
+    }
+
+    if (
+      activeTab === "history" ||
+      activeTab === "favorites" ||
+      activeTab === "profile"
+    ) {
+      setActiveTab("home");
+    }
+  };
 
   useEffect(() => {
     if (!showSplash) return;
@@ -50,6 +127,178 @@ export default function Home() {
 
     return () => clearTimeout(timer);
   }, [showSplash, membershipStatus]);
+
+  useEffect(() => {
+    const tg = window.Telegram?.WebApp;
+    if (!tg) return;
+
+    tg.ready();
+    tg.expand();
+
+    const bgColor = tg.themeParams?.bg_color;
+    const textColor = tg.themeParams?.text_color;
+
+    if (bgColor) {
+      document.documentElement.style.setProperty("--tg-bg", bgColor);
+    }
+
+    if (textColor) {
+      document.documentElement.style.setProperty("--tg-text", textColor);
+    }
+
+    const user = tg.initDataUnsafe?.user;
+    if (user) {
+      const resolvedName =
+        user.first_name || user.username || user.last_name || null;
+      const resolvedId = user.id ?? null;
+
+      setTelegramUserName(resolvedName);
+      setTelegramUserId(resolvedId);
+
+      if (resolvedId) {
+        fetch("/api/user-profile", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            telegram_user_id: resolvedId,
+            telegram_username: resolvedName,
+          }),
+        }).catch((error) => {
+          console.error("Gagal sync user profile:", error);
+        });
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!telegramUserId) return;
+
+    const loadFavoritesFromDb = async () => {
+      try {
+        const res = await fetch(
+          `/api/user-favorites?telegram_user_id=${telegramUserId}`,
+        );
+
+        if (!res.ok) {
+          throw new Error("Gagal memuat favorites dari database.");
+        }
+
+        const data = await res.json();
+
+        if (Array.isArray(data)) {
+          setFavoriteIds(data.filter((id) => typeof id === "number"));
+        }
+      } catch (error) {
+        console.error("Gagal load favorites dari DB:", error);
+      }
+    };
+
+    loadFavoritesFromDb();
+  }, [telegramUserId]);
+
+  useEffect(() => {
+    const tg = window.Telegram?.WebApp;
+    const backButton = tg?.BackButton;
+
+    if (!backButton) return;
+
+    if (shouldShowTelegramBackButton) {
+      backButton.show();
+    } else {
+      backButton.hide();
+    }
+
+    backButton.onClick(handleTelegramBack);
+
+    return () => {
+      backButton.offClick(handleTelegramBack);
+    };
+  }, [shouldShowTelegramBackButton, selectedDrama, selectedSource, activeTab]);
+
+  useEffect(() => {
+    try {
+      const storedMembershipStatus = window.localStorage.getItem(
+        MEMBERSHIP_STORAGE_KEY,
+      );
+
+      if (
+        storedMembershipStatus === "free" ||
+        storedMembershipStatus === "vip"
+      ) {
+        setMembershipStatus(storedMembershipStatus);
+      }
+    } catch (error) {
+      console.error("Gagal membaca localStorage:", error);
+    }
+  }, []);
+
+  // Optional backup only. Main source for favorites is database.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        FAVORITES_STORAGE_KEY,
+        JSON.stringify(favoriteIds),
+      );
+    } catch (error) {
+      console.error("Gagal menyimpan favorit:", error);
+    }
+  }, [favoriteIds]);
+
+  useEffect(() => {
+    if (!telegramUserId) return;
+
+    const loadHistoryFromDb = async () => {
+      try {
+        const res = await fetch(
+          `/api/user-history?telegram_user_id=${telegramUserId}`,
+        );
+
+        if (!res.ok) {
+          throw new Error("Gagal memuat history dari database.");
+        }
+
+        const data = await res.json();
+
+        if (Array.isArray(data)) {
+          setHistoryItems(
+            data.filter(
+              (item) =>
+                item &&
+                typeof item === "object" &&
+                typeof item.dramaId === "number" &&
+                typeof item.episodeId === "number",
+            ),
+          );
+        }
+      } catch (error) {
+        console.error("Gagal load history dari DB:", error);
+      }
+    };
+
+    loadHistoryFromDb();
+  }, [telegramUserId]);
+
+  // Optional backup only. Main source for history is database.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        HISTORY_STORAGE_KEY,
+        JSON.stringify(historyItems),
+      );
+    } catch (error) {
+      console.error("Gagal menyimpan riwayat:", error);
+    }
+  }, [historyItems]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(MEMBERSHIP_STORAGE_KEY, membershipStatus);
+    } catch (error) {
+      console.error("Gagal menyimpan membership:", error);
+    }
+  }, [membershipStatus]);
 
   useEffect(() => {
     let isMounted = true;
@@ -72,18 +321,37 @@ export default function Home() {
           episodesRes.json(),
         ]);
 
+        if (!isArray<Source>(sourcesData)) {
+          throw new Error("Format data sources tidak valid.");
+        }
+
+        if (!isArray<Drama>(dramasData)) {
+          throw new Error("Format data dramas tidak valid.");
+        }
+
+        if (!isArray<Episode>(episodesData)) {
+          throw new Error("Format data episodes tidak valid.");
+        }
+
         if (!isMounted) return;
 
         setSources(sourcesData);
         setDramas(dramasData);
         setEpisodes(episodesData);
+        setDataError(null);
       } catch (error) {
         console.error("Gagal memuat data:", error);
 
         if (!isMounted) return;
+
         setSources([]);
         setDramas([]);
         setEpisodes([]);
+        setDataError(
+          error instanceof Error
+            ? error.message
+            : "Terjadi kesalahan saat memuat katalog drama.",
+        );
       } finally {
         if (isMounted) {
           setIsLoadingData(false);
@@ -150,33 +418,106 @@ export default function Home() {
     });
   }, [dramas, selectedSource, searchQuery, sourceTab]);
 
-  const toggleFavorite = (dramaId: number) => {
+  const toggleFavorite = async (dramaId: number) => {
+    const isFavorited = favoriteIds.includes(dramaId);
+
     setFavoriteIds((prev) =>
-      prev.includes(dramaId)
-        ? prev.filter((id) => id !== dramaId)
-        : [...prev, dramaId],
+      isFavorited ? prev.filter((id) => id !== dramaId) : [...prev, dramaId],
     );
+
+    if (!telegramUserId) return;
+
+    try {
+      const res = await fetch("/api/user-favorites", {
+        method: isFavorited ? "DELETE" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          telegram_user_id: telegramUserId,
+          drama_id: dramaId,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Gagal sinkron favorit ke database.");
+      }
+    } catch (error) {
+      console.error("Gagal sync favorite:", error);
+
+      setFavoriteIds((prev) =>
+        isFavorited ? [...prev, dramaId] : prev.filter((id) => id !== dramaId),
+      );
+    }
   };
 
   const favoriteDramas = dramas.filter((drama) =>
     favoriteIds.includes(drama.id),
   );
 
+  const mostWatchedLabel = useMemo(() => {
+    if (historyItems.length === 0) return "-";
+
+    const dramaMap = new Map(dramas.map((drama) => [drama.id, drama]));
+    const sourceCount = new Map<string, number>();
+
+    historyItems.forEach((item) => {
+      const drama = dramaMap.get(item.dramaId);
+      if (!drama?.source) return;
+
+      sourceCount.set(drama.source, (sourceCount.get(drama.source) ?? 0) + 1);
+    });
+
+    let topSource = "-";
+    let topCount = 0;
+
+    sourceCount.forEach((count, source) => {
+      if (count > topCount) {
+        topSource = source;
+        topCount = count;
+      }
+    });
+
+    return topSource;
+  }, [historyItems, dramas]);
+
   const currentEpisodes = selectedDrama
     ? episodes.filter((episode) => episode.dramaId === selectedDrama.id)
     : [];
 
-  const saveToHistory = (dramaId: number, episodeId: number) => {
+  const saveToHistory = async (dramaId: number, episodeId: number) => {
     setHistoryItems((prev) => {
       const filtered = prev.filter((item) => item.dramaId !== dramaId);
       return [{ dramaId, episodeId }, ...filtered];
     });
+
+    if (!telegramUserId) return;
+
+    try {
+      const res = await fetch("/api/user-history", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          telegram_user_id: telegramUserId,
+          drama_id: dramaId,
+          episode_id: episodeId,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Gagal sinkron history ke database.");
+      }
+    } catch (error) {
+      console.error("Gagal sync history:", error);
+    }
   };
 
   if (showSplash) {
     return (
-      <main className="min-h-screen bg-[#050507] text-[#F5F1E8]">
-        <div className="mx-auto flex min-h-screen w-full max-w-md items-center justify-center px-6">
+      <main className="min-h-screen tg-safe-bottom bg-[#050507] text-[#F5F1E8]">
+        <div className="tg-safe-top mx-auto flex min-h-screen w-full max-w-md items-center justify-center px-6">
           <div className="relative w-full overflow-hidden rounded-[34px] border border-white/10 bg-[#0B0C11] p-8 text-center shadow-2xl">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(201,164,92,0.16),transparent_38%)]" />
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(185,138,132,0.08),transparent_58%)]" />
@@ -221,10 +562,31 @@ export default function Home() {
 
   if (isLoadingData) {
     return (
-      <main className="min-h-screen bg-[#050507] text-[#F5F1E8]">
-        <div className="mx-auto flex min-h-screen w-full max-w-md items-center justify-center px-6">
+      <main className="min-h-screen tg-safe-bottom bg-[#050507] text-[#F5F1E8]">
+        <div className="tg-safe-top mx-auto flex min-h-screen w-full max-w-md items-center justify-center px-6">
           <div className="rounded-[28px] border border-white/10 bg-[#12131A] px-6 py-5 text-center shadow-[0_18px_40px_rgba(0,0,0,0.28)]">
             <p className="text-sm text-[#8F887C]">Memuat katalog drama...</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (dataError) {
+    return (
+      <main className="min-h-screen tg-safe-bottom bg-[#050507] text-[#F5F1E8]">
+        <div className="tg-safe-top mx-auto flex min-h-screen w-full max-w-md items-center justify-center px-6">
+          <div className="w-full rounded-[28px] border border-white/10 bg-[#12131A] px-6 py-6 text-center shadow-[0_18px_40px_rgba(0,0,0,0.28)]">
+            <p className="text-base font-semibold text-white">
+              Gagal memuat data
+            </p>
+            <p className="mt-2 text-sm leading-6 text-[#8F887C]">{dataError}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-5 rounded-[18px] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-medium text-[#E6D3A3]"
+            >
+              Coba Lagi
+            </button>
           </div>
         </div>
       </main>
@@ -258,6 +620,16 @@ export default function Home() {
         onOpenProfile={() => setActiveTab("profile")}
         onSelectDrama={(drama) => {
           setSelectedDrama(drama);
+
+          const firstEpisode =
+            episodes.find((episode) => episode.dramaId === drama.id) ?? null;
+
+          setSelectedEpisode(firstEpisode);
+
+          if (firstEpisode) {
+            saveToHistory(drama.id, firstEpisode.id);
+          }
+
           setActiveTab("home");
         }}
       />
@@ -268,7 +640,11 @@ export default function Home() {
     return (
       <ProfileScreen
         favoriteCount={favoriteDramas.length}
+        historyCount={historyItems.length}
+        mostWatchedLabel={mostWatchedLabel}
         membershipStatus={membershipStatus}
+        telegramUserName={telegramUserName}
+        telegramUserId={telegramUserId}
         onBack={() => setActiveTab("home")}
         onOpenHistory={() => setActiveTab("history")}
         onOpenFavorites={() => setActiveTab("favorites")}

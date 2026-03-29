@@ -230,7 +230,7 @@ export default function HomeScreen({
           </p>
         </div>
 
-        <nav className="fixed bottom-4 left-1/2 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-[28px] border border-white/10 bg-[#12131A]/95 p-3 backdrop-blur">
+        <nav className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-[28px] border border-white/10 bg-[#12131A]/95 p-3 backdrop-blur">
           <div className="grid grid-cols-4 gap-2 text-center text-sm">
             <button className="rounded-2xl bg-[linear-gradient(135deg,rgba(201,164,92,0.22),rgba(185,138,132,0.12))] px-3 py-2 font-medium text-[#F2E6C9] shadow-[0_6px_18px_rgba(201,164,92,0.12)]">
               Beranda

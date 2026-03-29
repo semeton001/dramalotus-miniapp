@@ -35,3 +35,28 @@ body {
 .font-ExoBold {
   font-family: "ExoBold", monospace;
 }
+
+:root {
+  --tg-bg: #050507;
+  --tg-text: #f5f1e8;
+  --tg-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --tg-safe-top: env(safe-area-inset-top, 0px);
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  background: var(--tg-bg);
+  color: var(--tg-text);
+}
+
+.tg-safe-top {
+  padding-top: max(0px, var(--tg-safe-top));
+}
+
+.tg-safe-bottom {
+  padding-bottom: max(20px, var(--tg-safe-bottom));
+}
