@@ -54,15 +54,17 @@ export default function ProfileScreen({
                     .slice(0, 2)
                     .map((part) => part.charAt(0).toUpperCase())
                     .join("")
-                : "K"}
+                : "TG"}
             </div>
 
             <div>
               <h2 className="text-[28px] font-bold leading-none text-white">
-                {telegramUserName?.trim() ? telegramUserName : "Kim"}
+                {telegramUserName?.trim()
+                  ? telegramUserName
+                  : "Pengguna Telegram"}
               </h2>
               <p className="mt-1 text-[18px] text-[#9E978B]">
-                ID: {telegramUserId ?? "-"}
+                ID: {telegramUserId ?? "Belum tersedia"}
               </p>
             </div>
           </div>

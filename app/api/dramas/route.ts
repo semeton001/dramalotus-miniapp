@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase-server";
+import { supabaseServer } from "@/lib/supabase/server";
 import type { Drama } from "@/types/drama";
 
 type DramaRow = {
@@ -11,6 +11,8 @@ type DramaRow = {
   episodes_count: number;
   badge: string | null;
   poster_class: string | null;
+  tags: string[];
+  category: string | null;
   is_new: boolean;
   is_dubbed: boolean;
   is_trending: boolean;
@@ -23,16 +25,16 @@ type SourceRow = {
 };
 
 export async function GET() {
-  const [{ data: dramasData, error: dramasError }, { data: sourcesData, error: sourcesError }] =
-    await Promise.all([
-      supabaseServer
-        .from("dramas")
-        .select("*")
-        .order("sort_order", { ascending: true }),
-      supabaseServer
-        .from("sources")
-        .select("id, name"),
-    ]);
+  const [
+    { data: dramasData, error: dramasError },
+    { data: sourcesData, error: sourcesError },
+  ] = await Promise.all([
+    supabaseServer
+      .from("dramas")
+      .select("*")
+      .order("sort_order", { ascending: true }),
+    supabaseServer.from("sources").select("id, name"),
+  ]);
 
   if (dramasError) {
     return NextResponse.json(
@@ -49,26 +51,28 @@ export async function GET() {
   }
 
   const sourceMap = new Map(
-    ((sourcesData ?? []) as SourceRow[]).map((source) => [source.id, source.name]),
+    ((sourcesData ?? []) as SourceRow[]).map((source) => [
+      source.id,
+      source.name,
+    ]),
   );
 
   const dramas: Drama[] = ((dramasData ?? []) as DramaRow[]).map((item) => ({
-  id: Number(item.id),
-  source: sourceMap.get(item.source_id) ?? "",
-  title: item.title,
-  episodes: item.episodes_count,
-  badge: item.badge ?? undefined,
-  tags: [],
-  posterClass: item.poster_class ?? "",
-  slug: item.slug,
-  description: item.description ?? "",
-  category: "",
-  isNew: item.is_new,
-  isDubbed: item.is_dubbed,
-  isTrending: item.is_trending,
-  sortOrder: item.sort_order,
-}));
-
+    id: Number(item.id),
+    source: sourceMap.get(item.source_id) ?? "",
+    title: item.title,
+    episodes: item.episodes_count,
+    badge: item.badge ?? undefined,
+    tags: item.tags ?? [],
+    posterClass: item.poster_class ?? "",
+    slug: item.slug,
+    description: item.description ?? "",
+    category: item.category ?? "",
+    isNew: item.is_new,
+    isDubbed: item.is_dubbed,
+    isTrending: item.is_trending,
+    sortOrder: item.sort_order,
+  }));
 
   return NextResponse.json(dramas);
 }

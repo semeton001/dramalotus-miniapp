@@ -50,18 +50,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const { error } = await supabaseAdmin
-      .from("user_history")
-      .upsert(
-        {
-          telegram_user_id,
-          drama_id: String(drama_id),
-          episode_id: String(episode_id),
-        },
-        { onConflict: "telegram_user_id,drama_id" },
-      );
+    const { error } = await supabaseAdmin.from("user_history").upsert(
+      {
+        telegram_user_id,
+        drama_id: String(drama_id),
+        episode_id: String(episode_id),
+      },
+      { onConflict: "telegram_user_id,drama_id" },
+    );
 
     if (error) {
+      console.error("user-history POST error:", error);
       return NextResponse.json(
         { error: "Failed to save history", details: error.message },
         { status: 500 },

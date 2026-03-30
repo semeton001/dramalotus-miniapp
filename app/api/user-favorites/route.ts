@@ -23,21 +23,24 @@ export async function GET(request: Request) {
     .eq("telegram_user_id", telegramUserId);
 
   if (error) {
+    console.error("user-favorites POST error:", error);
     return NextResponse.json(
-      { error: "Failed to fetch favorites", details: error.message },
+      { error: "Failed to save favorite", details: error.message },
       { status: 500 },
     );
   }
 
-  return NextResponse.json(
-    (data ?? []).map((item) => Number(item.drama_id)),
-  );
+  return NextResponse.json((data ?? []).map((item) => Number(item.drama_id)));
 }
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { telegram_user_id, drama_id } = body;
+    console.log("user-favorites POST body:", {
+      telegram_user_id,
+      drama_id,
+    });
 
     if (!telegram_user_id || !drama_id) {
       return NextResponse.json(
@@ -46,15 +49,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const { error } = await supabaseAdmin
-      .from("user_favorites")
-      .upsert(
-        {
-          telegram_user_id,
-          drama_id: String(drama_id),
-        },
-        { onConflict: "telegram_user_id,drama_id" },
-      );
+    const { error } = await supabaseAdmin.from("user_favorites").upsert(
+      {
+        telegram_user_id,
+        drama_id: String(drama_id),
+      },
+      { onConflict: "telegram_user_id,drama_id" },
+    );
 
     if (error) {
       return NextResponse.json(

@@ -7,6 +7,7 @@ type SourceScreenProps = {
   sourceTab: "Beranda" | "Terbaru" | "Dubbing" | "Acak";
   filteredDramas: Drama[];
   favoriteIds: number[];
+  isTelegramReady: boolean;
   onBack: () => void;
   onSearchChange: (value: string) => void;
   onTabChange: (tab: "Beranda" | "Terbaru" | "Dubbing" | "Acak") => void;
@@ -27,6 +28,7 @@ export default function SourceScreen({
   sourceTab,
   filteredDramas,
   favoriteIds,
+  isTelegramReady,
   onBack,
   onSearchChange,
   onTabChange,
@@ -115,9 +117,21 @@ export default function SourceScreen({
               const isFavorite = favoriteIds.includes(drama.id);
 
               return (
-                <button
+                <div
                   key={drama.id}
-                  onClick={() => onSelectDrama(drama)}
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    const target = e.target as HTMLElement;
+                    if (target.closest("button")) return;
+                    onSelectDrama(drama);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onSelectDrama(drama);
+                    }
+                  }}
                   className="h-full text-left"
                 >
                   <div className="flex h-full flex-col overflow-hidden rounded-[24px] border border-[#B76E79]/45 bg-[#12131A] shadow-[0_18px_36px_rgba(0,0,0,0.22)]">
@@ -138,9 +152,19 @@ export default function SourceScreen({
                       </div>
 
                       <button
-                        onClick={(e) => {
+                        type="button"
+                        disabled={!isTelegramReady}
+                        onPointerUp={(e) => {
+                          e.preventDefault();
                           e.stopPropagation();
+                          if (!isTelegramReady) return;
                           onToggleFavorite(drama.id);
+                        }}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                        }}
+                        onTouchStart={(e) => {
+                          e.stopPropagation();
                         }}
                         aria-label={
                           isFavorite
@@ -151,7 +175,7 @@ export default function SourceScreen({
                           isFavorite
                             ? "border-[#C9A45C]/35 bg-[linear-gradient(135deg,rgba(201,164,92,0.22),rgba(183,110,121,0.18))] text-[#F5E6C5]"
                             : "border-white/8 bg-[#11131B]/88 text-white/90"
-                        }`}
+                        } ${!isTelegramReady ? "pointer-events-none opacity-50" : ""}`}
                       >
                         <span className="text-[14px] leading-none">
                           {isFavorite ? "♥" : "♡"}
@@ -188,7 +212,7 @@ export default function SourceScreen({
                       </div>
                     </div>
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>

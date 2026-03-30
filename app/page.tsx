@@ -57,6 +57,8 @@ export default function Home() {
 
   const [telegramUserName, setTelegramUserName] = useState<string | null>(null);
   const [telegramUserId, setTelegramUserId] = useState<number | null>(null);
+  const isTelegramReady = telegramUserId !== null;
+
   const [sources, setSources] = useState<Source[]>([]);
   const [dramas, setDramas] = useState<Drama[]>([]);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
@@ -74,13 +76,6 @@ export default function Home() {
     "Beranda" | "Terbaru" | "Dubbing" | "Acak"
   >("Beranda");
 
-  const shouldShowTelegramBackButton =
-    !!selectedDrama ||
-    !!selectedSource ||
-    activeTab === "history" ||
-    activeTab === "favorites" ||
-    activeTab === "profile";
-
   const [searchQuery, setSearchQuery] = useState("");
   const [favoriteIds, setFavoriteIds] = useState<number[]>([]);
   const [historyItems, setHistoryItems] = useState<
@@ -90,30 +85,6 @@ export default function Home() {
     "free",
   );
   const [showSplash, setShowSplash] = useState(true);
-
-  const handleTelegramBack = () => {
-    if (selectedDrama) {
-      setSelectedDrama(null);
-      setSelectedEpisode(null);
-      setShowEpisodes(false);
-      return;
-    }
-
-    if (selectedSource) {
-      setSelectedSource(null);
-      setSearchQuery("");
-      setSourceTab("Beranda");
-      return;
-    }
-
-    if (
-      activeTab === "history" ||
-      activeTab === "favorites" ||
-      activeTab === "profile"
-    ) {
-      setActiveTab("home");
-    }
-  };
 
   useEffect(() => {
     if (!showSplash) return;
@@ -146,30 +117,54 @@ export default function Home() {
       document.documentElement.style.setProperty("--tg-text", textColor);
     }
 
-    const user = tg.initDataUnsafe?.user;
-    if (user) {
-      const resolvedName =
-        user.first_name || user.username || user.last_name || null;
-      const resolvedId = user.id ?? null;
+    let cancelled = false;
+    let attempts = 0;
+    const maxAttempts = 10;
 
-      setTelegramUserName(resolvedName);
-      setTelegramUserId(resolvedId);
+    const tryReadTelegramUser = async () => {
+      const user = tg.initDataUnsafe?.user;
+
+      const resolvedName =
+        user?.first_name || user?.username || user?.last_name || null;
+      const resolvedId = user?.id ?? null;
+
+      if (resolvedName) {
+        setTelegramUserName(resolvedName);
+      }
 
       if (resolvedId) {
-        fetch("/api/user-profile", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            telegram_user_id: resolvedId,
-            telegram_username: resolvedName,
-          }),
-        }).catch((error) => {
+        setTelegramUserId(resolvedId);
+
+        try {
+          await fetch("/api/user-profile", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              telegram_user_id: resolvedId,
+              telegram_username: resolvedName,
+            }),
+          });
+        } catch (error) {
           console.error("Gagal sync user profile:", error);
-        });
+        }
+
+        return;
       }
-    }
+
+      attempts += 1;
+
+      if (!cancelled && attempts < maxAttempts) {
+        window.setTimeout(tryReadTelegramUser, 500);
+      }
+    };
+
+    tryReadTelegramUser();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -199,25 +194,6 @@ export default function Home() {
   }, [telegramUserId]);
 
   useEffect(() => {
-    const tg = window.Telegram?.WebApp;
-    const backButton = tg?.BackButton;
-
-    if (!backButton) return;
-
-    if (shouldShowTelegramBackButton) {
-      backButton.show();
-    } else {
-      backButton.hide();
-    }
-
-    backButton.onClick(handleTelegramBack);
-
-    return () => {
-      backButton.offClick(handleTelegramBack);
-    };
-  }, [shouldShowTelegramBackButton, selectedDrama, selectedSource, activeTab]);
-
-  useEffect(() => {
     try {
       const storedMembershipStatus = window.localStorage.getItem(
         MEMBERSHIP_STORAGE_KEY,
@@ -234,7 +210,6 @@ export default function Home() {
     }
   }, []);
 
-  // Optional backup only. Main source for favorites is database.
   useEffect(() => {
     try {
       window.localStorage.setItem(
@@ -280,7 +255,6 @@ export default function Home() {
     loadHistoryFromDb();
   }, [telegramUserId]);
 
-  // Optional backup only. Main source for history is database.
   useEffect(() => {
     try {
       window.localStorage.setItem(
@@ -419,13 +393,16 @@ export default function Home() {
   }, [dramas, selectedSource, searchQuery, sourceTab]);
 
   const toggleFavorite = async (dramaId: number) => {
+    if (!telegramUserId) {
+      alert("Mohon tunggu, data Telegram belum siap.");
+      return;
+    }
+
     const isFavorited = favoriteIds.includes(dramaId);
 
     setFavoriteIds((prev) =>
       isFavorited ? prev.filter((id) => id !== dramaId) : [...prev, dramaId],
     );
-
-    if (!telegramUserId) return;
 
     try {
       const res = await fetch("/api/user-favorites", {
@@ -534,7 +511,7 @@ export default function Home() {
               </div>
 
               <h1 className="font-ExoBold mt-6 text-4xl tracking-[0.02em] text-[#D9B36A]">
-                DRAMALOTUS
+                DRAMALOTUS LOCAL TEST
               </h1>
 
               <p className="mt-4 text-sm leading-7 text-[#9E978B]">
@@ -551,7 +528,7 @@ export default function Home() {
                 onClick={() => setShowSplash(false)}
                 className="mt-8 w-full rounded-[22px] border border-white/10 bg-white/[0.03] px-4 py-4 text-sm font-medium text-[#DDD4C4] transition hover:bg-white/[0.05]"
               >
-                Masuk ke DRAMALOTUS
+                Masuk ke DRAMALOTUS LOCAL TEST
               </button>
             </div>
           </div>
@@ -689,6 +666,7 @@ export default function Home() {
         sourceTab={sourceTab}
         filteredDramas={filteredDramas}
         favoriteIds={favoriteIds}
+        isTelegramReady={isTelegramReady}
         onBack={() => {
           setSelectedSource(null);
           setSearchQuery("");
