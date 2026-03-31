@@ -87,6 +87,31 @@ function getValidatedTelegramUser(): SafeTelegramUser | null {
   };
 }
 
+function getTelegramDisplayName(user: SafeTelegramUser): string | null {
+  if (user.username) return user.username;
+
+  const fullName = [user.firstName, user.lastName]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  return fullName || null;
+}
+
+type HistoryItem = {
+  dramaId: number;
+  episodeId: number;
+};
+
+function isValidHistoryItem(value: unknown): value is HistoryItem {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    typeof (value as HistoryItem).dramaId === "number" &&
+    typeof (value as HistoryItem).episodeId === "number"
+  );
+}
+
 export default function Home() {
   const FAVORITES_STORAGE_KEY = "dramalotus.favoriteIds";
   const HISTORY_STORAGE_KEY = "dramalotus.historyItems";
@@ -120,9 +145,7 @@ export default function Home() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [favoriteIds, setFavoriteIds] = useState<number[]>([]);
-  const [historyItems, setHistoryItems] = useState<
-    { dramaId: number; episodeId: number }[]
-  >([]);
+  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [membershipStatus, setMembershipStatus] = useState<"free" | "vip">(
     "free",
   );
@@ -183,14 +206,7 @@ export default function Home() {
     }
 
     setTelegramUserId(validatedUser.id);
-    setTelegramUserName(
-      validatedUser.username ||
-        [validatedUser.firstName, validatedUser.lastName]
-          .filter(Boolean)
-          .join(" ")
-          .trim() ||
-        null,
-    );
+    setTelegramUserName(getTelegramDisplayName(validatedUser));
     setIsTelegramUserValid(true);
   }, []);
 
@@ -201,6 +217,8 @@ export default function Home() {
     setTelegramUserName(null);
     setIsTelegramUserValid(false);
     setHasSyncedProfile(false);
+    setHasLoadedServerFavorites(false);
+    setHasLoadedServerHistory(false);
   }, [canUseTelegramSync]);
 
   useEffect(() => {
@@ -267,18 +285,9 @@ export default function Home() {
         const parsed = JSON.parse(storedHistoryItems);
 
         if (Array.isArray(parsed)) {
-          setHistoryItems(
-            parsed.filter(
-              (item) =>
-                item &&
-                typeof item === "object" &&
-                typeof item.dramaId === "number" &&
-                typeof item.episodeId === "number",
-            ),
-          );
+          setHistoryItems(parsed.filter(isValidHistoryItem));
         }
       }
-      setHasLoadedServerHistory(true);
     } catch (error) {
       console.error("Gagal membaca riwayat:", error);
     }
@@ -339,30 +348,6 @@ export default function Home() {
     if (!canUseTelegramSync || !telegramUserId || hasLoadedServerFavorites)
       return;
 
-    const syncProfile = async () => {
-      try {
-        await fetch("/api/user-profile", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            telegram_user_id: telegramUserId,
-            telegram_username: telegramUserName,
-          }),
-        });
-      } catch (error) {
-        console.error("Gagal sync user profile:", error);
-      }
-    };
-
-    syncProfile();
-  }, [canUseTelegramSync, telegramUserId, telegramUserName]);
-
-  useEffect(() => {
-    if (!canUseTelegramSync || !telegramUserId || hasLoadedServerFavorites)
-      return;
-
     let isMounted = true;
 
     const loadServerFavorites = async () => {
@@ -395,6 +380,43 @@ export default function Home() {
       isMounted = false;
     };
   }, [canUseTelegramSync, telegramUserId, hasLoadedServerFavorites]);
+
+  useEffect(() => {
+    if (!canUseTelegramSync || !telegramUserId || hasLoadedServerHistory)
+      return;
+
+    let isMounted = true;
+
+    const loadServerHistory = async () => {
+      try {
+        const response = await fetch(
+          `/api/user-history?telegram_user_id=${telegramUserId}`,
+        );
+
+        if (!response.ok) {
+          throw new Error("Gagal memuat riwayat dari server.");
+        }
+
+        const data = await response.json();
+
+        if (!isMounted) return;
+
+        if (Array.isArray(data)) {
+          setHistoryItems(data.filter(isValidHistoryItem));
+        }
+
+        setHasLoadedServerHistory(true);
+      } catch (error) {
+        console.error("Gagal memuat riwayat server:", error);
+      }
+    };
+
+    loadServerHistory();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [canUseTelegramSync, telegramUserId, hasLoadedServerHistory]);
 
   useEffect(() => {
     let isMounted = true;
