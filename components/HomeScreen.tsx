@@ -98,7 +98,7 @@ export default function HomeScreen({
           </div>
         </header>
 
-        <section className="mt-4">
+        <section className="mt-5">
           <div className="mb-3 text-center">
             <h2 className="text-[13px] font-semibold uppercase tracking-[0.28em] text-[#8F887C]">
               Populer
@@ -147,7 +147,7 @@ export default function HomeScreen({
           </div>
         </section>
 
-        <section className="mt-0">
+        <section className="mt-8">
           <div className="mb-4 flex items-center justify-center gap-3">
             <h2 className="text-[13px] font-semibold uppercase tracking-[0.28em] text-[#8F887C]">
               Jelajah Lainnya
@@ -198,8 +198,8 @@ export default function HomeScreen({
           </div>
         </section>
 
-        <section className="mt-5 rounded-[28px] border border-white/10 bg-[#12131A] px-6 py-5 shadow-[0_18px_36px_rgba(0,0,0,0.18)]">
-          <div className="mb-6 grid grid-cols-3 gap-3">
+        <section className="mt-8 rounded-[28px] border border-white/10 bg-[#12131A] px-6 py-5 shadow-[0_18px_36px_rgba(0,0,0,0.18)]">
+          <div className="grid grid-cols-3 text-center">
             <div>
               <p className="text-3xl font-bold text-[#D9B36A]">12</p>
               <p className="mt-2 text-[12px] uppercase tracking-[0.2em] text-[#8F887C]">
