@@ -112,6 +112,10 @@ function isValidHistoryItem(value: unknown): value is HistoryItem {
   );
 }
 
+function isValidFavoriteId(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
 export default function Home() {
   const FAVORITES_STORAGE_KEY = "dramalotus.favoriteIds";
   const HISTORY_STORAGE_KEY = "dramalotus.historyItems";
@@ -239,7 +243,7 @@ export default function Home() {
         const parsed = JSON.parse(storedFavoriteIds);
 
         if (Array.isArray(parsed)) {
-          setFavoriteIds(parsed.filter((id) => typeof id === "number"));
+          setFavoriteIds(parsed.filter(isValidFavoriteId));
         }
       }
     } catch (error) {
@@ -350,7 +354,7 @@ export default function Home() {
 
     let isMounted = true;
 
-    const loadServerFavorites = async () => {
+    const loadFavoriteDataFromServer = async () => {
       try {
         const response = await fetch(
           `/api/user-favorites?telegram_user_id=${telegramUserId}`,
@@ -365,7 +369,7 @@ export default function Home() {
         if (!isMounted) return;
 
         if (Array.isArray(data)) {
-          setFavoriteIds(data.filter((id) => typeof id === "number"));
+          setFavoriteIds(data.filter(isValidFavoriteId));
         }
 
         setHasLoadedServerFavorites(true);
@@ -374,7 +378,7 @@ export default function Home() {
       }
     };
 
-    loadServerFavorites();
+    loadFavoriteDataFromServer();
 
     return () => {
       isMounted = false;
@@ -387,7 +391,7 @@ export default function Home() {
 
     let isMounted = true;
 
-    const loadServerHistory = async () => {
+    const loadHistoryDataFromServer = async () => {
       try {
         const response = await fetch(
           `/api/user-history?telegram_user_id=${telegramUserId}`,
@@ -411,7 +415,7 @@ export default function Home() {
       }
     };
 
-    loadServerHistory();
+    loadHistoryDataFromServer();
 
     return () => {
       isMounted = false;
@@ -421,7 +425,7 @@ export default function Home() {
   useEffect(() => {
     let isMounted = true;
 
-    const loadData = async () => {
+    const loadCatalogData = async () => {
       try {
         const [sourcesRes, dramasRes, episodesRes] = await Promise.all([
           fetch("/api/sources"),
@@ -477,7 +481,7 @@ export default function Home() {
       }
     };
 
-    loadData();
+    loadCatalogData();
 
     return () => {
       isMounted = false;
@@ -500,7 +504,7 @@ export default function Home() {
     [sources],
   );
 
-  const filteredDramas = useMemo(() => {
+  const visibleDramas = useMemo(() => {
     const keyword = searchQuery.toLowerCase().trim();
 
     const baseFiltered = dramas.filter((drama) => {
@@ -536,11 +540,13 @@ export default function Home() {
     });
   }, [dramas, selectedSource, searchQuery, sourceTab]);
 
-  const toggleFavorite = async (dramaId: number) => {
-    const isFavorited = favoriteIds.includes(dramaId);
+  const handleToggleFavorite = async (dramaId: number) => {
+    const isFavorited = favoriteIdSet.has(dramaId);
 
-    setFavoriteIds((prev) =>
-      isFavorited ? prev.filter((id) => id !== dramaId) : [...prev, dramaId],
+    setFavoriteIds((currentFavoriteIds) =>
+      isFavorited
+        ? currentFavoriteIds.filter((id) => id !== dramaId)
+        : [...currentFavoriteIds, dramaId],
     );
 
     if (!canUseTelegramSync || !telegramUserId) return;
@@ -563,14 +569,18 @@ export default function Home() {
     } catch (error) {
       console.error("Gagal sinkron favorit:", error);
 
-      setFavoriteIds((prev) =>
-        isFavorited ? [...prev, dramaId] : prev.filter((id) => id !== dramaId),
+      setFavoriteIds((currentFavoriteIds) =>
+        isFavorited
+          ? currentFavoriteIds.filter((id) => id !== dramaId)
+          : [...currentFavoriteIds, dramaId],
       );
     }
   };
 
-  const favoriteDramas = dramas.filter((drama) =>
-    favoriteIds.includes(drama.id),
+  const favoriteIdSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
+
+  const favoriteDramaList = dramas.filter((drama) =>
+    favoriteIdSet.has(drama.id),
   );
 
   const mostWatchedLabel = useMemo(() => {
@@ -599,16 +609,28 @@ export default function Home() {
     return topSource;
   }, [historyItems, dramas]);
 
-  const currentEpisodes = selectedDrama
+  const selectedDramaEpisodes = selectedDrama
     ? episodes.filter((episode) => episode.dramaId === selectedDrama.id)
     : [];
 
-  const saveToHistory = async (dramaId: number, episodeId: number) => {
+  const historyByDramaId = useMemo(() => {
+    const map = new Map<number, HistoryItem>();
+
+    historyItems.forEach((item) => {
+      map.set(item.dramaId, item);
+    });
+
+    return map;
+  }, [historyItems]);
+
+  const handleSaveToHistory = async (dramaId: number, episodeId: number) => {
     const previousHistoryItems = historyItems;
+    const existingHistoryItem = historyByDramaId.get(dramaId);
+    if (existingHistoryItem?.episodeId === episodeId) return;
 
     setHistoryItems((prev) => {
-      const filtered = prev.filter((item) => item.dramaId !== dramaId);
-      return [{ dramaId, episodeId }, ...filtered];
+      const otherHistoryItems = prev.filter((item) => item.dramaId !== dramaId);
+      return [{ dramaId, episodeId }, ...otherHistoryItems];
     });
 
     if (!canUseTelegramSync || !telegramUserId) return;
@@ -735,7 +757,7 @@ export default function Home() {
   if (activeTab === "favorites" && !selectedSource && !selectedDrama) {
     return (
       <FavoritesScreen
-        favoriteDramas={favoriteDramas}
+        favoriteDramas={favoriteDramaList}
         onBack={() => setActiveTab("home")}
         onOpenHistory={() => setActiveTab("history")}
         onOpenProfile={() => setActiveTab("profile")}
@@ -748,7 +770,7 @@ export default function Home() {
           setSelectedEpisode(firstEpisode);
 
           if (firstEpisode) {
-            saveToHistory(drama.id, firstEpisode.id);
+            handleSaveToHistory(drama.id, firstEpisode.id);
           }
 
           setActiveTab("home");
@@ -760,7 +782,7 @@ export default function Home() {
   if (activeTab === "profile" && !selectedSource && !selectedDrama) {
     return (
       <ProfileScreen
-        favoriteCount={favoriteDramas.length}
+        favoriteCount={favoriteDramaList.length}
         historyCount={historyItems.length}
         mostWatchedLabel={mostWatchedLabel}
         membershipStatus={membershipStatus}
@@ -781,7 +803,7 @@ export default function Home() {
       <PlayerScreen
         selectedDrama={selectedDrama}
         selectedEpisode={selectedEpisode}
-        episodes={currentEpisodes}
+        episodes={selectedDramaEpisodes}
         showEpisodes={showEpisodes}
         membershipStatus={membershipStatus}
         onBack={() => {
@@ -795,7 +817,7 @@ export default function Home() {
           setSelectedEpisode(episode);
 
           if (selectedDrama) {
-            saveToHistory(selectedDrama.id, episode.id);
+            handleSaveToHistory(selectedDrama.id, episode.id);
           }
         }}
       />
@@ -808,9 +830,9 @@ export default function Home() {
         selectedSource={selectedSource}
         searchQuery={searchQuery}
         sourceTab={sourceTab}
-        filteredDramas={filteredDramas}
+        filteredDramas={visibleDramas}
         favoriteIds={favoriteIds}
-        isTelegramReady={canUseTelegramSync}
+        isTelegramReady={true}
         onBack={() => {
           setSelectedSource(null);
           setSearchQuery("");
@@ -825,10 +847,10 @@ export default function Home() {
           setSelectedEpisode(firstEpisode);
 
           if (firstEpisode) {
-            saveToHistory(drama.id, firstEpisode.id);
+            handleSaveToHistory(drama.id, firstEpisode.id);
           }
         }}
-        onToggleFavorite={toggleFavorite}
+        onToggleFavorite={handleToggleFavorite}
       />
     );
   }
