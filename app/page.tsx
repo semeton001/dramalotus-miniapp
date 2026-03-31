@@ -109,14 +109,6 @@ export default function Home() {
     if (textColor) {
       document.documentElement.style.setProperty("--tg-text", textColor);
     }
-
-    const user = tg.initDataUnsafe?.user;
-    const resolvedName =
-      user?.first_name || user?.username || user?.last_name || null;
-
-    if (resolvedName) {
-      setTelegramUserName(resolvedName);
-    }
   }, []);
 
   useEffect(() => {
