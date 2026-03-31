@@ -64,7 +64,7 @@ export default function ProfileScreen({
                   : "Pengguna Telegram"}
               </h2>
               <p className="mt-1 text-[18px] text-[#9E978B]">
-                ID: {telegramUserId ?? "Belum tersedia"}
+                ID Telegram belum tervalidasi
               </p>
             </div>
           </div>

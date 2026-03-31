@@ -21,12 +21,6 @@ declare global {
         backgroundColor?: string;
         headerColor?: string;
         colorScheme?: "light" | "dark";
-        BackButton?: {
-          show: () => void;
-          hide: () => void;
-          onClick: (callback: () => void) => void;
-          offClick: (callback: () => void) => void;
-        };
         initDataUnsafe?: {
           user?: {
             id?: number;
@@ -56,8 +50,7 @@ export default function Home() {
   const MEMBERSHIP_STORAGE_KEY = "dramalotus.membershipStatus";
 
   const [telegramUserName, setTelegramUserName] = useState<string | null>(null);
-  const [telegramUserId, setTelegramUserId] = useState<number | null>(null);
-  const isTelegramReady = telegramUserId !== null;
+  const [telegramUserId] = useState<number | null>(null);
 
   const [sources, setSources] = useState<Source[]>([]);
   const [dramas, setDramas] = useState<Drama[]>([]);
@@ -117,81 +110,57 @@ export default function Home() {
       document.documentElement.style.setProperty("--tg-text", textColor);
     }
 
-    let cancelled = false;
-    let attempts = 0;
-    const maxAttempts = 10;
+    const user = tg.initDataUnsafe?.user;
+    const resolvedName =
+      user?.first_name || user?.username || user?.last_name || null;
 
-    const tryReadTelegramUser = async () => {
-      const user = tg.initDataUnsafe?.user;
-
-      const resolvedName =
-        user?.first_name || user?.username || user?.last_name || null;
-      const resolvedId = user?.id ?? null;
-
-      if (resolvedName) {
-        setTelegramUserName(resolvedName);
-      }
-
-      if (resolvedId) {
-        setTelegramUserId(resolvedId);
-
-        try {
-          await fetch("/api/user-profile", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              telegram_user_id: resolvedId,
-              telegram_username: resolvedName,
-            }),
-          });
-        } catch (error) {
-          console.error("Gagal sync user profile:", error);
-        }
-
-        return;
-      }
-
-      attempts += 1;
-
-      if (!cancelled && attempts < maxAttempts) {
-        window.setTimeout(tryReadTelegramUser, 500);
-      }
-    };
-
-    tryReadTelegramUser();
-
-    return () => {
-      cancelled = true;
-    };
+    if (resolvedName) {
+      setTelegramUserName(resolvedName);
+    }
   }, []);
 
   useEffect(() => {
-    if (!telegramUserId) return;
+    try {
+      const storedFavoriteIds = window.localStorage.getItem(
+        FAVORITES_STORAGE_KEY,
+      );
 
-    const loadFavoritesFromDb = async () => {
-      try {
-        const res = await fetch(
-          `/api/user-favorites?telegram_user_id=${telegramUserId}`,
-        );
+      if (storedFavoriteIds) {
+        const parsed = JSON.parse(storedFavoriteIds);
 
-        if (!res.ok) {
-          throw new Error("Gagal memuat favorites dari database.");
+        if (Array.isArray(parsed)) {
+          setFavoriteIds(parsed.filter((id) => typeof id === "number"));
         }
-
-        const data = await res.json();
-
-        if (Array.isArray(data)) {
-          setFavoriteIds(data.filter((id) => typeof id === "number"));
-        }
-      } catch (error) {
-        console.error("Gagal load favorites dari DB:", error);
       }
-    };
+    } catch (error) {
+      console.error("Gagal membaca favorit:", error);
+    }
+  }, []);
 
-    loadFavoritesFromDb();
-  }, [telegramUserId]);
+  useEffect(() => {
+    try {
+      const storedHistoryItems =
+        window.localStorage.getItem(HISTORY_STORAGE_KEY);
+
+      if (storedHistoryItems) {
+        const parsed = JSON.parse(storedHistoryItems);
+
+        if (Array.isArray(parsed)) {
+          setHistoryItems(
+            parsed.filter(
+              (item) =>
+                item &&
+                typeof item === "object" &&
+                typeof item.dramaId === "number" &&
+                typeof item.episodeId === "number",
+            ),
+          );
+        }
+      }
+    } catch (error) {
+      console.error("Gagal membaca riwayat:", error);
+    }
+  }, []);
 
   useEffect(() => {
     try {
@@ -220,40 +189,6 @@ export default function Home() {
       console.error("Gagal menyimpan favorit:", error);
     }
   }, [favoriteIds]);
-
-  useEffect(() => {
-    if (!telegramUserId) return;
-
-    const loadHistoryFromDb = async () => {
-      try {
-        const res = await fetch(
-          `/api/user-history?telegram_user_id=${telegramUserId}`,
-        );
-
-        if (!res.ok) {
-          throw new Error("Gagal memuat history dari database.");
-        }
-
-        const data = await res.json();
-
-        if (Array.isArray(data)) {
-          setHistoryItems(
-            data.filter(
-              (item) =>
-                item &&
-                typeof item === "object" &&
-                typeof item.dramaId === "number" &&
-                typeof item.episodeId === "number",
-            ),
-          );
-        }
-      } catch (error) {
-        console.error("Gagal load history dari DB:", error);
-      }
-    };
-
-    loadHistoryFromDb();
-  }, [telegramUserId]);
 
   useEffect(() => {
     try {
@@ -393,39 +328,11 @@ export default function Home() {
   }, [dramas, selectedSource, searchQuery, sourceTab]);
 
   const toggleFavorite = async (dramaId: number) => {
-    if (!telegramUserId) {
-      alert("Mohon tunggu, data Telegram belum siap.");
-      return;
-    }
-
     const isFavorited = favoriteIds.includes(dramaId);
 
     setFavoriteIds((prev) =>
       isFavorited ? prev.filter((id) => id !== dramaId) : [...prev, dramaId],
     );
-
-    try {
-      const res = await fetch("/api/user-favorites", {
-        method: isFavorited ? "DELETE" : "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          telegram_user_id: telegramUserId,
-          drama_id: dramaId,
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error("Gagal sinkron favorit ke database.");
-      }
-    } catch (error) {
-      console.error("Gagal sync favorite:", error);
-
-      setFavoriteIds((prev) =>
-        isFavorited ? [...prev, dramaId] : prev.filter((id) => id !== dramaId),
-      );
-    }
   };
 
   const favoriteDramas = dramas.filter((drama) =>
@@ -467,28 +374,6 @@ export default function Home() {
       const filtered = prev.filter((item) => item.dramaId !== dramaId);
       return [{ dramaId, episodeId }, ...filtered];
     });
-
-    if (!telegramUserId) return;
-
-    try {
-      const res = await fetch("/api/user-history", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          telegram_user_id: telegramUserId,
-          drama_id: dramaId,
-          episode_id: episodeId,
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error("Gagal sinkron history ke database.");
-      }
-    } catch (error) {
-      console.error("Gagal sync history:", error);
-    }
   };
 
   if (showSplash) {
@@ -511,7 +396,7 @@ export default function Home() {
               </div>
 
               <h1 className="font-ExoBold mt-6 text-4xl tracking-[0.02em] text-[#D9B36A]">
-                DRAMALOTUS LOCAL TEST
+                DRAMALOTUS
               </h1>
 
               <p className="mt-4 text-sm leading-7 text-[#9E978B]">
@@ -528,7 +413,7 @@ export default function Home() {
                 onClick={() => setShowSplash(false)}
                 className="mt-8 w-full rounded-[22px] border border-white/10 bg-white/[0.03] px-4 py-4 text-sm font-medium text-[#DDD4C4] transition hover:bg-white/[0.05]"
               >
-                Masuk ke DRAMALOTUS LOCAL TEST
+                Masuk ke DRAMALOTUS
               </button>
             </div>
           </div>
@@ -666,7 +551,7 @@ export default function Home() {
         sourceTab={sourceTab}
         filteredDramas={filteredDramas}
         favoriteIds={favoriteIds}
-        isTelegramReady={isTelegramReady}
+        isTelegramReady={true}
         onBack={() => {
           setSelectedSource(null);
           setSearchQuery("");
