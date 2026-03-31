@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
+import {
+  adaptDramaListBySource,
+  adaptDramaSearchListBySource,
+} from "@/lib/adapters/drama";
 
 type DramaRow = {
   id: string;
@@ -42,6 +46,27 @@ type SourceRow = {
   name: string;
 };
 
+async function fetchDramaBoxSearchList() {
+  const response = await fetch(
+    "https://dramabox.dramabos.my.id/api/v1/search?query=drama&lang=in",
+    {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+      },
+      cache: "no-store",
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `DramaBox search request failed with status ${response.status}`,
+    );
+  }
+
+  return response.json();
+}
+
 export async function GET() {
   const [
     { data: dramasData, error: dramasError },
@@ -74,6 +99,64 @@ export async function GET() {
       source.name,
     ]),
   );
+  const dramaboxSample = [
+    {
+      bookId: "42000008165",
+      bookName: "Tak Tertandingi Usai Bebas",
+      coverWap:
+        "https://hwztchapter.dramaboxdb.com/data/cppartner/4x2/42x0/420x0/42000008165/42000008165.jpg?t=1773974408741",
+      chapterCount: 69,
+      introduction:
+        "Rendy Susanto menanggung kesalahan tunangannya, dia pun dipenjara lima tahun.",
+      tags: [
+        "Serangan Balik",
+        "Balas Dendam",
+        "Keadilan",
+        "Kekuatan Khusus",
+        "Modern",
+        "Pria Dominan",
+      ],
+    },
+  ];
+
+  const adaptedDramaBoxSample = adaptDramaListBySource(
+    "dramabox",
+    dramaboxSample,
+  );
+  void adaptedDramaBoxSample;
+
+  let adaptedDramaBoxSearch: DramaResponse[] = [];
+
+  try {
+    const dramaBoxSearchRaw = await fetchDramaBoxSearchList();
+    const dramaBoxSearchItems = Array.isArray(dramaBoxSearchRaw)
+      ? dramaBoxSearchRaw
+      : [];
+
+    let adaptedDramaBoxSearch: DramaResponse[] = [];
+
+    try {
+      const dramaBoxSearchRaw = await fetchDramaBoxSearchList();
+      const dramaBoxSearchItems = Array.isArray(dramaBoxSearchRaw)
+        ? dramaBoxSearchRaw
+        : [];
+
+      adaptedDramaBoxSearch = adaptDramaSearchListBySource(
+        "dramabox",
+        dramaBoxSearchItems,
+      ) as DramaResponse[];
+
+      console.log("DramaBox search raw count:", dramaBoxSearchItems.length);
+      console.log(
+        "DramaBox search adapted count:",
+        adaptedDramaBoxSearch.length,
+      );
+    } catch (error) {
+      console.error("DramaBox search adapter test failed:", error);
+    }
+  } catch (error) {
+    console.error("DramaBox search adapter test failed:", error);
+  }
 
   const dramas: DramaResponse[] = ((dramasData ?? []) as DramaRow[]).map(
     (item) => ({
@@ -96,5 +179,5 @@ export async function GET() {
     }),
   );
 
-  return NextResponse.json(dramas);
+  return NextResponse.json([...dramas, ...adaptedDramaBoxSearch]);
 }
