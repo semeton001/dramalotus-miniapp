@@ -62,7 +62,7 @@ export async function GET() {
     source: sourceMap.get(item.source_id) ?? "",
     title: item.title,
     episodes: item.episodes_count,
-    badge: item.badge ?? undefined,
+    badge: item.badge ?? "",
     tags: item.tags ?? [],
     posterClass: item.poster_class ?? "",
     slug: item.slug,

@@ -96,6 +96,7 @@ export default function SourceScreen({
               return (
                 <button
                   key={tab.value}
+                  type="button"
                   onClick={() => onTabChange(tab.value)}
                   className={`relative whitespace-nowrap pb-3 text-[14px] font-semibold transition ${
                     active ? "text-[#E6D3A3]" : "text-[#8F887C]"
@@ -103,7 +104,7 @@ export default function SourceScreen({
                 >
                   {tab.label}
                   {active && (
-                    <span className="absolute left-1/2 bottom-0 h-[2px] w-[72px] -translate-x-1/2 rounded-full bg-[linear-gradient(90deg,#B76E79,#C9A45C,#E6D3A3)]" />
+                    <span className="absolute bottom-0 left-1/2 h-[2px] w-[72px] -translate-x-1/2 rounded-full bg-[linear-gradient(90deg,#B76E79,#C9A45C,#E6D3A3)]" />
                   )}
                 </button>
               );
@@ -112,7 +113,7 @@ export default function SourceScreen({
         </header>
 
         <section className="px-4 pt-4">
-          <div className="grid grid-cols-3 gap-x-3 gap-y-5 items-start">
+          <div className="grid grid-cols-3 items-start gap-x-3 gap-y-5">
             {filteredDramas.map((drama) => {
               const isFavorite = favoriteIds.includes(drama.id);
 
@@ -160,6 +161,10 @@ export default function SourceScreen({
                           if (!isTelegramReady) return;
                           onToggleFavorite(drama.id);
                         }}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
                         onMouseDown={(e) => {
                           e.stopPropagation();
                         }}
@@ -175,7 +180,7 @@ export default function SourceScreen({
                           isFavorite
                             ? "border-[#C9A45C]/35 bg-[linear-gradient(135deg,rgba(201,164,92,0.22),rgba(183,110,121,0.18))] text-[#F5E6C5]"
                             : "border-white/8 bg-[#11131B]/88 text-white/90"
-                        } ${!isTelegramReady ? "pointer-events-none opacity-50" : ""}`}
+                        } ${!isTelegramReady ? "cursor-not-allowed opacity-50" : ""}`}
                       >
                         <span className="text-[14px] leading-none">
                           {isFavorite ? "♥" : "♡"}
