@@ -46,9 +46,9 @@ type SourceRow = {
   name: string;
 };
 
-async function fetchDramaBoxSearchList() {
+async function fetchDramaBoxSearchList(query: string) {
   const response = await fetch(
-    "https://dramabox.dramabos.my.id/api/v1/search?query=drama&lang=in",
+    `https://dramabox.dramabos.my.id/api/v1/search?query=${encodeURIComponent(query)}&lang=in`,
     {
       method: "GET",
       headers: {
@@ -128,32 +128,18 @@ export async function GET() {
   let adaptedDramaBoxSearch: DramaResponse[] = [];
 
   try {
-    const dramaBoxSearchRaw = await fetchDramaBoxSearchList();
+    const dramaBoxSearchRaw = await fetchDramaBoxSearchList("love");
     const dramaBoxSearchItems = Array.isArray(dramaBoxSearchRaw)
       ? dramaBoxSearchRaw
       : [];
 
-    let adaptedDramaBoxSearch: DramaResponse[] = [];
+    adaptedDramaBoxSearch = adaptDramaSearchListBySource(
+      "dramabox",
+      dramaBoxSearchItems,
+    ) as DramaResponse[];
 
-    try {
-      const dramaBoxSearchRaw = await fetchDramaBoxSearchList();
-      const dramaBoxSearchItems = Array.isArray(dramaBoxSearchRaw)
-        ? dramaBoxSearchRaw
-        : [];
-
-      adaptedDramaBoxSearch = adaptDramaSearchListBySource(
-        "dramabox",
-        dramaBoxSearchItems,
-      ) as DramaResponse[];
-
-      console.log("DramaBox search raw count:", dramaBoxSearchItems.length);
-      console.log(
-        "DramaBox search adapted count:",
-        adaptedDramaBoxSearch.length,
-      );
-    } catch (error) {
-      console.error("DramaBox search adapter test failed:", error);
-    }
+    console.log("DramaBox search raw count:", dramaBoxSearchItems.length);
+    console.log("DramaBox search adapted count:", adaptedDramaBoxSearch.length);
   } catch (error) {
     console.error("DramaBox search adapter test failed:", error);
   }
@@ -179,5 +165,29 @@ export async function GET() {
     }),
   );
 
-  return NextResponse.json([...dramas, ...adaptedDramaBoxSearch]);
+  const mergedDramas = [...dramas];
+  const existingDramaIds = new Set(dramas.map((item) => item.id));
+
+  adaptedDramaBoxSearch.forEach((item) => {
+    if (!existingDramaIds.has(item.id)) {
+      mergedDramas.push(item);
+    }
+  });
+
+  mergedDramas.sort((a, b) => {
+    const aOrder = a.sortOrder ?? 9999;
+    const bOrder = b.sortOrder ?? 9999;
+
+    if (aOrder !== bOrder) {
+      return aOrder - bOrder;
+    }
+
+    return a.title.localeCompare(b.title);
+  });
+
+  console.log("Supabase dramas count:", dramas.length);
+  console.log("DramaBox adapted count:", adaptedDramaBoxSearch.length);
+  console.log("Merged dramas count:", mergedDramas.length);
+
+  return NextResponse.json(mergedDramas);
 }

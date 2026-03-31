@@ -116,6 +116,21 @@ function isValidFavoriteId(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value > 0;
 }
 
+function isDramaBoxDrama(drama: Drama | null): boolean {
+  return !!drama && drama.sourceId === "dramabox";
+}
+
+function getFirstLocalEpisode(
+  drama: Drama,
+  episodes: Episode[],
+): Episode | null {
+  return episodes.find((episode) => episode.dramaId === drama.id) ?? null;
+}
+
+function getFirstDramaBoxEpisode(episodes: Episode[]): Episode | null {
+  return episodes.length > 0 ? episodes[0] : null;
+}
+
 export default function Home() {
   const FAVORITES_STORAGE_KEY = "dramalotus.favoriteIds";
   const HISTORY_STORAGE_KEY = "dramalotus.historyItems";
@@ -133,6 +148,7 @@ export default function Home() {
   const [sources, setSources] = useState<Source[]>([]);
   const [dramas, setDramas] = useState<Drama[]>([]);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
+  const [dramaBoxEpisodes, setDramaBoxEpisodes] = useState<Episode[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [dataError, setDataError] = useState<string | null>(null);
 
@@ -488,6 +504,57 @@ export default function Home() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!selectedDrama || !isDramaBoxDrama(selectedDrama)) return;
+    if (selectedEpisode) return;
+    if (dramaBoxEpisodes.length === 0) return;
+
+    setSelectedEpisode(dramaBoxEpisodes[0]);
+  }, [selectedDrama, selectedEpisode, dramaBoxEpisodes]);
+
+  useEffect(() => {
+    if (!selectedDrama || !isDramaBoxDrama(selectedDrama)) {
+      setDramaBoxEpisodes([]);
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadDramaBoxEpisodes = async () => {
+      try {
+        const response = await fetch(
+          `/api/dramabox/episodes?bookId=${selectedDrama.id}`,
+        );
+
+        if (!response.ok) {
+          throw new Error("Gagal memuat episode DramaBox.");
+        }
+
+        const data = await response.json();
+
+        if (!isMounted) return;
+
+        if (Array.isArray(data)) {
+          setDramaBoxEpisodes(data);
+        } else {
+          setDramaBoxEpisodes([]);
+        }
+      } catch (error) {
+        console.error("Gagal memuat episode DramaBox:", error);
+
+        if (isMounted) {
+          setDramaBoxEpisodes([]);
+        }
+      }
+    };
+
+    loadDramaBoxEpisodes();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedDrama]);
+
   const popularSources = useMemo(
     () =>
       sources
@@ -613,7 +680,9 @@ export default function Home() {
   }, [historyItems, dramas]);
 
   const selectedDramaEpisodes = selectedDrama
-    ? episodes.filter((episode) => episode.dramaId === selectedDrama.id)
+    ? isDramaBoxDrama(selectedDrama)
+      ? dramaBoxEpisodes
+      : episodes.filter((episode) => episode.dramaId === selectedDrama.id)
     : [];
 
   const historyByDramaId = useMemo(() => {
@@ -767,8 +836,9 @@ export default function Home() {
         onSelectDrama={(drama) => {
           setSelectedDrama(drama);
 
-          const firstEpisode =
-            episodes.find((episode) => episode.dramaId === drama.id) ?? null;
+          const firstEpisode = isDramaBoxDrama(drama)
+            ? getFirstDramaBoxEpisode(dramaBoxEpisodes)
+            : getFirstLocalEpisode(drama, episodes);
 
           setSelectedEpisode(firstEpisode);
 
@@ -845,8 +915,9 @@ export default function Home() {
         onTabChange={setSourceTab}
         onSelectDrama={(drama) => {
           setSelectedDrama(drama);
-          const firstEpisode =
-            episodes.find((episode) => episode.dramaId === drama.id) ?? null;
+          const firstEpisode = isDramaBoxDrama(drama)
+            ? getFirstDramaBoxEpisode(dramaBoxEpisodes)
+            : getFirstLocalEpisode(drama, episodes);
           setSelectedEpisode(firstEpisode);
 
           if (firstEpisode) {
