@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
-import type { Drama } from "@/types/drama";
 
 type DramaRow = {
   id: string;
@@ -17,6 +16,25 @@ type DramaRow = {
   is_dubbed: boolean;
   is_trending: boolean;
   sort_order: number;
+};
+
+type DramaResponse = {
+  id: number;
+  source: string; // lama, sementara
+  sourceId: string; // baru
+  sourceName: string; // baru
+  title: string;
+  episodes: number;
+  badge: string;
+  tags: string[];
+  posterClass: string;
+  slug: string;
+  description: string;
+  category: string;
+  isNew: boolean;
+  isDubbed: boolean;
+  isTrending: boolean;
+  sortOrder: number;
 };
 
 type SourceRow = {
@@ -57,22 +75,26 @@ export async function GET() {
     ]),
   );
 
-  const dramas: Drama[] = ((dramasData ?? []) as DramaRow[]).map((item) => ({
-    id: Number(item.id),
-    source: sourceMap.get(item.source_id) ?? "",
-    title: item.title,
-    episodes: item.episodes_count,
-    badge: item.badge ?? "",
-    tags: item.tags ?? [],
-    posterClass: item.poster_class ?? "",
-    slug: item.slug,
-    description: item.description ?? "",
-    category: item.category ?? "",
-    isNew: item.is_new,
-    isDubbed: item.is_dubbed,
-    isTrending: item.is_trending,
-    sortOrder: item.sort_order,
-  }));
+  const dramas: DramaResponse[] = ((dramasData ?? []) as DramaRow[]).map(
+    (item) => ({
+      id: Number(item.id),
+      source: sourceMap.get(item.source_id) ?? "",
+      sourceId: item.source_id,
+      sourceName: sourceMap.get(item.source_id) ?? "",
+      title: item.title,
+      episodes: item.episodes_count,
+      badge: item.badge ?? "",
+      tags: item.tags ?? [],
+      posterClass: item.poster_class ?? "",
+      slug: item.slug,
+      description: item.description ?? "",
+      category: item.category ?? "",
+      isNew: item.is_new,
+      isDubbed: item.is_dubbed,
+      isTrending: item.is_trending,
+      sortOrder: item.sort_order,
+    }),
+  );
 
   return NextResponse.json(dramas);
 }

@@ -509,7 +509,7 @@ export default function Home() {
 
     const baseFiltered = dramas.filter((drama) => {
       const matchesSource = selectedSource
-        ? drama.source === selectedSource.name
+        ? drama.sourceId === selectedSource.id
         : true;
 
       const matchesSearch =
@@ -591,9 +591,12 @@ export default function Home() {
 
     historyItems.forEach((item) => {
       const drama = dramaMap.get(item.dramaId);
-      if (!drama?.source) return;
+      if (!drama?.sourceName) return;
 
-      sourceCount.set(drama.source, (sourceCount.get(drama.source) ?? 0) + 1);
+      sourceCount.set(
+        drama.sourceName,
+        (sourceCount.get(drama.sourceName) ?? 0) + 1,
+      );
     });
 
     let topSource = "-";

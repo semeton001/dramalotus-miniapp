@@ -103,7 +103,7 @@ export default function HistoryScreen({
                             {drama.title}
                           </p>
                           <p className="mt-1 text-[12px] font-medium text-[#C9A45C]">
-                            {drama.source}
+                            {drama.sourceName}
                           </p>
                         </div>
 

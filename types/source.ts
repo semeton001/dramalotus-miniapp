@@ -1,20 +1,17 @@
 export type Source = {
-  id: number;
+  id: string;
   name: string;
-  badge?: string;
-  cardClass?: string;
-  logo?: string;
+  badge?: string | null;
+  cardClass?: string | null;
+  logo?: string | null;
 
-  // siap untuk data nyata
-  slug?: string;
-  description?: string;
+  slug?: string | null;
+  description?: string | null;
   websiteUrl?: string;
 
-  // siap untuk styling / branding source
   themeColor?: string;
   accentColor?: string;
 
-  // siap untuk kontrol urutan / status
-  sortOrder?: number;
+  sortOrder?: number | null;
   isPopular?: boolean;
 };
