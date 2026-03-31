@@ -44,13 +44,62 @@ declare global {
 
 const isArray = <T,>(value: unknown): value is T[] => Array.isArray(value);
 
+type SafeTelegramUser = {
+  id: number;
+  username: string | null;
+  firstName: string | null;
+  lastName: string | null;
+};
+
+function getValidatedTelegramUser(): SafeTelegramUser | null {
+  if (typeof window === "undefined") return null;
+
+  const rawUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+  if (!rawUser) return null;
+
+  const userId = rawUser.id;
+
+  if (typeof userId !== "number" || !Number.isInteger(userId) || userId <= 0) {
+    return null;
+  }
+
+  const username =
+    typeof rawUser.username === "string" && rawUser.username.trim().length > 0
+      ? rawUser.username.trim()
+      : null;
+
+  const firstName =
+    typeof rawUser.first_name === "string" &&
+    rawUser.first_name.trim().length > 0
+      ? rawUser.first_name.trim()
+      : null;
+
+  const lastName =
+    typeof rawUser.last_name === "string" && rawUser.last_name.trim().length > 0
+      ? rawUser.last_name.trim()
+      : null;
+
+  return {
+    id: userId,
+    username,
+    firstName,
+    lastName,
+  };
+}
+
 export default function Home() {
   const FAVORITES_STORAGE_KEY = "dramalotus.favoriteIds";
   const HISTORY_STORAGE_KEY = "dramalotus.historyItems";
   const MEMBERSHIP_STORAGE_KEY = "dramalotus.membershipStatus";
 
   const [telegramUserName, setTelegramUserName] = useState<string | null>(null);
-  const [telegramUserId] = useState<number | null>(null);
+  const [telegramUserId, setTelegramUserId] = useState<number | null>(null);
+  const [isTelegramWebAppReady, setIsTelegramWebAppReady] = useState(false);
+  const [isTelegramUserValid, setIsTelegramUserValid] = useState(false);
+  const [hasSyncedProfile, setHasSyncedProfile] = useState(false);
+  const [hasLoadedServerFavorites, setHasLoadedServerFavorites] =
+    useState(false);
+  const [hasLoadedServerHistory, setHasLoadedServerHistory] = useState(false);
 
   const [sources, setSources] = useState<Source[]>([]);
   const [dramas, setDramas] = useState<Drama[]>([]);
@@ -78,6 +127,11 @@ export default function Home() {
     "free",
   );
   const [showSplash, setShowSplash] = useState(true);
+  // Mode app:
+  // - Browser biasa / luar Telegram -> lokal saja
+  // - Telegram ada tapi user tidak valid -> lokal/netral
+  // - Telegram valid -> boleh sync profile/favorit/riwayat
+  const canUseTelegramSync = isTelegramWebAppReady && isTelegramUserValid;
 
   useEffect(() => {
     if (!showSplash) return;
@@ -94,7 +148,16 @@ export default function Home() {
 
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
-    if (!tg) return;
+
+    if (!tg) {
+      setIsTelegramWebAppReady(false);
+      setIsTelegramUserValid(false);
+      setTelegramUserId(null);
+      setTelegramUserName(null);
+      return;
+    }
+
+    setIsTelegramWebAppReady(true);
 
     tg.ready();
     tg.expand();
@@ -109,7 +172,44 @@ export default function Home() {
     if (textColor) {
       document.documentElement.style.setProperty("--tg-text", textColor);
     }
+
+    const validatedUser = getValidatedTelegramUser();
+
+    if (!validatedUser) {
+      setTelegramUserId(null);
+      setTelegramUserName(null);
+      setIsTelegramUserValid(false);
+      return;
+    }
+
+    setTelegramUserId(validatedUser.id);
+    setTelegramUserName(
+      validatedUser.username ||
+        [validatedUser.firstName, validatedUser.lastName]
+          .filter(Boolean)
+          .join(" ")
+          .trim() ||
+        null,
+    );
+    setIsTelegramUserValid(true);
   }, []);
+
+  useEffect(() => {
+    if (canUseTelegramSync) return;
+
+    setTelegramUserId(null);
+    setTelegramUserName(null);
+    setIsTelegramUserValid(false);
+    setHasSyncedProfile(false);
+  }, [canUseTelegramSync]);
+
+  useEffect(() => {
+    setHasLoadedServerFavorites(false);
+  }, [telegramUserId]);
+
+  useEffect(() => {
+    setHasLoadedServerHistory(false);
+  }, [telegramUserId]);
 
   useEffect(() => {
     try {
@@ -128,6 +228,35 @@ export default function Home() {
       console.error("Gagal membaca favorit:", error);
     }
   }, []);
+
+  useEffect(() => {
+    if (!canUseTelegramSync || !telegramUserId || hasSyncedProfile) return;
+
+    const syncProfile = async () => {
+      try {
+        const response = await fetch("/api/user-profile", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            telegram_user_id: telegramUserId,
+            telegram_username: telegramUserName,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Gagal sync user profile.");
+        }
+
+        setHasSyncedProfile(true);
+      } catch (error) {
+        console.error("Gagal sync user profile:", error);
+      }
+    };
+
+    syncProfile();
+  }, [canUseTelegramSync, telegramUserId, telegramUserName, hasSyncedProfile]);
 
   useEffect(() => {
     try {
@@ -149,6 +278,7 @@ export default function Home() {
           );
         }
       }
+      setHasLoadedServerHistory(true);
     } catch (error) {
       console.error("Gagal membaca riwayat:", error);
     }
@@ -200,6 +330,71 @@ export default function Home() {
       console.error("Gagal menyimpan membership:", error);
     }
   }, [membershipStatus]);
+
+  useEffect(() => {
+    setHasSyncedProfile(false);
+  }, [telegramUserId]);
+
+  useEffect(() => {
+    if (!canUseTelegramSync || !telegramUserId || hasLoadedServerFavorites)
+      return;
+
+    const syncProfile = async () => {
+      try {
+        await fetch("/api/user-profile", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            telegram_user_id: telegramUserId,
+            telegram_username: telegramUserName,
+          }),
+        });
+      } catch (error) {
+        console.error("Gagal sync user profile:", error);
+      }
+    };
+
+    syncProfile();
+  }, [canUseTelegramSync, telegramUserId, telegramUserName]);
+
+  useEffect(() => {
+    if (!canUseTelegramSync || !telegramUserId || hasLoadedServerFavorites)
+      return;
+
+    let isMounted = true;
+
+    const loadServerFavorites = async () => {
+      try {
+        const response = await fetch(
+          `/api/user-favorites?telegram_user_id=${telegramUserId}`,
+        );
+
+        if (!response.ok) {
+          throw new Error("Gagal memuat favorit dari server.");
+        }
+
+        const data = await response.json();
+
+        if (!isMounted) return;
+
+        if (Array.isArray(data)) {
+          setFavoriteIds(data.filter((id) => typeof id === "number"));
+        }
+
+        setHasLoadedServerFavorites(true);
+      } catch (error) {
+        console.error("Gagal memuat favorit server:", error);
+      }
+    };
+
+    loadServerFavorites();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [canUseTelegramSync, telegramUserId, hasLoadedServerFavorites]);
 
   useEffect(() => {
     let isMounted = true;
@@ -325,6 +520,31 @@ export default function Home() {
     setFavoriteIds((prev) =>
       isFavorited ? prev.filter((id) => id !== dramaId) : [...prev, dramaId],
     );
+
+    if (!canUseTelegramSync || !telegramUserId) return;
+
+    try {
+      const response = await fetch("/api/user-favorites", {
+        method: isFavorited ? "DELETE" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          telegram_user_id: telegramUserId,
+          drama_id: dramaId,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Gagal sinkron favorit ke server.");
+      }
+    } catch (error) {
+      console.error("Gagal sinkron favorit:", error);
+
+      setFavoriteIds((prev) =>
+        isFavorited ? [...prev, dramaId] : prev.filter((id) => id !== dramaId),
+      );
+    }
   };
 
   const favoriteDramas = dramas.filter((drama) =>
@@ -362,10 +582,35 @@ export default function Home() {
     : [];
 
   const saveToHistory = async (dramaId: number, episodeId: number) => {
+    const previousHistoryItems = historyItems;
+
     setHistoryItems((prev) => {
       const filtered = prev.filter((item) => item.dramaId !== dramaId);
       return [{ dramaId, episodeId }, ...filtered];
     });
+
+    if (!canUseTelegramSync || !telegramUserId) return;
+
+    try {
+      const response = await fetch("/api/user-history", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          telegram_user_id: telegramUserId,
+          drama_id: dramaId,
+          episode_id: episodeId,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Gagal sinkron riwayat ke server.");
+      }
+    } catch (error) {
+      console.error("Gagal sinkron riwayat:", error);
+      setHistoryItems(previousHistoryItems);
+    }
   };
 
   if (showSplash) {
@@ -543,7 +788,7 @@ export default function Home() {
         sourceTab={sourceTab}
         filteredDramas={filteredDramas}
         favoriteIds={favoriteIds}
-        isTelegramReady={true}
+        isTelegramReady={canUseTelegramSync}
         onBack={() => {
           setSelectedSource(null);
           setSearchQuery("");

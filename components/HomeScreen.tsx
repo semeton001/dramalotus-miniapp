@@ -59,23 +59,23 @@ export default function HomeScreen({
               siap menemani harimu.
             </p>
 
-            <p className="mx-auto mt-3 max-w-sm text-center text-[12px] leading-6 text-[#8F887C]">
+            <p className="mx-auto mt-3 max-w-sm text-center text-[13px] leading-6 text-[#8F887C]">
               Masuk ke koleksi drama pilihan, jelajahi source favoritmu, lalu
               lanjut nonton dengan ritme yang cepat dan nyaman.
             </p>
 
             <div className="mt-4 grid grid-cols-3 gap-3">
-              <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-3 text-center">
+              <div className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-3 text-center">
                 <p className="text-sm font-semibold text-[#F2E6C9]">12</p>
-                <p className="mt-1 text-[11px] text-[#8F887C]">source aktif</p>
+                <p className="mt-0 text-[11px] text-[#8F887C]">source aktif</p>
               </div>
-              <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-3 text-center">
+              <div className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-3 text-center">
                 <p className="text-sm font-semibold text-[#F2E6C9]">5</p>
-                <p className="mt-1 text-[11px] text-[#8F887C]">family API</p>
+                <p className="mt-0 text-[11px] text-[#8F887C]">family API</p>
               </div>
-              <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-3 text-center">
+              <div className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-3 text-center">
                 <p className="text-sm font-semibold text-[#F2E6C9]">24/7</p>
-                <p className="mt-1 text-[11px] text-[#8F887C]">
+                <p className="mt-0 text-[11px] text-[#8F887C]">
                   siap streaming
                 </p>
               </div>
@@ -113,7 +113,7 @@ export default function HomeScreen({
                 onClick={() => onSelectSource(source)}
                 className="rounded-[24px] border border-white/10 bg-[#12131A] px-3 py-3 text-center shadow-[0_18px_36px_rgba(0,0,0,0.22)] transition hover:border-[#C9A45C]/20"
               >
-                <div className="flex min-h-[120px] flex-col items-center justify-start">
+                <div className="flex min-h-[126px] flex-col items-center justify-start">
                   <div className="relative flex items-start justify-center">
                     {source.logo ? (
                       <Image
@@ -137,8 +137,11 @@ export default function HomeScreen({
                   </div>
 
                   <div className="mt-3 w-full">
-                    <p className="line-clamp-2 text-[12px] font-semibold leading-4 text-[#F5F1E8]">
+                    <p className="line-clamp-1 text-[12px] font-semibold text-[#F5F1E8]">
                       {source.name}
+                    </p>
+                    <p className="mt-1 line-clamp-2 min-h-[30px] text-[11px] leading-4 text-[#8F887C]">
+                      {source.description ?? "Buka source"}
                     </p>
                   </div>
                 </div>
@@ -147,7 +150,7 @@ export default function HomeScreen({
           </div>
         </section>
 
-        <section className="mt-8">
+        <section className="mt-2">
           <div className="mb-4 flex items-center justify-center gap-3">
             <h2 className="text-[13px] font-semibold uppercase tracking-[0.28em] text-[#8F887C]">
               Jelajah Lainnya
@@ -186,7 +189,7 @@ export default function HomeScreen({
                     <p className="truncate text-[13px] font-semibold text-[#F5F1E8]">
                       {source.name}
                     </p>
-                    <p className="mt-1 line-clamp-2 min-h-[40px] text-[12px] leading-5 text-[#8F887C]">
+                    <p className="mt-1 line-clamp-2 min-h-[30px] text-[11px] leading-5 text-[#8F887C]">
                       {source.description ?? "Buka source"}
                     </p>
                   </div>

@@ -8,11 +8,17 @@ const supabaseAdmin = createClient(
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const telegramUserId = searchParams.get("telegram_user_id");
+  const telegramUserIdParam = searchParams.get("telegram_user_id");
+  const safeTelegramUserId =
+    typeof telegramUserIdParam === "string" &&
+    /^\d+$/.test(telegramUserIdParam) &&
+    Number(telegramUserIdParam) > 0
+      ? telegramUserIdParam
+      : null;
 
-  if (!telegramUserId) {
+  if (!safeTelegramUserId) {
     return NextResponse.json(
-      { error: "telegram_user_id is required" },
+      { error: "telegram_user_id must be a valid positive integer" },
       { status: 400 },
     );
   }
@@ -20,7 +26,7 @@ export async function GET(request: Request) {
   const { data, error } = await supabaseAdmin
     .from("user_favorites")
     .select("drama_id")
-    .eq("telegram_user_id", telegramUserId);
+    .eq("telegram_user_id", safeTelegramUserId);
 
   if (error) {
     console.error("user-favorites POST error:", error);
@@ -37,22 +43,33 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { telegram_user_id, drama_id } = body;
-    console.log("user-favorites POST body:", {
-      telegram_user_id,
-      drama_id,
-    });
 
-    if (!telegram_user_id || !drama_id) {
+    const safeTelegramUserId =
+      typeof telegram_user_id === "number" &&
+      Number.isInteger(telegram_user_id) &&
+      telegram_user_id > 0
+        ? telegram_user_id
+        : null;
+
+    const safeDramaId =
+      typeof drama_id === "number" && Number.isInteger(drama_id) && drama_id > 0
+        ? drama_id
+        : null;
+
+    if (!safeTelegramUserId || !safeDramaId) {
       return NextResponse.json(
-        { error: "telegram_user_id and drama_id are required" },
+        {
+          error:
+            "telegram_user_id and drama_id must be valid positive integers",
+        },
         { status: 400 },
       );
     }
 
     const { error } = await supabaseAdmin.from("user_favorites").upsert(
       {
-        telegram_user_id,
-        drama_id: String(drama_id),
+        telegram_user_id: safeTelegramUserId,
+        drama_id: String(safeDramaId),
       },
       { onConflict: "telegram_user_id,drama_id" },
     );
@@ -81,9 +98,24 @@ export async function DELETE(request: Request) {
     const body = await request.json();
     const { telegram_user_id, drama_id } = body;
 
-    if (!telegram_user_id || !drama_id) {
+    const safeTelegramUserId =
+      typeof telegram_user_id === "number" &&
+      Number.isInteger(telegram_user_id) &&
+      telegram_user_id > 0
+        ? telegram_user_id
+        : null;
+
+    const safeDramaId =
+      typeof drama_id === "number" && Number.isInteger(drama_id) && drama_id > 0
+        ? drama_id
+        : null;
+
+    if (!safeTelegramUserId || !safeDramaId) {
       return NextResponse.json(
-        { error: "telegram_user_id and drama_id are required" },
+        {
+          error:
+            "telegram_user_id and drama_id must be valid positive integers",
+        },
         { status: 400 },
       );
     }
@@ -91,8 +123,8 @@ export async function DELETE(request: Request) {
     const { error } = await supabaseAdmin
       .from("user_favorites")
       .delete()
-      .eq("telegram_user_id", telegram_user_id)
-      .eq("drama_id", String(drama_id));
+      .eq("telegram_user_id", safeTelegramUserId)
+      .eq("drama_id", String(safeDramaId));
 
     if (error) {
       return NextResponse.json(

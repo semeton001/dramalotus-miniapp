@@ -11,24 +11,32 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { telegram_user_id, telegram_username } = body;
 
-    if (!telegram_user_id) {
+    const safeTelegramUserId =
+      typeof telegram_user_id === "number" &&
+      Number.isInteger(telegram_user_id) &&
+      telegram_user_id > 0
+        ? telegram_user_id
+        : null;
+
+    const safeTelegramUsername =
+      typeof telegram_username === "string" &&
+      telegram_username.trim().length > 0
+        ? telegram_username.trim()
+        : null;
+
+    if (!safeTelegramUserId) {
       return NextResponse.json(
-        { error: "telegram_user_id is required" },
+        { error: "telegram_user_id must be a valid positive integer" },
         { status: 400 },
       );
     }
 
     const { data, error } = await supabaseAdmin
       .from("user_profiles")
-      .upsert(
-        {
-          telegram_user_id,
-          telegram_username: telegram_username ?? null,
-        },
-        {
-          onConflict: "telegram_user_id",
-        },
-      )
+      .upsert({
+        telegram_user_id: safeTelegramUserId,
+        telegram_username: safeTelegramUsername,
+      })
       .select()
       .single();
 

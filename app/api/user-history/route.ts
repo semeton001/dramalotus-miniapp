@@ -8,11 +8,18 @@ const supabaseAdmin = createClient(
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const telegramUserId = searchParams.get("telegram_user_id");
+  const telegramUserIdParam = searchParams.get("telegram_user_id");
 
-  if (!telegramUserId) {
+  const safeTelegramUserId =
+    typeof telegramUserIdParam === "string" &&
+    /^\d+$/.test(telegramUserIdParam) &&
+    Number(telegramUserIdParam) > 0
+      ? telegramUserIdParam
+      : null;
+
+  if (!safeTelegramUserId) {
     return NextResponse.json(
-      { error: "telegram_user_id is required" },
+      { error: "telegram_user_id must be a valid positive integer" },
       { status: 400 },
     );
   }
@@ -20,7 +27,7 @@ export async function GET(request: Request) {
   const { data, error } = await supabaseAdmin
     .from("user_history")
     .select("drama_id, episode_id")
-    .eq("telegram_user_id", telegramUserId)
+    .eq("telegram_user_id", safeTelegramUserId)
     .order("updated_at", { ascending: false });
 
   if (error) {
@@ -43,18 +50,40 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { telegram_user_id, drama_id, episode_id } = body;
 
-    if (!telegram_user_id || !drama_id || !episode_id) {
+    const safeTelegramUserId =
+      typeof telegram_user_id === "number" &&
+      Number.isInteger(telegram_user_id) &&
+      telegram_user_id > 0
+        ? telegram_user_id
+        : null;
+
+    const safeDramaId =
+      typeof drama_id === "number" && Number.isInteger(drama_id) && drama_id > 0
+        ? drama_id
+        : null;
+
+    const safeEpisodeId =
+      typeof episode_id === "number" &&
+      Number.isInteger(episode_id) &&
+      episode_id > 0
+        ? episode_id
+        : null;
+
+    if (!safeTelegramUserId || !safeDramaId || !safeEpisodeId) {
       return NextResponse.json(
-        { error: "telegram_user_id, drama_id, and episode_id are required" },
+        {
+          error:
+            "telegram_user_id, drama_id, and episode_id must be valid positive integers",
+        },
         { status: 400 },
       );
     }
 
     const { error } = await supabaseAdmin.from("user_history").upsert(
       {
-        telegram_user_id,
-        drama_id: String(drama_id),
-        episode_id: String(episode_id),
+        telegram_user_id: safeTelegramUserId,
+        drama_id: String(safeDramaId),
+        episode_id: String(safeEpisodeId),
       },
       { onConflict: "telegram_user_id,drama_id" },
     );
