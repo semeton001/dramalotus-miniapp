@@ -93,6 +93,8 @@ export async function GET() {
     );
   }
 
+  const DRAMABOX_SEARCH_QUERY = "love";
+
   const sourceMap = new Map(
     ((sourcesData ?? []) as SourceRow[]).map((source) => [
       source.id,
@@ -128,7 +130,9 @@ export async function GET() {
   let adaptedDramaBoxSearch: DramaResponse[] = [];
 
   try {
-    const dramaBoxSearchRaw = await fetchDramaBoxSearchList("love");
+    const dramaBoxSearchRaw = await fetchDramaBoxSearchList(
+      DRAMABOX_SEARCH_QUERY,
+    );
     const dramaBoxSearchItems = Array.isArray(dramaBoxSearchRaw)
       ? dramaBoxSearchRaw
       : [];
@@ -140,6 +144,14 @@ export async function GET() {
 
     console.log("DramaBox search raw count:", dramaBoxSearchItems.length);
     console.log("DramaBox search adapted count:", adaptedDramaBoxSearch.length);
+    console.log(
+      "DramaBox adapted titles:",
+      adaptedDramaBoxSearch.slice(0, 5).map((item) => ({
+        id: item.id,
+        title: item.title,
+        episodes: item.episodes,
+      })),
+    );
   } catch (error) {
     console.error("DramaBox search adapter test failed:", error);
   }

@@ -26,7 +26,7 @@ export function adaptDramaBoxDrama(raw: DramaBoxDramaResponse): Drama {
   return {
     id: Number(raw.bookId) || 0,
     source: "DramaBox",
-    sourceId: "dramabox",
+    sourceId: "1",
     sourceName: "DramaBox",
     title: raw.bookName ?? "",
     episodes: raw.chapterCount ?? 0,
@@ -56,7 +56,7 @@ export function adaptDramaBoxSearchItem(
   return {
     id: Number(raw.bookId) || 0,
     source: "DramaBox",
-    sourceId: "dramabox",
+    sourceId: "1",
     sourceName: "DramaBox",
     title: raw.bookName ?? "",
     episodes: raw.chapterCount ?? 0,
@@ -77,5 +77,7 @@ export function adaptDramaBoxSearchItem(
 export function adaptDramaBoxSearchList(
   rawItems: DramaBoxSearchItemResponse[],
 ): Drama[] {
-  return rawItems.map(adaptDramaBoxSearchItem);
+  return rawItems
+    .filter((item) => Number(item.bookId) > 0 && !!item.bookName?.trim())
+    .map(adaptDramaBoxSearchItem);
 }

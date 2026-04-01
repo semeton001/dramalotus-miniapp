@@ -192,9 +192,11 @@ export default function SourceScreen({
                         </span>
                       </button>
 
-                      <div className="absolute bottom-2 right-2 rounded-full border border-white/8 bg-[#11131B]/90 px-2 py-1 text-[10px] font-bold text-[#F5F1E8]">
-                        {drama.episodes} Eps
-                      </div>
+                      {drama.episodes > 0 && (
+                        <div className="absolute bottom-2 right-2 rounded-full border border-white/8 bg-[#11131B]/90 px-2 py-1 text-[10px] font-bold text-[#F5F1E8]">
+                          {drama.episodes} Eps
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex min-h-[84px] flex-col border-t border-white/6 px-3 pb-2 pt-2">

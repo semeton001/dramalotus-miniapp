@@ -117,7 +117,7 @@ function isValidFavoriteId(value: unknown): value is number {
 }
 
 function isDramaBoxDrama(drama: Drama | null): boolean {
-  return !!drama && drama.sourceId === "dramabox";
+  return !!drama && drama.sourceId === "1";
 }
 
 function getFirstLocalEpisode(
@@ -448,6 +448,10 @@ export default function Home() {
           fetch("/api/dramas"),
           fetch("/api/episodes"),
         ]);
+
+        console.log("sources status:", sourcesRes.status);
+        console.log("dramas status:", dramasRes.status);
+        console.log("episodes status:", episodesRes.status);
 
         if (!sourcesRes.ok || !dramasRes.ok || !episodesRes.ok) {
           throw new Error("Gagal memuat data endpoint lokal.");
@@ -834,12 +838,17 @@ export default function Home() {
         onOpenHistory={() => setActiveTab("history")}
         onOpenProfile={() => setActiveTab("profile")}
         onSelectDrama={(drama) => {
+          if (isDramaBoxDrama(drama)) {
+            setSelectedDrama(drama);
+            setDramaBoxEpisodes([]);
+            setSelectedEpisode(null);
+            setActiveTab("home");
+            return;
+          }
+
+          const firstEpisode = getFirstLocalEpisode(drama, episodes);
+
           setSelectedDrama(drama);
-
-          const firstEpisode = isDramaBoxDrama(drama)
-            ? getFirstDramaBoxEpisode(dramaBoxEpisodes)
-            : getFirstLocalEpisode(drama, episodes);
-
           setSelectedEpisode(firstEpisode);
 
           if (firstEpisode) {
@@ -914,10 +923,16 @@ export default function Home() {
         onSearchChange={setSearchQuery}
         onTabChange={setSourceTab}
         onSelectDrama={(drama) => {
+          if (isDramaBoxDrama(drama)) {
+            setSelectedDrama(drama);
+            setDramaBoxEpisodes([]);
+            setSelectedEpisode(null);
+            return;
+          }
+
+          const firstEpisode = getFirstLocalEpisode(drama, episodes);
+
           setSelectedDrama(drama);
-          const firstEpisode = isDramaBoxDrama(drama)
-            ? getFirstDramaBoxEpisode(dramaBoxEpisodes)
-            : getFirstLocalEpisode(drama, episodes);
           setSelectedEpisode(firstEpisode);
 
           if (firstEpisode) {
