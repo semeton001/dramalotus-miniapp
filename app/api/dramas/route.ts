@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import {
-  adaptDramaListBySource,
+  adaptDramaDetailBySource,
   adaptDramaSearchListBySource,
+  mergeDramaBoxDramaMetadata,
 } from "@/lib/adapters/drama";
 
 type DramaRow = {
@@ -24,9 +25,9 @@ type DramaRow = {
 
 type DramaResponse = {
   id: number;
-  source: string; // lama, sementara
-  sourceId: string; // baru
-  sourceName: string; // baru
+  source: string;
+  sourceId: string;
+  sourceName: string;
   title: string;
   episodes: number;
   badge: string;
@@ -39,6 +40,7 @@ type DramaResponse = {
   isDubbed: boolean;
   isTrending: boolean;
   sortOrder: number;
+  posterImage?: string;
 };
 
 type SourceRow = {
@@ -46,9 +48,24 @@ type SourceRow = {
   name: string;
 };
 
+type DramaBoxSearchItemResponse = {
+  bookId: string;
+  bookName?: string;
+  coverWap?: string;
+  chapterCount?: number;
+  introduction?: string;
+  tags?: string[];
+};
+
+const DRAMABOX_BASE_URL = "https://dramabox.dramabos.my.id/api/v1";
+const DRAMABOX_LANG = "in";
+const DRAMABOX_ENRICH_LIMIT = 12;
+const DRAMABOX_SEARCH_QUERY = "love";
+const DRAMABOX_EPISODE_CODE = "4D96F22760EA30FB0FFBA9AA87A979A6";
+
 async function fetchDramaBoxSearchList(query: string) {
   const response = await fetch(
-    `https://dramabox.dramabos.my.id/api/v1/search?query=${encodeURIComponent(query)}&lang=in`,
+    `${DRAMABOX_BASE_URL}/search?query=${encodeURIComponent(query)}&lang=${DRAMABOX_LANG}`,
     {
       method: "GET",
       headers: {
@@ -65,6 +82,57 @@ async function fetchDramaBoxSearchList(query: string) {
   }
 
   return response.json();
+}
+
+async function fetchDramaBoxDetail(bookId: string) {
+  const response = await fetch(
+    `${DRAMABOX_BASE_URL}/detail?bookId=${encodeURIComponent(bookId)}&lang=${DRAMABOX_LANG}`,
+    {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+      },
+      cache: "no-store",
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `DramaBox detail request failed for bookId ${bookId} with status ${response.status}`,
+    );
+  }
+
+  return response.json();
+}
+
+async function fetchDramaBoxEpisodeList(bookId: string) {
+  const response = await fetch(
+    `${DRAMABOX_BASE_URL}/allepisode?bookId=${encodeURIComponent(bookId)}&lang=${DRAMABOX_LANG}&code=${DRAMABOX_EPISODE_CODE}`,
+    {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+      },
+      cache: "no-store",
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `DramaBox allepisode request failed for bookId ${bookId} with status ${response.status}`,
+    );
+  }
+
+  return response.json();
+}
+
+function shouldEnrichDramaBoxItem(item: DramaResponse) {
+  return (
+    item.sourceName === "DramaBox" &&
+    (item.episodes <= 0 ||
+      item.tags.length === 0 ||
+      item.description.trim().length === 0)
+  );
 }
 
 export async function GET() {
@@ -93,39 +161,12 @@ export async function GET() {
     );
   }
 
-  const DRAMABOX_SEARCH_QUERY = "love";
-
   const sourceMap = new Map(
     ((sourcesData ?? []) as SourceRow[]).map((source) => [
       source.id,
       source.name,
     ]),
   );
-  const dramaboxSample = [
-    {
-      bookId: "42000008165",
-      bookName: "Tak Tertandingi Usai Bebas",
-      coverWap:
-        "https://hwztchapter.dramaboxdb.com/data/cppartner/4x2/42x0/420x0/42000008165/42000008165.jpg?t=1773974408741",
-      chapterCount: 69,
-      introduction:
-        "Rendy Susanto menanggung kesalahan tunangannya, dia pun dipenjara lima tahun.",
-      tags: [
-        "Serangan Balik",
-        "Balas Dendam",
-        "Keadilan",
-        "Kekuatan Khusus",
-        "Modern",
-        "Pria Dominan",
-      ],
-    },
-  ];
-
-  const adaptedDramaBoxSample = adaptDramaListBySource(
-    "dramabox",
-    dramaboxSample,
-  );
-  void adaptedDramaBoxSample;
 
   let adaptedDramaBoxSearch: DramaResponse[] = [];
 
@@ -133,17 +174,86 @@ export async function GET() {
     const dramaBoxSearchRaw = await fetchDramaBoxSearchList(
       DRAMABOX_SEARCH_QUERY,
     );
+
     const dramaBoxSearchItems = Array.isArray(dramaBoxSearchRaw)
-      ? dramaBoxSearchRaw
+      ? (dramaBoxSearchRaw as DramaBoxSearchItemResponse[])
       : [];
 
-    adaptedDramaBoxSearch = adaptDramaSearchListBySource(
+    const searchAdapted = adaptDramaSearchListBySource(
       "dramabox",
       dramaBoxSearchItems,
     ) as DramaResponse[];
 
+    const enrichCandidates = searchAdapted
+      .filter(shouldEnrichDramaBoxItem)
+      .slice(0, DRAMABOX_ENRICH_LIMIT);
+
+    const enrichMap = new Map<
+      number,
+      {
+        detail?: Partial<DramaResponse> & { id: number };
+        episodeCount?: number;
+      }
+    >();
+
+    await Promise.allSettled(
+      enrichCandidates.map(async (item) => {
+        const bookId = String(item.id);
+
+        const [detailResult, episodeResult] = await Promise.allSettled([
+          fetchDramaBoxDetail(bookId),
+          item.episodes <= 0
+            ? fetchDramaBoxEpisodeList(bookId)
+            : Promise.resolve(null),
+        ]);
+
+        let detail: (Partial<DramaResponse> & { id: number }) | undefined;
+
+        if (detailResult.status === "fulfilled" && detailResult.value) {
+          try {
+            detail = adaptDramaDetailBySource(
+              "dramabox",
+              detailResult.value,
+            ) as Partial<DramaResponse> & { id: number };
+          } catch (error) {
+            console.error(
+              `Failed adapting DramaBox detail for ${bookId}:`,
+              error,
+            );
+          }
+        }
+
+        let episodeCount: number | undefined;
+
+        if (
+          episodeResult.status === "fulfilled" &&
+          Array.isArray(episodeResult.value)
+        ) {
+          episodeCount = episodeResult.value.length;
+        }
+
+        enrichMap.set(item.id, { detail, episodeCount });
+      }),
+    );
+
+    adaptedDramaBoxSearch = searchAdapted.map((item) => {
+      const enriched = enrichMap.get(item.id);
+
+      if (!enriched) return item;
+
+      return mergeDramaBoxDramaMetadata(
+        item,
+        enriched.detail,
+        enriched.episodeCount,
+      ) as DramaResponse;
+    });
+
     console.log("DramaBox search raw count:", dramaBoxSearchItems.length);
-    console.log("DramaBox search adapted count:", adaptedDramaBoxSearch.length);
+    console.log("DramaBox search adapted count:", searchAdapted.length);
+    console.log(
+      "DramaBox search enriched count:",
+      adaptedDramaBoxSearch.length,
+    );
     console.log(
       "DramaBox adapted titles:",
       adaptedDramaBoxSearch.slice(0, 5).map((item) => ({

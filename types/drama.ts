@@ -29,4 +29,15 @@ export type Drama = {
 
   rating?: number;
   releaseYear?: number;
+
+  // metadata source-specific
+  reelShortRawId?: string;
+  reelShortCode?: string;
+  reelShortSlug?: string;
+
+  meloloRawId?: string;
+  meloloDramaId?: string;
+
+  dramawaveRawId?: string;
+  dramawaveDramaId?: string;
 };

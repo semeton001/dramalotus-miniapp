@@ -1,3 +1,5 @@
+"use client";
+
 import type { Drama } from "@/types/drama";
 import type { Episode } from "@/types/episode";
 
@@ -14,6 +16,7 @@ type HistoryScreenProps = {
   onOpenFavorites: () => void;
   onOpenProfile: () => void;
   onSelectDrama: (drama: Drama, episode: Episode | null) => void;
+  onClearHistory: () => void;
 };
 
 export default function HistoryScreen({
@@ -24,17 +27,18 @@ export default function HistoryScreen({
   onOpenFavorites,
   onOpenProfile,
   onSelectDrama,
+  onClearHistory,
 }: HistoryScreenProps) {
   const resolvedHistory = historyItems
     .map((item) => {
       const drama = dramas.find((d) => d.id === item.dramaId);
-      const episode = episodes.find((e) => e.id === item.episodeId);
+      if (!drama) return null;
 
-      if (!drama || !episode) return null;
+      const episode = episodes.find((e) => e.id === item.episodeId) ?? null;
 
       return { drama, episode };
     })
-    .filter(Boolean) as { drama: Drama; episode: Episode }[];
+    .filter(Boolean) as { drama: Drama; episode: Episode | null }[];
 
   return (
     <main className="min-h-[100dvh] bg-[radial-gradient(circle_at_top,rgba(201,164,92,0.10),transparent_24%),#0B0B0F] text-white">
@@ -49,12 +53,20 @@ export default function HistoryScreen({
             </p>
           </div>
 
-          <button
-            onClick={onBack}
-            className="rounded-[18px] border border-white/10 bg-[#14151C] px-4 py-2.5 text-sm font-medium text-[#E6D3A3] shadow-[0_6px_18px_rgba(0,0,0,0.22)] transition hover:border-[#C9A45C]/20 hover:bg-[#181A22]"
-          >
-            Kembali
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClearHistory}
+              className="rounded-[18px] border border-[#EF476F]/20 bg-[#2A1419] px-4 py-2.5 text-sm font-medium text-[#FFB3C1] shadow-[0_6px_18px_rgba(0,0,0,0.22)] transition hover:border-[#EF476F]/30 hover:bg-[#34181F]"
+            >
+              Hapus Semua
+            </button>
+            <button
+              onClick={onBack}
+              className="rounded-[18px] border border-white/10 bg-[#14151C] px-4 py-2.5 text-sm font-medium text-[#E6D3A3] shadow-[0_6px_18px_rgba(0,0,0,0.22)] transition hover:border-[#C9A45C]/20 hover:bg-[#181A22]"
+            >
+              Kembali
+            </button>
+          </div>
         </header>
 
         <section className="overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,#14161D_0%,#101118_100%)] p-4 shadow-[0_20px_48px_rgba(0,0,0,0.30)] sm:p-5">
@@ -87,14 +99,37 @@ export default function HistoryScreen({
             ) : (
               resolvedHistory.map(({ drama, episode }) => (
                 <button
-                  key={`${drama.id}-${episode.id}`}
+                  key={`${drama.id}-${episode?.id ?? "resume"}`}
                   onClick={() => onSelectDrama(drama, episode)}
                   className="w-full rounded-[26px] border border-white/8 bg-[#171922] p-3 text-left shadow-[0_18px_40px_rgba(0,0,0,0.24)] transition hover:border-[#C9A45C]/20 hover:-translate-y-[1px]"
                 >
                   <div className="flex gap-3">
-                    <div
-                      className={`h-[108px] w-[76px] shrink-0 rounded-[20px] border border-white/8 bg-gradient-to-b ${drama.posterClass}`}
-                    />
+                    <div className="h-[108px] w-[76px] shrink-0 overflow-hidden rounded-[20px] border border-white/8">
+                      {(typeof drama.posterImage === "string" &&
+                        drama.posterImage.trim().length > 0) ||
+                      (typeof drama.coverImage === "string" &&
+                        drama.coverImage.trim().length > 0) ? (
+                        <img
+                          src={
+                            typeof drama.posterImage === "string" &&
+                            drama.posterImage.trim().length > 0
+                              ? drama.posterImage
+                              : drama.coverImage
+                          }
+                          alt={drama.title}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                          }}
+                        />
+                      ) : (
+                        <div
+                          className={`h-full w-full bg-gradient-to-b ${drama.posterClass}`}
+                        />
+                      )}
+                    </div>
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-3">
@@ -114,10 +149,12 @@ export default function HistoryScreen({
 
                       <div className="mt-3 rounded-[18px] border border-white/6 bg-[#13151C] px-3 py-2.5">
                         <p className="text-[13px] font-medium text-[#E8DED0]">
-                          {episode.title}
+                          {episode?.title ?? "Lanjutkan tontonan"}
                         </p>
                         <p className="mt-1 text-[11px] text-[#8F887C]">
-                          Durasi {episode.duration}
+                          {episode?.duration
+                            ? `Durasi ${episode.duration}`
+                            : `${drama.episodes} episode`}
                         </p>
                       </div>
                     </div>

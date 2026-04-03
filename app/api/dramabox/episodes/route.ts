@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { adaptDramaBoxEpisodeList } from "@/lib/adapters/episode";
 
+const DRAMABOX_BASE_URL = "https://dramabox.dramabos.my.id/api/v1";
+const DRAMABOX_LANG = "in";
+const DRAMABOX_EPISODE_CODE = "4D96F22760EA30FB0FFBA9AA87A979A6";
+
 async function fetchDramaBoxEpisodeList(bookId: string) {
   const response = await fetch(
-    `https://dramabox.dramabos.my.id/api/v1/allepisode?bookId=${bookId}&lang=in&code=4D96F22760EA30FB0FFBA9AA87A979A6`,
+    `${DRAMABOX_BASE_URL}/allepisode?bookId=${encodeURIComponent(bookId)}&lang=${DRAMABOX_LANG}&code=${DRAMABOX_EPISODE_CODE}`,
     {
       method: "GET",
       headers: {
@@ -40,6 +44,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json(episodes);
   } catch (error) {
+    console.error("Failed to fetch DramaBox episodes:", error);
+
     return NextResponse.json(
       {
         error: "Failed to fetch DramaBox episodes",

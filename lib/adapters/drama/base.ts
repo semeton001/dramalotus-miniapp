@@ -1,22 +1,80 @@
-import type { Drama } from "@/types/drama";
+type RawRecord = Record<string, unknown>;
 
-export function createBaseDrama(partial: Partial<Drama>): Drama {
-  return {
-    id: partial.id ?? 0,
-    source: partial.source ?? "",
-    sourceId: partial.sourceId ?? "",
-    sourceName: partial.sourceName ?? "",
-    title: partial.title ?? "",
-    episodes: partial.episodes ?? 0,
-    badge: partial.badge ?? "",
-    tags: partial.tags ?? [],
-    posterClass: partial.posterClass ?? "",
-    slug: partial.slug ?? "",
-    description: partial.description ?? "",
-    category: partial.category ?? "",
-    isNew: partial.isNew ?? false,
-    isDubbed: partial.isDubbed ?? false,
-    isTrending: partial.isTrending ?? false,
-    sortOrder: partial.sortOrder ?? 9999,
-  };
+export function pickString(record: RawRecord, ...keys: string[]): string {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+
+  return "";
+}
+
+export function pickNumber(record: RawRecord, ...keys: string[]): number {
+  for (const key of keys) {
+    const value = record[key];
+
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === "string" && value.trim().length > 0) {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+  }
+
+  return 0;
+}
+
+export function normalizeStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .filter((item): item is string => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  if (typeof value === "string" && value.trim().length > 0) {
+    return value
+      .split(/[|,/]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+export function toRecord(value: unknown): RawRecord {
+  return value && typeof value === "object"
+    ? (value as RawRecord)
+    : {};
+}
+
+export function extractArrayPayload(payload: unknown): unknown[] {
+  if (Array.isArray(payload)) return payload;
+
+  if (payload && typeof payload === "object") {
+    const record = payload as Record<string, unknown>;
+
+    const candidates = [
+      record.data,
+      record.items,
+      record.results,
+      record.list,
+      record.rows,
+      record.books,
+    ];
+
+    for (const candidate of candidates) {
+      if (Array.isArray(candidate)) {
+        return candidate;
+      }
+    }
+  }
+
+  return [];
 }

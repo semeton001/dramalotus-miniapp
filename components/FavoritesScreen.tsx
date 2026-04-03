@@ -1,3 +1,5 @@
+"use client";
+
 import type { Drama } from "@/types/drama";
 
 type FavoritesScreenProps = {
@@ -6,6 +8,7 @@ type FavoritesScreenProps = {
   onOpenHistory: () => void;
   onOpenProfile: () => void;
   onSelectDrama: (drama: Drama) => void;
+  onClearFavorites: () => void;
 };
 
 export default function FavoritesScreen({
@@ -14,6 +17,7 @@ export default function FavoritesScreen({
   onOpenHistory,
   onOpenProfile,
   onSelectDrama,
+  onClearFavorites,
 }: FavoritesScreenProps) {
   return (
     <main className="min-h-[100dvh] bg-[radial-gradient(circle_at_top,rgba(201,164,92,0.10),transparent_24%),#0B0B0F] text-white">
@@ -28,12 +32,20 @@ export default function FavoritesScreen({
             </p>
           </div>
 
-          <button
-            onClick={onBack}
-            className="rounded-[18px] border border-white/10 bg-[#14151C] px-4 py-2.5 text-sm font-medium text-[#E6D3A3] shadow-[0_6px_18px_rgba(0,0,0,0.22)] transition hover:border-[#C9A45C]/20 hover:bg-[#181A22]"
-          >
-            Kembali
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClearFavorites}
+              className="rounded-[18px] border border-[#EF476F]/20 bg-[#2A1419] px-4 py-2.5 text-sm font-medium text-[#FFB3C1] shadow-[0_6px_18px_rgba(0,0,0,0.22)] transition hover:border-[#EF476F]/30 hover:bg-[#34181F]"
+            >
+              Hapus Semua
+            </button>
+            <button
+              onClick={onBack}
+              className="rounded-[18px] border border-white/10 bg-[#14151C] px-4 py-2.5 text-sm font-medium text-[#E6D3A3] shadow-[0_6px_18px_rgba(0,0,0,0.22)] transition hover:border-[#C9A45C]/20 hover:bg-[#181A22]"
+            >
+              Kembali
+            </button>
+          </div>
         </header>
 
         <section className="overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,#14161D_0%,#101118_100%)] p-4 shadow-[0_20px_48px_rgba(0,0,0,0.30)] sm:p-5">
@@ -70,9 +82,31 @@ export default function FavoritesScreen({
                   className="overflow-hidden rounded-[24px] border border-white/8 bg-[#171922] text-left shadow-[0_18px_40px_rgba(0,0,0,0.26)] transition hover:border-[#C9A45C]/20 hover:-translate-y-[1px]"
                 >
                   <div className="relative">
-                    <div
-                      className={`aspect-[3/4] w-full bg-gradient-to-br ${drama.posterClass}`}
-                    />
+                    {(typeof drama.posterImage === "string" &&
+                      drama.posterImage.trim().length > 0) ||
+                    (typeof drama.coverImage === "string" &&
+                      drama.coverImage.trim().length > 0) ? (
+                      <img
+                        src={
+                          typeof drama.posterImage === "string" &&
+                          drama.posterImage.trim().length > 0
+                            ? drama.posterImage
+                            : drama.coverImage
+                        }
+                        alt={drama.title}
+                        className="aspect-[3/4] w-full object-cover"
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                        }}
+                      />
+                    ) : (
+                      <div
+                        className={`aspect-[3/4] w-full bg-gradient-to-br ${drama.posterClass}`}
+                      />
+                    )}
+
                     <div className="absolute inset-0 bg-gradient-to-t from-[#090B12]/75 via-transparent to-transparent" />
                     <div className="absolute right-3 top-3 rounded-full border border-[#C9A45C]/20 bg-[#11131B]/85 px-2.5 py-1 text-[10px] font-semibold text-[#F2E6C9] backdrop-blur">
                       Favorit

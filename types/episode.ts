@@ -15,4 +15,19 @@ export type Episode = {
 
   // siap untuk urutan dan tracking
   sortOrder?: number;
+
+  // subtitle
+  subtitleUrl?: string;
+  subtitleLang?: string;
+  subtitleLabel?: string;
+
+  // metadata source-specific
+  reelShortEpisodeId?: string;
+  reelShortVideoId?: string;
+
+  meloloEpisodeId?: string;
+  meloloVid?: string;
+
+  dramawaveEpisodeId?: string;
+  dramawaveVid?: string;
 };

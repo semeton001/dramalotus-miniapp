@@ -6,7 +6,29 @@ import sourcesData from "./sources.json";
 import dramasData from "./dramas.json";
 import episodesData from "./episodes.json";
 
-const sources = sourcesData as Source[];
+type SourceJson = {
+  id: string | number;
+  name: string;
+  badge?: string;
+  cardClass?: string;
+  logo?: string;
+  slug?: string;
+  description?: string;
+  sortOrder?: number;
+  isPopular?: boolean;
+};
+
+const sources: Source[] = (sourcesData as SourceJson[]).map((source) => ({
+  id: String(source.id),
+  name: source.name,
+  badge: source.badge,
+  cardClass: source.cardClass ?? "",
+  logo: source.logo ?? "",
+  slug: source.slug ?? "",
+  description: source.description ?? "",
+  sortOrder: source.sortOrder,
+  isPopular: source.isPopular ?? false,
+}));
 
 export const popularSources: Source[] = sources
   .filter((source) => source.isPopular)
