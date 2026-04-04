@@ -346,10 +346,11 @@ export default function SourceScreen({
           {filteredDramas.length === 0 ? (
             <div className="rounded-[24px] border border-white/10 bg-[#12131A] px-5 py-10 text-center shadow-[0_12px_30px_rgba(0,0,0,0.2)]">
               <p className="text-base font-semibold text-[#F5F1E8]">
-                Belum ada drama
+                Server sedang menyiapkan daftar drama
               </p>
               <p className="mt-2 text-sm text-[#8F887C]">
-                Coba pindah tab atau ubah kata kunci pencarian.
+                Mohon tunggu sebentar, kami sedang memuat konten terbaik
+                untukmu.
               </p>
             </div>
           ) : (
