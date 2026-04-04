@@ -12,7 +12,8 @@ type SourceTab =
   | "Trending"
   | "Romance"
   | "ForYou"
-  | "Anime";
+  | "Anime"
+  | "Teater";
 
 type SourceScreenProps = {
   selectedSource: Source;
@@ -62,6 +63,13 @@ const dramawaveTabs: Array<{ label: string; value: SourceTab }> = [
   { label: "🎲 Acak", value: "Acak" },
 ];
 
+const netshortTabs: Array<{ label: string; value: SourceTab }> = [
+  { label: "🏠 Beranda", value: "Beranda" },
+  { label: "✨ ForYou", value: "ForYou" },
+  { label: "🎭 Teater", value: "Teater" },
+  { label: "🎲 Acak", value: "Acak" },
+];
+
 function isDramaBoxSource(source: Source): boolean {
   return source.id === "1" || source.slug === "dramabox";
 }
@@ -87,6 +95,13 @@ function isDramawaveSource(source: Source): boolean {
   );
 }
 
+function isNetshortSource(source: Source): boolean {
+  return (
+    source.slug?.toLowerCase() === "netshort" ||
+    source.name?.toLowerCase() === "netshort"
+  );
+}
+
 function getSourceTabs(selectedSource: Source) {
   if (isReelShortSource(selectedSource)) {
     return reelShortTabs;
@@ -98,6 +113,10 @@ function getSourceTabs(selectedSource: Source) {
 
   if (isDramawaveSource(selectedSource)) {
     return dramawaveTabs;
+  }
+
+  if (isNetshortSource(selectedSource)) {
+    return netshortTabs;
   }
 
   return dramaBoxTabs;
@@ -116,6 +135,7 @@ function resolveBadge(
   if (sourceTab === "Trending") return "Trending";
   if (sourceTab === "Romance") return "Romance";
   if (sourceTab === "Anime") return "Anime";
+  if (sourceTab === "Teater") return "Teater";
 
   if (typeof drama.badge === "string" && drama.badge.trim().length > 0) {
     return drama.badge.trim();
@@ -135,6 +155,10 @@ function resolveBadge(
 
   if (isDramawaveSource(selectedSource)) {
     return "Dramawave";
+  }
+
+  if (isNetshortSource(selectedSource)) {
+    return "Netshort";
   }
 
   return "Drama";
@@ -169,6 +193,10 @@ function resolveBadgeClass(sourceTab: SourceTab, selectedSource: Source) {
     return "bg-[linear-gradient(135deg,#06B6D4,#3B82F6)] text-white";
   }
 
+  if (sourceTab === "Teater") {
+    return "bg-[linear-gradient(135deg,#2563EB,#7C3AED)] text-white";
+  }
+
   if (isMeloloSource(selectedSource)) {
     return "bg-[linear-gradient(135deg,#C13C7A,#F472B6)] text-white";
   }
@@ -179,6 +207,10 @@ function resolveBadgeClass(sourceTab: SourceTab, selectedSource: Source) {
 
   if (isDramawaveSource(selectedSource)) {
     return "bg-[linear-gradient(135deg,#7C3AED,#EC4899)] text-white";
+  }
+
+  if (isNetshortSource(selectedSource)) {
+    return "bg-[linear-gradient(135deg,#2563EB,#7C3AED)] text-white";
   }
 
   return "bg-[linear-gradient(135deg,#B76E79,#C98B57)] text-white";

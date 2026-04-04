@@ -20,11 +20,16 @@ import {
   buildDramawaveDrama,
   normalizeDramawaveFeed,
 } from "./dramawave";
+import {
+  buildNetshortDrama,
+  normalizeNetshortFeed,
+} from "./netshort";
 
 export * from "./dramabox";
 export * from "./reelshort";
 export * from "./melolo";
 export * from "./dramawave";
+export * from "./netshort";
 
 export {
   adaptDramaBoxDetail,
@@ -39,6 +44,8 @@ export {
   adaptMeloloDramaDetail,
   buildDramawaveDrama,
   normalizeDramawaveFeed,
+  buildNetshortDrama,
+  normalizeNetshortFeed,
 };
 
 function adaptDramawaveDramaList(rawItems: unknown[]): Drama[] {
@@ -61,6 +68,26 @@ function adaptDramawaveDramaDetail(
   return adapted as Partial<Drama> & { id: number };
 }
 
+function adaptNetshortDramaList(rawItems: unknown[]): Drama[] {
+  return normalizeNetshortFeed({ items: rawItems }, "home", "5");
+}
+
+function adaptNetshortSearchList(rawItems: unknown[]): Drama[] {
+  return normalizeNetshortFeed({ items: rawItems }, "search", "5");
+}
+
+function adaptNetshortDramaDetail(
+  rawItem: unknown,
+): Partial<Drama> & { id: number } {
+  const adapted = buildNetshortDrama(rawItem, 0, "detail", "5");
+
+  if (!adapted) {
+    throw new Error("Invalid Netshort detail payload.");
+  }
+
+  return adapted as Partial<Drama> & { id: number };
+}
+
 export function adaptDramaListBySource(
   sourceSlug: string,
   rawItems: unknown[],
@@ -74,6 +101,8 @@ export function adaptDramaListBySource(
       return adaptMeloloDramaList(rawItems);
     case "dramawave":
       return adaptDramawaveDramaList(rawItems);
+    case "netshort":
+      return adaptNetshortDramaList(rawItems);
     default:
       throw new Error(`No drama adapter registered for source: ${sourceSlug}`);
   }
@@ -92,6 +121,8 @@ export function adaptDramaSearchListBySource(
       return adaptMeloloSearchList(rawItems);
     case "dramawave":
       return adaptDramawaveSearchList(rawItems);
+    case "netshort":
+      return adaptNetshortSearchList(rawItems);
     default:
       throw new Error(
         `No drama search adapter registered for source: ${sourceSlug}`,
@@ -126,6 +157,8 @@ export function adaptDramaDetailBySource(
     }
     case "dramawave":
       return adaptDramawaveDramaDetail(rawItem);
+    case "netshort":
+      return adaptNetshortDramaDetail(rawItem);
     default:
       throw new Error(
         `No drama detail adapter registered for source: ${sourceSlug}`,

@@ -19,6 +19,12 @@ type PlayerScreenProps = {
   onSelectEpisode: (episode: Episode) => void;
 };
 
+type SubtitleCue = {
+  start: number;
+  end: number;
+  text: string;
+};
+
 function formatSeconds(value: number): string {
   if (!Number.isFinite(value) || value < 0) return "00:00";
 
@@ -30,6 +36,67 @@ function formatSeconds(value: number): string {
     2,
     "0",
   )}`;
+}
+
+function stripSubtitleTags(value: string): string {
+  return value.replace(/<[^>]+>/g, "").trim();
+}
+
+function parseTimestamp(value: string): number {
+  const cleaned = value.trim().replace(",", ".");
+  const [hours, minutes, seconds] = cleaned.split(":");
+
+  return (
+    Number(hours || 0) * 3600 + Number(minutes || 0) * 60 + Number(seconds || 0)
+  );
+}
+
+function parseSubtitleText(text: string): SubtitleCue[] {
+  const normalized = text.replace(/\r/g, "").trim();
+  if (!normalized) return [];
+
+  const body = normalized.startsWith("WEBVTT")
+    ? normalized.replace(/^WEBVTT\s*/i, "")
+    : normalized;
+
+  const blocks = body.split(/\n\s*\n/);
+  const cues: SubtitleCue[] = [];
+
+  for (const block of blocks) {
+    const lines = block
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    if (lines.length === 0) continue;
+
+    const timeLineIndex = lines.findIndex((line) => line.includes("-->"));
+    if (timeLineIndex === -1) continue;
+
+    const timeLine = lines[timeLineIndex];
+    const [startRaw, endRaw] = timeLine.split("-->").map((part) => part.trim());
+
+    if (!startRaw || !endRaw) continue;
+
+    const start = parseTimestamp(startRaw.split(" ")[0]);
+    const end = parseTimestamp(endRaw.split(" ")[0]);
+
+    if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+
+    const textLines = lines.slice(timeLineIndex + 1);
+    if (textLines.length === 0) continue;
+
+    const cueText = stripSubtitleTags(textLines.join("\n"));
+    if (!cueText) continue;
+
+    cues.push({
+      start,
+      end,
+      text: cueText,
+    });
+  }
+
+  return cues;
 }
 
 export default function PlayerScreen({
@@ -54,6 +121,18 @@ export default function PlayerScreen({
   const [duration, setDuration] = useState(0);
   const [videoError, setVideoError] = useState<string | null>(null);
   const [shouldAutoplayNext, setShouldAutoplayNext] = useState(false);
+
+  const [netshortSubtitleCues, setNetshortSubtitleCues] = useState<
+    SubtitleCue[]
+  >([]);
+  const [activeNetshortSubtitle, setActiveNetshortSubtitle] = useState("");
+
+  const isNetshortDrama = useMemo(() => {
+    return (
+      selectedDrama.sourceName === "Netshort" ||
+      selectedDrama.source?.toLowerCase() === "netshort"
+    );
+  }, [selectedDrama]);
 
   const videoSrc = useMemo(
     () => selectedEpisode?.videoUrl?.trim() ?? "",
@@ -99,6 +178,8 @@ export default function PlayerScreen({
     setDuration(0);
     setIsPlaying(false);
     setVideoError(null);
+    setNetshortSubtitleCues([]);
+    setActiveNetshortSubtitle("");
 
     if (videoSrc) {
       setShouldAutoplayNext(true);
@@ -197,13 +278,78 @@ export default function PlayerScreen({
     };
   }, []);
 
+  useEffect(() => {
+    if (!isNetshortDrama || !subtitleSrc) {
+      setNetshortSubtitleCues([]);
+      setActiveNetshortSubtitle("");
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadNetshortSubtitle = async () => {
+      try {
+        const response = await fetch(subtitleSrc, {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error(`Subtitle fetch failed: ${response.status}`);
+        }
+
+        const text = await response.text();
+        if (cancelled) return;
+
+        const cues = parseSubtitleText(text);
+        setNetshortSubtitleCues(cues);
+      } catch (error) {
+        console.error("Gagal memuat subtitle Netshort:", error);
+        if (!cancelled) {
+          setNetshortSubtitleCues([]);
+          setActiveNetshortSubtitle("");
+        }
+      }
+    };
+
+    loadNetshortSubtitle();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isNetshortDrama, subtitleSrc]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+
+    if (!video || !isNetshortDrama || netshortSubtitleCues.length === 0) {
+      setActiveNetshortSubtitle("");
+      return;
+    }
+
+    const updateSubtitle = () => {
+      const current = video.currentTime;
+      const activeCue = netshortSubtitleCues.find(
+        (cue) => current >= cue.start && current <= cue.end,
+      );
+
+      setActiveNetshortSubtitle(activeCue?.text || "");
+    };
+
+    video.addEventListener("timeupdate", updateSubtitle);
+    updateSubtitle();
+
+    return () => {
+      video.removeEventListener("timeupdate", updateSubtitle);
+    };
+  }, [isNetshortDrama, netshortSubtitleCues]);
+
   const handleLoadedMetadata = async () => {
     const video = videoRef.current;
     if (!video) return;
 
     setDuration(video.duration || 0);
 
-    if (video.textTracks && video.textTracks.length > 0) {
+    if (!isNetshortDrama && video.textTracks && video.textTracks.length > 0) {
       for (let i = 0; i < video.textTracks.length; i += 1) {
         video.textTracks[i].mode = i === 0 ? "showing" : "disabled";
       }
@@ -393,6 +539,7 @@ export default function PlayerScreen({
                     controls={false}
                     playsInline
                     preload="metadata"
+                    crossOrigin="anonymous"
                     className="h-full w-full object-contain bg-black"
                     onLoadedMetadata={handleLoadedMetadata}
                     onTimeUpdate={handleTimeUpdate}
@@ -401,7 +548,7 @@ export default function PlayerScreen({
                     onEnded={handleVideoEnded}
                     onError={handleVideoError}
                   >
-                    {subtitleSrc ? (
+                    {!isNetshortDrama && subtitleSrc ? (
                       <track
                         kind="subtitles"
                         src={subtitleSrc}
@@ -423,6 +570,14 @@ export default function PlayerScreen({
                     </div>
                   </div>
                 )}
+
+                {isNetshortDrama && activeNetshortSubtitle ? (
+                  <div className="pointer-events-none absolute left-1/2 top-[72%] z-20 w-[82%] -translate-x-1/2 -translate-y-1/2 text-center">
+                    <div className="inline rounded px-3 py-1.5 text-[17px] font-semibold leading-6 text-white [text-shadow:0_2px_6px_rgba(0,0,0,0.95)]">
+                      {activeNetshortSubtitle}
+                    </div>
+                  </div>
+                ) : null}
 
                 {videoError && (
                   <div className="absolute inset-x-3 bottom-3 rounded-2xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-100">

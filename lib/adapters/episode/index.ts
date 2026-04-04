@@ -5,6 +5,7 @@ import {
 import { adaptReelShortEpisodes } from "./reelshort";
 import { adaptMeloloEpisodeList } from "./melolo";
 import { normalizeDramawaveEpisodes } from "./dramawave";
+import { normalizeNetshortEpisodes } from "./netshort";
 
 export {
   adaptDramaBoxEpisode,
@@ -12,4 +13,5 @@ export {
   adaptReelShortEpisodes,
   adaptMeloloEpisodeList,
   normalizeDramawaveEpisodes,
+  normalizeNetshortEpisodes,
 };

@@ -64,6 +64,11 @@ const DRAMAWAVE_FORYOU_URL = "/api/dramawave/foryou";
 const DRAMAWAVE_ANIME_URL = "/api/dramawave/anime";
 const DRAMAWAVE_RANDOM_URL = "/api/dramawave/random";
 const DRAMAWAVE_SEARCH_BASE_URL = "/api/dramawave/search";
+const NETSHORT_HOME_URL = "/api/netshort/home";
+const NETSHORT_FORYOU_URL = "/api/netshort/foryou";
+const NETSHORT_THEATERS_URL = "/api/netshort/theaters";
+const NETSHORT_RANDOM_URL = "/api/netshort/random";
+const NETSHORT_SEARCH_BASE_URL = "/api/netshort/search";
 
 type SafeTelegramUser = {
   id: number;
@@ -81,12 +86,14 @@ type DramaBoxTab = "Beranda" | "Terbaru" | "Dubbing" | "Acak";
 type ReelShortTab = "Beranda" | "For You" | "Trending" | "Romance";
 type MeloloTab = "Beranda" | "Terbaru" | "Trending" | "ForYou";
 type DramawaveTab = "Beranda" | "ForYou" | "Anime" | "Acak";
+type NetshortTab = "Beranda" | "ForYou" | "Teater" | "Acak";
 type DefaultSourceTab = DramaBoxTab;
 type SourceTab =
   | DramaBoxTab
   | ReelShortTab
   | MeloloTab
   | DramawaveTab
+  | NetshortTab
   | DefaultSourceTab;
 
 type ReelShortDramaMeta = {
@@ -103,6 +110,11 @@ type MeloloDramaMeta = {
 type DramawaveDramaMeta = {
   dramawaveRawId?: string;
   dramawaveDramaId?: string;
+};
+
+type NetshortDramaMeta = {
+  netshortRawId?: string;
+  netshortDramaId?: string;
 };
 
 function getValidatedTelegramUser(): SafeTelegramUser | null {
@@ -219,6 +231,22 @@ function isDramawaveSource(source: Source | null): boolean {
   );
 }
 
+function isNetshortDrama(drama: Drama | null): boolean {
+  return (
+    !!drama &&
+    (drama.sourceName === "Netshort" ||
+      drama.source?.toLowerCase() === "netshort")
+  );
+}
+
+function isNetshortSource(source: Source | null): boolean {
+  return (
+    !!source &&
+    (source.slug?.toLowerCase() === "netshort" ||
+      source.name?.toLowerCase() === "netshort")
+  );
+}
+
 function getDramaBoxTabEndpoint(
   tab: "Beranda" | "Terbaru" | "Dubbing" | "Acak",
 ): string {
@@ -302,6 +330,26 @@ function getDramawaveTabEndpoint(
 
 function getDramawaveSearchEndpoint(query: string): string {
   return `${DRAMAWAVE_SEARCH_BASE_URL}?query=${encodeURIComponent(query)}`;
+}
+
+function getNetshortTabEndpoint(
+  tab: "Beranda" | "ForYou" | "Teater" | "Acak",
+): string {
+  switch (tab) {
+    case "ForYou":
+      return NETSHORT_FORYOU_URL;
+    case "Teater":
+      return NETSHORT_THEATERS_URL;
+    case "Acak":
+      return NETSHORT_RANDOM_URL;
+    case "Beranda":
+    default:
+      return NETSHORT_HOME_URL;
+  }
+}
+
+function getNetshortSearchEndpoint(query: string): string {
+  return `${NETSHORT_SEARCH_BASE_URL}?query=${encodeURIComponent(query)}`;
 }
 
 function getFirstLocalEpisode(
@@ -410,6 +458,30 @@ function extractDramawaveDramaId(drama: Drama | null): string {
   return "";
 }
 
+function getNetshortMeta(drama: Drama | null): NetshortDramaMeta {
+  if (!drama) return {};
+
+  const meta = drama as Drama & NetshortDramaMeta;
+
+  return {
+    netshortRawId:
+      typeof meta.netshortRawId === "string" ? meta.netshortRawId.trim() : "",
+    netshortDramaId:
+      typeof meta.netshortDramaId === "string"
+        ? meta.netshortDramaId.trim()
+        : "",
+  };
+}
+
+function extractNetshortDramaId(drama: Drama | null): string {
+  const meta = getNetshortMeta(drama);
+
+  if (meta.netshortDramaId) return meta.netshortDramaId;
+  if (meta.netshortRawId) return meta.netshortRawId;
+
+  return "";
+}
+
 function createStableNumericId(seed: string, fallback: number): number {
   if (!seed.trim()) return fallback;
 
@@ -429,6 +501,7 @@ export default function Home() {
   const REELSHORT_CACHE_STORAGE_KEY = "dramalotus.reelShortDramaCache";
   const MELOLO_CACHE_STORAGE_KEY = "dramalotus.meloloDramaCache";
   const DRAMAWAVE_CACHE_STORAGE_KEY = "dramalotus.dramawaveDramaCache";
+  const NETSHORT_CACHE_STORAGE_KEY = "dramalotus.netshortDramaCache";
 
   const [telegramUserName, setTelegramUserName] = useState<string | null>(null);
   const [telegramUserId, setTelegramUserId] = useState<number | null>(null);
@@ -517,6 +590,20 @@ export default function Home() {
   );
   const [dramawaveDramaCache, setDramawaveDramaCache] = useState<Drama[]>([]);
 
+  const [netshortEpisodes, setNetshortEpisodes] = useState<Episode[]>([]);
+  const [isLoadingNetshortEpisodes, setIsLoadingNetshortEpisodes] =
+    useState(false);
+  const [netshortEpisodesError, setNetshortEpisodesError] = useState<
+    string | null
+  >(null);
+  const [netshortTab, setNetshortTab] = useState<NetshortTab>("Beranda");
+  const [liveNetshortDramas, setLiveNetshortDramas] = useState<Drama[]>([]);
+  const [isLoadingNetshortFeed, setIsLoadingNetshortFeed] = useState(false);
+  const [netshortFeedError, setNetshortFeedError] = useState<string | null>(
+    null,
+  );
+  const [netshortDramaCache, setNetshortDramaCache] = useState<Drama[]>([]);
+
   const canUseTelegramSync = isTelegramWebAppReady && isTelegramUserValid;
 
   const favoriteIdSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
@@ -536,6 +623,7 @@ export default function Home() {
     if (isReelShortSource(selectedSource)) return reelShortTab;
     if (isMeloloSource(selectedSource)) return meloloTab;
     if (isDramawaveSource(selectedSource)) return dramawaveTab;
+    if (isNetshortSource(selectedSource)) return netshortTab;
     return defaultSourceTab;
   }, [
     selectedSource,
@@ -543,6 +631,7 @@ export default function Home() {
     reelShortTab,
     meloloTab,
     dramawaveTab,
+    netshortTab,
     defaultSourceTab,
   ]);
 
@@ -606,6 +695,20 @@ export default function Home() {
         return;
       }
 
+      if (isNetshortSource(selectedSource)) {
+        if (
+          tab === "Beranda" ||
+          tab === "ForYou" ||
+          tab === "Teater" ||
+          tab === "Acak"
+        ) {
+          setNetshortTab(tab);
+        } else {
+          setNetshortTab("Beranda");
+        }
+        return;
+      }
+
       setDefaultSourceTab("Beranda");
     },
     [selectedSource],
@@ -620,7 +723,9 @@ export default function Home() {
           ? meloloEpisodes
           : isDramawaveDrama(selectedDrama)
             ? dramawaveEpisodes
-            : episodes.filter((episode) => episode.dramaId === selectedDrama.id)
+            : isNetshortDrama(selectedDrama)
+              ? netshortEpisodes
+              : episodes.filter((episode) => episode.dramaId === selectedDrama.id)
     : [];
 
   const handleSubmitSearch = useCallback(() => {
@@ -806,6 +911,23 @@ export default function Home() {
 
   useEffect(() => {
     try {
+      const storedNetshortCache = window.localStorage.getItem(
+        NETSHORT_CACHE_STORAGE_KEY,
+      );
+
+      if (storedNetshortCache) {
+        const parsed = JSON.parse(storedNetshortCache);
+        if (Array.isArray(parsed)) {
+          setNetshortDramaCache(parsed);
+        }
+      }
+    } catch (error) {
+      console.error("Gagal membaca cache Netshort:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
       const storedMembershipStatus = window.localStorage.getItem(
         MEMBERSHIP_STORAGE_KEY,
       );
@@ -886,6 +1008,17 @@ export default function Home() {
       console.error("Gagal menyimpan cache Dramawave:", error);
     }
   }, [dramawaveDramaCache]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        NETSHORT_CACHE_STORAGE_KEY,
+        JSON.stringify(netshortDramaCache),
+      );
+    } catch (error) {
+      console.error("Gagal menyimpan cache Netshort:", error);
+    }
+  }, [netshortDramaCache]);
 
   useEffect(() => {
     try {
@@ -1289,6 +1422,22 @@ export default function Home() {
     });
   }, []);
 
+  const cacheNetshortDrama = useCallback((drama: Drama) => {
+    if (!isNetshortDrama(drama)) return;
+
+    setNetshortDramaCache((currentCache) => {
+      const map = new Map<number, Drama>();
+
+      currentCache.forEach((item) => {
+        map.set(item.id, item);
+      });
+
+      map.set(drama.id, drama);
+
+      return Array.from(map.values());
+    });
+  }, []);
+
   const mergedDramaMap = useMemo(() => {
     const map = new Map<number, Drama>();
 
@@ -1312,6 +1461,10 @@ export default function Home() {
       map.set(drama.id, drama);
     });
 
+    netshortDramaCache.forEach((drama) => {
+      map.set(drama.id, drama);
+    });
+
     return map;
   }, [
     dramas,
@@ -1319,6 +1472,7 @@ export default function Home() {
     reelShortDramaCache,
     meloloDramaCache,
     dramawaveDramaCache,
+    netshortDramaCache,
   ]);
 
   const mergedDramas = useMemo(() => {
@@ -1379,6 +1533,11 @@ export default function Home() {
 
     if (isDramawaveDrama(selectedDrama)) {
       cacheDramawaveDrama(selectedDrama);
+      return;
+    }
+
+    if (isNetshortDrama(selectedDrama)) {
+      cacheNetshortDrama(selectedDrama);
     }
   }, [
     selectedDrama,
@@ -1386,6 +1545,7 @@ export default function Home() {
     cacheReelShortDrama,
     cacheMeloloDrama,
     cacheDramawaveDrama,
+    cacheNetshortDrama,
   ]);
 
   useEffect(() => {
@@ -2180,6 +2340,190 @@ export default function Home() {
   }, [liveDramawaveDramas]);
 
   useEffect(() => {
+    if (!isNetshortSource(selectedSource)) {
+      setLiveNetshortDramas([]);
+      setIsLoadingNetshortFeed(false);
+      setNetshortFeedError(null);
+      return;
+    }
+
+    let isMounted = true;
+    const keyword = submittedSearchQuery.trim();
+
+    const loadNetshortFeed = async () => {
+      setIsLoadingNetshortFeed(true);
+      setNetshortFeedError(null);
+      setLiveNetshortDramas([]);
+
+      try {
+        const shouldUseSearch = keyword.length > 0;
+        const endpoint = shouldUseSearch
+          ? getNetshortSearchEndpoint(keyword)
+          : getNetshortTabEndpoint(netshortTab);
+
+        const response = await fetch(endpoint, {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `Gagal memuat feed Netshort. endpoint=${endpoint} status=${response.status}`,
+          );
+        }
+
+        const data = await response.json();
+
+        if (!isMounted) return;
+
+        if (Array.isArray(data)) {
+          setLiveNetshortDramas(data as Drama[]);
+        } else {
+          setLiveNetshortDramas([]);
+          setNetshortFeedError("Format feed Netshort tidak valid.");
+        }
+      } catch (error) {
+        console.error("Gagal memuat feed Netshort:", error);
+
+        if (!isMounted) return;
+
+        setLiveNetshortDramas([]);
+        setNetshortFeedError(
+          error instanceof Error
+            ? error.message
+            : "Terjadi kesalahan saat memuat feed Netshort.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingNetshortFeed(false);
+        }
+      }
+    };
+
+    loadNetshortFeed();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedSource, netshortTab, submittedSearchQuery]);
+
+  useEffect(() => {
+    if (liveNetshortDramas.length === 0) return;
+
+    setNetshortDramaCache((currentCache) => {
+      const map = new Map<number, Drama>();
+
+      currentCache.forEach((drama) => {
+        map.set(drama.id, drama);
+      });
+
+      liveNetshortDramas.forEach((drama) => {
+        map.set(drama.id, drama);
+      });
+
+      return Array.from(map.values());
+    });
+  }, [liveNetshortDramas]);
+
+  useEffect(() => {
+    if (!selectedDrama || !isNetshortDrama(selectedDrama)) return;
+    if (selectedEpisode) return;
+    if (netshortEpisodes.length === 0) return;
+
+    const resumeEpisode = getResumeEpisodeFromHistory(
+      selectedDrama.id,
+      netshortEpisodes,
+      historyByDramaId,
+    );
+
+    const fallbackEpisode = netshortEpisodes[0] ?? null;
+    const targetEpisode = resumeEpisode ?? fallbackEpisode;
+
+    if (!targetEpisode) return;
+
+    setSelectedEpisode(targetEpisode);
+    handleSaveToHistory(selectedDrama.id, targetEpisode.id);
+  }, [
+    selectedDrama,
+    selectedEpisode,
+    netshortEpisodes,
+    historyByDramaId,
+    handleSaveToHistory,
+  ]);
+
+  useEffect(() => {
+    if (!selectedDrama || !isNetshortDrama(selectedDrama)) {
+      setNetshortEpisodes([]);
+      setIsLoadingNetshortEpisodes(false);
+      setNetshortEpisodesError(null);
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadNetshortEpisodes = async () => {
+      setIsLoadingNetshortEpisodes(true);
+      setNetshortEpisodesError(null);
+      setNetshortEpisodes([]);
+      setSelectedEpisode(null);
+
+      try {
+        const netshortDramaId = extractNetshortDramaId(selectedDrama);
+
+        if (!netshortDramaId) {
+          throw new Error(
+            "ID asli Netshort tidak ditemukan dari feed. Periksa field shortPlayId.",
+          );
+        }
+
+        const response = await fetch(
+          `/api/netshort/episodes?dramaId=${encodeURIComponent(netshortDramaId)}&numericDramaId=${selectedDrama.id}`,
+        );
+
+        if (!response.ok) {
+          throw new Error("Gagal memuat episode Netshort.");
+        }
+
+        const data = await response.json();
+
+        if (!isMounted) return;
+
+        if (Array.isArray(data)) {
+          setNetshortEpisodes(data);
+
+          if (data.length === 0) {
+            setNetshortEpisodesError("Episode belum tersedia untuk drama ini.");
+          }
+        } else {
+          setNetshortEpisodes([]);
+          setNetshortEpisodesError("Format episode Netshort tidak valid.");
+        }
+      } catch (error) {
+        console.error("Gagal memuat episode Netshort:", error);
+
+        if (isMounted) {
+          setNetshortEpisodes([]);
+          setNetshortEpisodesError(
+            error instanceof Error
+              ? error.message
+              : "Terjadi kesalahan saat memuat episode Netshort.",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingNetshortEpisodes(false);
+        }
+      }
+    };
+
+    loadNetshortEpisodes();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedDrama]);
+
+  useEffect(() => {
     if (!selectedDrama || !isDramawaveDrama(selectedDrama)) return;
     if (selectedEpisode) return;
     if (dramawaveEpisodes.length === 0) return;
@@ -2547,6 +2891,10 @@ export default function Home() {
       return liveDramawaveDramas;
     }
 
+    if (isNetshortSource(selectedSource)) {
+      return liveNetshortDramas;
+    }
+
     return visibleDramas;
   }, [
     selectedSource,
@@ -2554,6 +2902,7 @@ export default function Home() {
     liveReelShortDramas,
     liveMeloloDramas,
     liveDramawaveDramas,
+    liveNetshortDramas,
     visibleDramas,
   ]);
 
@@ -2571,6 +2920,7 @@ export default function Home() {
     setMeloloTab("Beranda");
     setMeloloOffset(0);
     setDramawaveTab("Beranda");
+    setNetshortTab("Beranda");
     setDefaultSourceTab("Beranda");
     setLiveDramaBoxDramas([]);
     setDramaBoxFeedError(null);
@@ -2580,6 +2930,8 @@ export default function Home() {
     setMeloloFeedError(null);
     setLiveDramawaveDramas([]);
     setDramawaveFeedError(null);
+    setLiveNetshortDramas([]);
+    setNetshortFeedError(null);
     setReelShortEpisodes([]);
     setReelShortEpisodesError(null);
     setIsLoadingReelShortEpisodes(false);
@@ -2589,6 +2941,9 @@ export default function Home() {
     setDramawaveEpisodes([]);
     setDramawaveEpisodesError(null);
     setIsLoadingDramawaveEpisodes(false);
+    setNetshortEpisodes([]);
+    setNetshortEpisodesError(null);
+    setIsLoadingNetshortEpisodes(false);
   };
 
   const handleGoHome = () => {
@@ -2749,6 +3104,17 @@ export default function Home() {
               return;
             }
 
+            if (isNetshortDrama(drama)) {
+              cacheNetshortDrama(drama);
+              setSelectedDrama(drama);
+              setNetshortEpisodes([]);
+              setSelectedEpisode(null);
+              setNetshortEpisodesError(null);
+              setShowEpisodes(false);
+              setActiveTab("home");
+              return;
+            }
+
             setSelectedDrama(drama);
             setSelectedEpisode(episode);
             setShowEpisodes(false);
@@ -2815,6 +3181,17 @@ export default function Home() {
               setDramawaveEpisodes([]);
               setSelectedEpisode(null);
               setDramawaveEpisodesError(null);
+              setShowEpisodes(false);
+              setActiveTab("home");
+              return;
+            }
+
+            if (isNetshortDrama(drama)) {
+              cacheNetshortDrama(drama);
+              setSelectedDrama(drama);
+              setNetshortEpisodes([]);
+              setSelectedEpisode(null);
+              setNetshortEpisodesError(null);
               setShowEpisodes(false);
               setActiveTab("home");
               return;
@@ -2901,7 +3278,9 @@ export default function Home() {
                   ? isLoadingMeloloEpisodes
                   : isDramawaveDrama(selectedDrama)
                     ? isLoadingDramawaveEpisodes
-                    : false
+                    : isNetshortDrama(selectedDrama)
+                      ? isLoadingNetshortEpisodes
+                      : false
           }
           episodesError={
             isDramaBoxDrama(selectedDrama)
@@ -2912,7 +3291,9 @@ export default function Home() {
                   ? meloloEpisodesError
                   : isDramawaveDrama(selectedDrama)
                     ? dramawaveEpisodesError
-                    : null
+                    : isNetshortDrama(selectedDrama)
+                      ? netshortEpisodesError
+                      : null
           }
           onBack={() => {
             setSelectedDrama(null);
@@ -2926,6 +3307,8 @@ export default function Home() {
             setMeloloEpisodesError(null);
             setDramawaveEpisodes([]);
             setDramawaveEpisodesError(null);
+            setNetshortEpisodes([]);
+            setNetshortEpisodesError(null);
           }}
           onOpenEpisodes={() => setShowEpisodes(true)}
           onCloseEpisodes={() => setShowEpisodes(false)}
@@ -2962,7 +3345,8 @@ export default function Home() {
             isDramaBoxSource(selectedSource) ||
             isReelShortSource(selectedSource) ||
             isMeloloSource(selectedSource) ||
-            isDramawaveSource(selectedSource)
+            isDramawaveSource(selectedSource) ||
+            isNetshortSource(selectedSource)
           }
           meloloOffset={meloloOffset}
           showMeloloPagination={
@@ -2983,6 +3367,7 @@ export default function Home() {
             setMeloloTab("Beranda");
             setMeloloOffset(0);
             setDramawaveTab("Beranda");
+            setNetshortTab("Beranda");
             setDefaultSourceTab("Beranda");
             setLiveDramaBoxDramas([]);
             setDramaBoxFeedError(null);
@@ -2992,6 +3377,8 @@ export default function Home() {
             setMeloloFeedError(null);
             setLiveDramawaveDramas([]);
             setDramawaveFeedError(null);
+            setLiveNetshortDramas([]);
+            setNetshortFeedError(null);
             setDramaBoxEpisodes([]);
             setDramaBoxEpisodesError(null);
             setReelShortEpisodes([]);
@@ -3000,6 +3387,8 @@ export default function Home() {
             setMeloloEpisodesError(null);
             setDramawaveEpisodes([]);
             setDramawaveEpisodesError(null);
+            setNetshortEpisodes([]);
+            setNetshortEpisodesError(null);
             setSelectedEpisode(null);
             setShowEpisodes(false);
           }}
@@ -3043,6 +3432,16 @@ export default function Home() {
               setDramawaveEpisodes([]);
               setSelectedEpisode(null);
               setDramawaveEpisodesError(null);
+              setShowEpisodes(false);
+              return;
+            }
+
+            if (isNetshortDrama(drama)) {
+              cacheNetshortDrama(drama);
+              setSelectedDrama(drama);
+              setNetshortEpisodes([]);
+              setSelectedEpisode(null);
+              setNetshortEpisodesError(null);
               setShowEpisodes(false);
               return;
             }
@@ -3094,6 +3493,7 @@ export default function Home() {
           setMeloloTab("Beranda");
           setMeloloOffset(0);
           setDramawaveTab("Beranda");
+          setNetshortTab("Beranda");
           setDefaultSourceTab("Beranda");
           setLiveDramaBoxDramas([]);
           setDramaBoxFeedError(null);
@@ -3103,6 +3503,8 @@ export default function Home() {
           setMeloloFeedError(null);
           setLiveDramawaveDramas([]);
           setDramawaveFeedError(null);
+          setLiveNetshortDramas([]);
+          setNetshortFeedError(null);
           setDramaBoxEpisodes([]);
           setDramaBoxEpisodesError(null);
           setReelShortEpisodes([]);
@@ -3111,6 +3513,8 @@ export default function Home() {
           setMeloloEpisodesError(null);
           setDramawaveEpisodes([]);
           setDramawaveEpisodesError(null);
+          setNetshortEpisodes([]);
+          setNetshortEpisodesError(null);
           setSelectedEpisode(null);
           setShowEpisodes(false);
         }}

@@ -30,4 +30,7 @@ export type Episode = {
 
   dramawaveEpisodeId?: string;
   dramawaveVid?: string;
+
+  netshortEpisodeId?: string;
+  netshortVid?: string;
 };

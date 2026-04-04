@@ -40,4 +40,7 @@ export type Drama = {
 
   dramawaveRawId?: string;
   dramawaveDramaId?: string;
+
+  netshortRawId?: string;
+  netshortDramaId?: string;
 };
