@@ -1,12 +1,16 @@
-import { NextResponse } from "next/server";
-
+import { NextRequest, NextResponse } from "next/server";
 import { normalizeDramawaveFeed } from "@/lib/adapters/drama/dramawave";
 
-const UPSTREAM_URL = "https://dramawave.dramabos.my.id/api/home?lang=in";
-
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const response = await fetch(UPSTREAM_URL, { cache: "no-store" });
+    const pageParam = request.nextUrl.searchParams.get("page")?.trim() || "1";
+    const page = Math.max(1, Number(pageParam) || 1);
+
+    const upstreamUrl = new URL("https://dramawave.dramabos.my.id/api/home");
+    upstreamUrl.searchParams.set("lang", "in");
+    upstreamUrl.searchParams.set("page", String(page));
+
+    const response = await fetch(upstreamUrl.toString(), { cache: "no-store" });
 
     if (!response.ok) {
       return NextResponse.json(

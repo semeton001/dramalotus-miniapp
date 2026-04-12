@@ -1,9 +1,9 @@
-import path from "path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: ["bristle-prompter-lunar.ngrok-free.dev"],
   turbopack: {
-    root: path.join(__dirname),
+    root: "C:/Users/padan/dramalotus-miniapp",
   },
 };
 

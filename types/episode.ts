@@ -5,25 +5,26 @@ export type Episode = {
   title: string;
   duration: string;
 
-  // siap untuk data nyata
   slug?: string;
   description?: string;
   videoUrl?: string;
+  originalVideoUrl?: string;
   thumbnail?: string;
   isLocked?: boolean;
   isVipOnly?: boolean;
-
-  // siap untuk urutan dan tracking
   sortOrder?: number;
 
-  // subtitle
   subtitleUrl?: string;
   subtitleLang?: string;
   subtitleLabel?: string;
 
-  // metadata source-specific
+  dramaboxChapterId?: string;
+  dramaboxBookId?: string;
+
   reelShortEpisodeId?: string;
   reelShortVideoId?: string;
+  reelShortDramaId?: string;
+  reelShortCode?: string;
 
   meloloEpisodeId?: string;
   meloloVid?: string;
@@ -33,4 +34,18 @@ export type Episode = {
 
   netshortEpisodeId?: string;
   netshortVid?: string;
+
+  flickreelsEpisodeId?: string;
+  flickreelsVid?: string;
+
+  idramaEpisodeId?: string;
+  idramaPlayId?: string;
+
+  reelifeEpisodeId?: string;
+  reelifePlayId?: string;
+  reelifeCode?: string;
+
+  freereelsEpisodeId?: string;
+  freereelsPlayId?: string;
+  freereelsCode?: string;
 };

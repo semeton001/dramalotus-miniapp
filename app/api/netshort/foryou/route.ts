@@ -1,37 +1,24 @@
-import { NextResponse } from "next/server";
-import { normalizeNetshortFeed } from "@/lib/adapters/drama/netshort";
+import { NextRequest, NextResponse } from "next/server";
 import {
-  NETSHORT_SANSEKAI_BASE_URL,
-  loadNetshortHomeFeed,
-  tryFetchJson,
+  fetchAndNormalizeNetshortForYou,
+  toErrorResponse,
 } from "../_shared";
 
-function rotate<T>(items: T[], offset: number): T[] {
-  if (items.length === 0) return items;
-  const safeOffset = offset % items.length;
-  return [...items.slice(safeOffset), ...items.slice(0, safeOffset)];
-}
+export async function GET(request: NextRequest) {
+  const pageParam = request.nextUrl.searchParams.get("page") ?? "1";
+  const page = Number(pageParam);
 
-export async function GET() {
-  const data = await tryFetchJson(
-    `${NETSHORT_SANSEKAI_BASE_URL}/foryou?page=1`,
-  );
-
-  if (data) {
-    const dramas = normalizeNetshortFeed(data, "foryou", "5");
-    if (dramas.length > 0) {
-      return NextResponse.json(dramas);
-    }
+  if (!Number.isFinite(page) || page < 1) {
+    return NextResponse.json(
+      { error: "page must be a positive number." },
+      { status: 400 },
+    );
   }
 
-  const fallback = await loadNetshortHomeFeed("5");
-  const rotated = rotate(fallback, 6);
-
-  return NextResponse.json(
-    rotated.map((item, index) => ({
-      ...item,
-      badge: "ForYou",
-      sortOrder: index,
-    })),
-  );
+  try {
+    const dramas = await fetchAndNormalizeNetshortForYou(page);
+    return NextResponse.json(dramas);
+  } catch (error) {
+    return toErrorResponse(error, "Failed to load Netshort ForYou.");
+  }
 }

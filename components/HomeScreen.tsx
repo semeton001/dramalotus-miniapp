@@ -121,7 +121,7 @@ export default function HomeScreen({
                         alt={source.name}
                         width={60}
                         height={60}
-                        className="h-[60px] w-[60px] rounded-[18px] object-contain"
+                        className="h-[60px] w-auto rounded-[18px] object-contain"
                       />
                     ) : (
                       <span className="text-2xl font-bold text-[#E6D3A3]">
@@ -176,7 +176,7 @@ export default function HomeScreen({
                         alt={source.name}
                         width={46}
                         height={46}
-                        className="h-[46px] w-[46px] rounded-[18px] object-contain"
+                        className="h-[46px] w-auto rounded-[18px] object-contain"
                       />
                     ) : (
                       <span className="text-base font-bold text-[#E6D3A3]">

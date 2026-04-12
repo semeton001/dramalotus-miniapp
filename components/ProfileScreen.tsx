@@ -8,7 +8,7 @@ type ProfileScreenProps = {
   onBack: () => void;
   onOpenHistory: () => void;
   onOpenFavorites: () => void;
-  onToggleMembership: () => void;
+  onOpenMembershipInfo: () => void;
 };
 
 export default function ProfileScreen({
@@ -21,7 +21,7 @@ export default function ProfileScreen({
   onBack,
   onOpenHistory,
   onOpenFavorites,
-  onToggleMembership,
+  onOpenMembershipInfo,
 }: ProfileScreenProps) {
   const displayName = telegramUserName?.trim()
     ? telegramUserName
@@ -37,12 +37,12 @@ export default function ProfileScreen({
     : "TG";
 
   const membershipLabel =
-    membershipStatus === "vip" ? "VIP Member" : "Pengguna Biasa";
+    membershipStatus === "vip" ? "VIP Member" : "Free Member";
 
   const membershipDescription =
     membershipStatus === "vip"
-      ? "Akses premium aktif. Menonton lebih nyaman tanpa iklan."
-      : "Mode lokal aktif. Upgrade VIP untuk pengalaman yang lebih eksklusif.";
+      ? "Status VIP aktif dari bot Telegram. Semua episode dapat ditonton dengan pengalaman bebas iklan."
+      : "Status Free aktif dari bot Telegram. Semua episode tetap dapat ditonton, dengan beberapa iklan singkat di episode tertentu.";
 
   return (
     <main className="min-h-[100dvh] bg-[radial-gradient(circle_at_top,rgba(201,164,92,0.10),transparent_26%),#0B0B0F] text-white">
@@ -79,16 +79,16 @@ export default function ProfileScreen({
                       {displayName}
                     </h2>
                     <span className="rounded-full border border-[#C9A45C]/20 bg-[#1A1C24] px-2.5 py-1 text-[11px] font-semibold text-[#E6D3A3]">
-                      Lokal
+                      Telegram Sync
                     </span>
                   </div>
 
                   <p className="mt-2 text-[14px] leading-6 text-[#9E978B]">
-                    ID Telegram belum tervalidasi
+                    Status akun mengikuti data dari bot Telegram
                   </p>
                   <p className="text-[13px] leading-5 text-[#7F786D]">
-                    Mode aman aktif untuk menjaga sinkronisasi akun tetap
-                    stabil.
+                    Jika membership berubah di bot, buka ulang mini app untuk
+                    memuat status terbaru.
                   </p>
                 </div>
               </div>
@@ -124,14 +124,16 @@ export default function ProfileScreen({
           </div>
 
           <button
-            onClick={onToggleMembership}
+            onClick={onOpenMembershipInfo}
             className={`mt-5 w-full rounded-[22px] px-4 py-4 text-[16px] font-semibold transition shadow-[0_12px_30px_rgba(0,0,0,0.18)] ${
               membershipStatus === "vip"
                 ? "bg-gradient-to-r from-[#D4AF37] to-[#F3D27A] text-black hover:brightness-105"
                 : "bg-gradient-to-r from-[#B76E79] via-[#C79A57] to-[#D4AF37] text-white hover:brightness-105"
             }`}
           >
-            {membershipStatus === "vip" ? "💎 VIP Aktif" : "Upgrade ke VIP"}
+            {membershipStatus === "vip"
+              ? "💎 Status VIP dari Bot Telegram"
+              : "✨ Status Free dari Bot Telegram"}
           </button>
 
           <div className="mt-5 grid grid-cols-3 gap-3 text-center">

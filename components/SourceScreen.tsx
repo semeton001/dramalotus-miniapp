@@ -8,12 +8,14 @@ type SourceTab =
   | "Terbaru"
   | "Dubbing"
   | "Acak"
+  | "Populer"
   | "For You"
   | "Trending"
   | "Romance"
   | "ForYou"
   | "Anime"
-  | "Teater";
+  | "Teater"
+  | "Hot";
 
 type SourceScreenProps = {
   selectedSource: Source;
@@ -23,10 +25,42 @@ type SourceScreenProps = {
   favoriteIds: number[];
   isTelegramReady: boolean;
   isSearchEnabled?: boolean;
+
+  dramaBoxPage?: number;
+  dramaBoxHasNextPage?: boolean;
+  showDramaBoxPagination?: boolean;
+  onDramaBoxPrevPage?: () => void;
+  onDramaBoxNextPage?: () => void;
+
+  meloloPage?: number;
+  meloloHasNextPage?: boolean;
   meloloOffset?: number;
   showMeloloPagination?: boolean;
   onMeloloPrevPage?: () => void;
   onMeloloNextPage?: () => void;
+
+  flickreelsPage?: number;
+  showFlickreelsPagination?: boolean;
+  onFlickreelsPrevPage?: () => void;
+  onFlickreelsNextPage?: () => void;
+
+  shortmaxPage?: number;
+  showShortmaxPagination?: boolean;
+  onShortmaxPrevPage?: () => void;
+  onShortmaxNextPage?: () => void;
+
+  goodshortPage?: number;
+  goodshortHasNextPage?: boolean;
+  showGoodshortPagination?: boolean;
+  onGoodshortPrevPage?: () => void;
+  onGoodshortNextPage?: () => void;
+
+  reelifePage?: number;
+  reelifeHasNextPage?: boolean;
+  showReelifePagination?: boolean;
+  onReelifePrevPage?: () => void;
+  onReelifeNextPage?: () => void;
+
   onBack: () => void;
   onSearchChange: (value: string) => void;
   onSubmitSearch: () => void;
@@ -70,6 +104,48 @@ const netshortTabs: Array<{ label: string; value: SourceTab }> = [
   { label: "🎲 Acak", value: "Acak" },
 ];
 
+const flickreelsTabs: Array<{ label: string; value: SourceTab }> = [
+  { label: "🏠 Beranda", value: "Beranda" },
+  { label: "✨ ForYou", value: "ForYou" },
+  { label: "🔥 Trending", value: "Trending" },
+  { label: "🎲 Acak", value: "Acak" },
+];
+
+const shortmaxTabs: Array<{ label: string; value: SourceTab }> = [
+  { label: "🏠 Beranda", value: "Beranda" },
+  { label: "🆕 Terbaru", value: "Terbaru" },
+  { label: "🔥 Trending", value: "Trending" },
+  { label: "♨️ Hot", value: "Hot" },
+];
+
+const goodshortTabs: Array<{ label: string; value: SourceTab }> = [
+  { label: "🏠 Beranda", value: "Beranda" },
+  { label: "⭐ Populer", value: "Populer" },
+  { label: "🔥 Trending", value: "Trending" },
+  { label: "🎲 Acak", value: "Acak" },
+];
+
+const reelifeTabs: Array<{ label: string; value: SourceTab }> = [
+  { label: "🏠 Beranda", value: "Beranda" },
+  { label: "🔥 Trending", value: "Trending" },
+  { label: "♨️ Hot", value: "Hot" },
+  { label: "🎲 Acak", value: "Acak" },
+];
+
+const freeReelsTabs: Array<{ label: string; value: SourceTab }> = [
+  { label: "🏠 Beranda", value: "Beranda" },
+  { label: "⭐ Populer", value: "Populer" },
+  { label: "🆕 Terbaru", value: "Terbaru" },
+  { label: "✨ ForYou", value: "ForYou" },
+];
+
+const idramaTabs: Array<{ label: string; value: SourceTab }> = [
+  { label: "🏠 Beranda", value: "Beranda" },
+  { label: "⭐ Populer", value: "Populer" },
+  { label: "♨️ Hot", value: "Hot" },
+  { label: "🎲 Acak", value: "Acak" },
+];
+
 function isDramaBoxSource(source: Source): boolean {
   return source.id === "1" || source.slug === "dramabox";
 }
@@ -102,6 +178,48 @@ function isNetshortSource(source: Source): boolean {
   );
 }
 
+function isFlickreelsSource(source: Source): boolean {
+  return (
+    source.slug?.toLowerCase() === "flickreels" ||
+    source.name?.toLowerCase() === "flickreels"
+  );
+}
+
+function isShortmaxSource(source: Source): boolean {
+  return (
+    source.slug?.toLowerCase() === "shortmax" ||
+    source.name?.toLowerCase() === "shortmax"
+  );
+}
+
+function isGoodshortSource(source: Source): boolean {
+  return (
+    source.slug?.toLowerCase() === "goodshort" ||
+    source.name?.toLowerCase() === "goodshort"
+  );
+}
+
+function isReelifeSource(source: Source): boolean {
+  return (
+    source.slug?.toLowerCase() === "reelife" ||
+    source.name?.toLowerCase() === "reelife"
+  );
+}
+
+function isFreeReelsSource(source: Source): boolean {
+  return (
+    source.slug?.toLowerCase() === "freereels" ||
+    source.name?.toLowerCase() === "freereels"
+  );
+}
+
+function isIdramaSource(source: Source): boolean {
+  return (
+    source.slug?.toLowerCase() === "idrama" ||
+    source.name?.toLowerCase() === "idrama"
+  );
+}
+
 function getSourceTabs(selectedSource: Source) {
   if (isReelShortSource(selectedSource)) {
     return reelShortTabs;
@@ -117,6 +235,30 @@ function getSourceTabs(selectedSource: Source) {
 
   if (isNetshortSource(selectedSource)) {
     return netshortTabs;
+  }
+
+  if (isFlickreelsSource(selectedSource)) {
+    return flickreelsTabs;
+  }
+
+  if (isShortmaxSource(selectedSource)) {
+    return shortmaxTabs;
+  }
+
+  if (isGoodshortSource(selectedSource)) {
+    return goodshortTabs;
+  }
+
+  if (isReelifeSource(selectedSource)) {
+    return reelifeTabs;
+  }
+
+  if (isFreeReelsSource(selectedSource)) {
+    return freeReelsTabs;
+  }
+
+  if (isIdramaSource(selectedSource)) {
+    return idramaTabs;
   }
 
   return dramaBoxTabs;
@@ -136,6 +278,8 @@ function resolveBadge(
   if (sourceTab === "Romance") return "Romance";
   if (sourceTab === "Anime") return "Anime";
   if (sourceTab === "Teater") return "Teater";
+  if (sourceTab === "Hot") return "Hot";
+  if (sourceTab === "Populer") return "Populer";
 
   if (typeof drama.badge === "string" && drama.badge.trim().length > 0) {
     return drama.badge.trim();
@@ -159,6 +303,30 @@ function resolveBadge(
 
   if (isNetshortSource(selectedSource)) {
     return "Netshort";
+  }
+
+  if (isFlickreelsSource(selectedSource)) {
+    return "Flickreels";
+  }
+
+  if (isShortmaxSource(selectedSource)) {
+    return "Shortmax";
+  }
+
+  if (isGoodshortSource(selectedSource)) {
+    return "GoodShort";
+  }
+
+  if (isReelifeSource(selectedSource)) {
+    return "Reelife";
+  }
+
+  if (isFreeReelsSource(selectedSource)) {
+    return "FreeReels";
+  }
+
+  if (isIdramaSource(selectedSource)) {
+    return "iDrama";
   }
 
   return "Drama";
@@ -197,6 +365,14 @@ function resolveBadgeClass(sourceTab: SourceTab, selectedSource: Source) {
     return "bg-[linear-gradient(135deg,#2563EB,#7C3AED)] text-white";
   }
 
+  if (sourceTab === "Hot") {
+    return "bg-[linear-gradient(135deg,#EF4444,#F97316)] text-white";
+  }
+
+  if (sourceTab === "Populer") {
+    return "bg-[linear-gradient(135deg,#F59E0B,#EAB308)] text-white";
+  }
+
   if (isMeloloSource(selectedSource)) {
     return "bg-[linear-gradient(135deg,#C13C7A,#F472B6)] text-white";
   }
@@ -213,6 +389,30 @@ function resolveBadgeClass(sourceTab: SourceTab, selectedSource: Source) {
     return "bg-[linear-gradient(135deg,#2563EB,#7C3AED)] text-white";
   }
 
+  if (isFlickreelsSource(selectedSource)) {
+    return "bg-[linear-gradient(135deg,#0F766E,#2563EB)] text-white";
+  }
+
+  if (isShortmaxSource(selectedSource)) {
+    return "bg-[linear-gradient(135deg,#7C3AED,#EC4899)] text-white";
+  }
+
+  if (isGoodshortSource(selectedSource)) {
+    return "bg-[linear-gradient(135deg,#14B8A6,#06B6D4)] text-white";
+  }
+
+  if (isReelifeSource(selectedSource)) {
+    return "bg-[linear-gradient(135deg,#F97316,#EF4444)] text-white";
+  }
+
+  if (isFreeReelsSource(selectedSource)) {
+    return "bg-[linear-gradient(135deg,#F59E0B,#F97316)] text-white";
+  }
+
+  if (isIdramaSource(selectedSource)) {
+    return "bg-[linear-gradient(135deg,#0F766E,#0EA5E9)] text-white";
+  }
+
   return "bg-[linear-gradient(135deg,#B76E79,#C98B57)] text-white";
 }
 
@@ -224,10 +424,40 @@ export default function SourceScreen({
   favoriteIds,
   isTelegramReady,
   isSearchEnabled = true,
+
+  dramaBoxPage = 1,
+  dramaBoxHasNextPage = false,
+  showDramaBoxPagination = false,
+  onDramaBoxPrevPage,
+  onDramaBoxNextPage,
+
   meloloOffset = 0,
   showMeloloPagination = false,
   onMeloloPrevPage,
   onMeloloNextPage,
+
+  flickreelsPage = 1,
+  showFlickreelsPagination = false,
+  onFlickreelsPrevPage,
+  onFlickreelsNextPage,
+
+  shortmaxPage = 1,
+  showShortmaxPagination = false,
+  onShortmaxPrevPage,
+  onShortmaxNextPage,
+
+  goodshortPage = 1,
+  goodshortHasNextPage = false,
+  showGoodshortPagination = false,
+  onGoodshortPrevPage,
+  onGoodshortNextPage,
+
+  reelifePage = 1,
+  reelifeHasNextPage = false,
+  showReelifePagination = false,
+  onReelifePrevPage,
+  onReelifeNextPage,
+
   onBack,
   onSearchChange,
   onSubmitSearch,
@@ -386,7 +616,7 @@ export default function SourceScreen({
 
                   return (
                     <div
-                      key={drama.id}
+                      key={`${selectedSource.slug || selectedSource.name}-${drama.id}-${drama.slug || drama.title}`}
                       role="button"
                       tabIndex={0}
                       onClick={(e) => {
@@ -403,23 +633,27 @@ export default function SourceScreen({
                       className="h-full text-left"
                     >
                       <div className="flex h-full flex-col overflow-hidden rounded-[22px] border border-[#B76E79]/35 bg-[#12131A] shadow-[0_16px_32px_rgba(0,0,0,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_42px_rgba(0,0,0,0.28)]">
-                        <div className="relative">
+                        <div className="relative aspect-[0.72] w-full overflow-hidden bg-[#0D0F15]">
                           {hasPosterImage ? (
                             <img
                               src={posterSrc}
                               alt={drama.title}
-                              className="aspect-[0.72] w-full object-cover"
+                              className="absolute inset-0 h-full w-full object-cover"
                               loading="lazy"
                               referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                const target = e.currentTarget;
+                                target.style.display = "none";
+                              }}
                             />
-                          ) : (
-                            <div
-                              className={`aspect-[0.72] w-full bg-gradient-to-b ${
-                                drama.posterClass ||
-                                "from-[#3A102A] via-[#12131A] to-[#090B12]"
-                              }`}
-                            />
-                          )}
+                          ) : null}
+
+                          <div
+                            className={`absolute inset-0 bg-gradient-to-b ${
+                              drama.posterClass ||
+                              "from-[#3A102A] via-[#12131A] to-[#090B12]"
+                            } ${hasPosterImage ? "opacity-0" : "opacity-100"}`}
+                          />
 
                           <div className="absolute inset-0 bg-black/18" />
                           <div className="absolute inset-0 bg-gradient-to-t from-[#090B12]/92 via-transparent to-transparent" />
@@ -517,6 +751,82 @@ export default function SourceScreen({
                     type="button"
                     onClick={onMeloloNextPage}
                     className="rounded-[16px] border border-white/10 bg-[#12131A] px-4 py-2 text-sm text-white"
+                  >
+                    Next →
+                  </button>
+                </div>
+              ) : null}
+
+              {showFlickreelsPagination ? (
+                <div className="mt-5 flex items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={onFlickreelsPrevPage}
+                    disabled={flickreelsPage <= 1}
+                    className="rounded-[16px] border border-white/10 bg-[#12131A] px-4 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    ← Prev
+                  </button>
+
+                  <span className="text-sm text-[#8F887C]">
+                    Page {flickreelsPage}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={onFlickreelsNextPage}
+                    className="rounded-[16px] border border-white/10 bg-[#12131A] px-4 py-2 text-sm text-white"
+                  >
+                    Next →
+                  </button>
+                </div>
+              ) : null}
+
+              {showShortmaxPagination ? (
+                <div className="mt-5 flex items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={onShortmaxPrevPage}
+                    disabled={shortmaxPage <= 1}
+                    className="rounded-[16px] border border-white/10 bg-[#12131A] px-4 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    ← Prev
+                  </button>
+
+                  <span className="text-sm text-[#8F887C]">
+                    Page {shortmaxPage}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={onShortmaxNextPage}
+                    className="rounded-[16px] border border-white/10 bg-[#12131A] px-4 py-2 text-sm text-white"
+                  >
+                    Next →
+                  </button>
+                </div>
+              ) : null}
+
+              {showGoodshortPagination && sourceTab !== "Trending" ? (
+                <div className="mt-5 flex items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={onGoodshortPrevPage}
+                    disabled={goodshortPage <= 1}
+                    className="rounded-[16px] border border-white/10 bg-[#12131A] px-4 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    ← Prev
+                  </button>
+
+                  <span className="text-sm text-[#8F887C]">
+                    Page {goodshortPage}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={onGoodshortNextPage}
+                    disabled={!goodshortHasNextPage}
+                    className="rounded-[16px] border border-white/10 bg-[#12131A] px-4 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Next →
                   </button>

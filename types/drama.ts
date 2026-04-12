@@ -43,4 +43,27 @@ export type Drama = {
 
   netshortRawId?: string;
   netshortDramaId?: string;
+
+  flickreelsRawId?: string;
+  flickreelsDramaId?: string;
+
+  shortmaxRawId?: string;
+  shortmaxDramaId?: string;
+  shortmaxCode?: string;
+  shortmaxViews?: number;
+
+  goodshortRawId?: string;
+  goodshortDramaId?: string;
+
+  idramaRawId?: string;
+  idramaDramaId?: string;
+  idramaCode?: string;
+
+  reelifeRawId?: string;
+  reelifeDramaId?: string;
+  reelifeCode?: string;
+
+  freereelsRawId?: string;
+  freereelsDramaId?: string;
+  freereelsCode?: string;
 };

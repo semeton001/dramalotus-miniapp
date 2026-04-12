@@ -1,162 +1,239 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Episode } from "@/types/episode";
-import {
-  NETSHORT_DRAMABOS_BASE_URL,
-  fetchJson,
-  toErrorResponse,
-} from "../_shared";
 
+const NETSHORT_ALLEPISODE_BASE_URL =
+  "https://netshort.sansekai.my.id/api/netshort/allepisode";
+const NETSHORT_WATCH_BASE_URL = "https://netshort.dramabos.my.id/api/watch";
+const NETSHORT_LANG = "in";
 const NETSHORT_WATCH_CODE =
   process.env.NETSHORT_WATCH_CODE || "4D96F22760EA30FB0FFBA9AA87A979A6";
 
-type NetshortDramaDetailResponse = {
-  shortPlayId?: string;
-  totalEpisode?: number;
+type NetshortAllepisodeResponse = {
+  shortPlayId?: string | number;
+  shortPlayLibraryId?: string | number;
+  shortPlayName?: string;
+  totalEpisode?: string | number;
+  shortPlayEpisodeInfos?: NetshortEpisodeItem[];
+};
+
+type NetshortEpisodeItem = {
+  shortPlayId?: string | number;
+  shortPlayLibraryId?: string | number;
+  episodeId?: string | number;
+  episodeNo?: string | number;
+  episodeType?: string | number;
+  episodeCover?: string;
+  isLock?: boolean | number | string;
+  isVip?: boolean | number | string;
+  isAd?: boolean | number | string;
+  subtitleList?: NetshortSubtitleItem[];
+};
+
+type NetshortSubtitleItem = {
+  url?: string;
+  format?: string;
+  sub_id?: string | number;
+  language_id?: string | number;
+  subtitleLanguage?: string;
+  expireTime?: string | number;
 };
 
 type NetshortWatchResponse = {
+  success?: boolean;
   data?: {
-    current?: number;
-    maxEps?: number;
+    current?: string | number;
+    maxEps?: string | number;
     status?: boolean;
-    videoUrl?: string;
     subtitles?: Array<{
       lang?: string;
       url?: string;
     }>;
+    videoUrl?: string;
   };
-  success?: boolean;
 };
 
-function pickSubtitle(
-  subtitles: Array<{ lang?: string; url?: string }> | undefined,
-): {
-  subtitleUrl?: string;
-  subtitleLang?: string;
-  subtitleLabel?: string;
-} {
-  if (!Array.isArray(subtitles) || subtitles.length === 0) {
-    return {};
-  }
-
-  const indo =
-    subtitles.find(
-      (item) => item?.lang === "id_ID" || item?.lang === "id-ID",
-    ) ?? subtitles[0];
-
-  if (!indo?.url) {
-    return {};
-  }
-
-  return {
-    subtitleUrl: indo.url,
-    subtitleLang: indo.lang === "id_ID" ? "id-ID" : indo.lang || "id-ID",
-    subtitleLabel: "Indonesian",
-  };
+function encodeUrlToken(value: string): string {
+  return Buffer.from(value, "utf8").toString("base64url");
 }
 
-function toEpisodeId(numericDramaId: number, episodeNumber: number): number {
-  return Number(`${numericDramaId}${String(episodeNumber).padStart(3, "0")}`);
+function toStringValue(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return "";
+}
+
+function toNumberValue(value: unknown, fallback = 0): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
+
+function toBooleanValue(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+  if (typeof value === "string") {
+    const lowered = value.trim().toLowerCase();
+    return lowered === "1" || lowered === "true" || lowered === "yes";
+  }
+  return false;
+}
+
+function buildStableEpisodeId(
+  numericDramaId: number,
+  rawEpisodeId: string,
+  episodeNumber: number,
+): number {
+  const direct = Number(rawEpisodeId);
+  if (Number.isFinite(direct) && direct > 0) return direct;
+
+  return Number(
+    `${numericDramaId || 9}${String(episodeNumber).padStart(3, "0")}`,
+  );
+}
+
+async function fetchNetshortAllepisodes(shortPlayId: string) {
+  const upstreamUrl = new URL(NETSHORT_ALLEPISODE_BASE_URL);
+  upstreamUrl.searchParams.set("shortPlayId", shortPlayId);
+
+  const response = await fetch(upstreamUrl.toString(), {
+    method: "GET",
+    cache: "no-store",
+    headers: {
+      Accept: "application/json, text/plain, */*",
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
+      Origin: "https://netshort.sansekai.my.id",
+      Referer: "https://netshort.sansekai.my.id/",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to load Netshort allepisode. status=${response.status}`,
+    );
+  }
+
+  return (await response.json()) as NetshortAllepisodeResponse;
+}
+
+async function fetchWatchEpisode(
+  shortPlayId: string,
+  episodeNumber: number,
+): Promise<NetshortWatchResponse["data"] | null> {
+  const upstreamUrl = new URL(
+    `${NETSHORT_WATCH_BASE_URL}/${encodeURIComponent(shortPlayId)}/${encodeURIComponent(String(episodeNumber))}`,
+  );
+  upstreamUrl.searchParams.set("lang", NETSHORT_LANG);
+  upstreamUrl.searchParams.set("code", NETSHORT_WATCH_CODE);
+
+  const response = await fetch(upstreamUrl.toString(), {
+    method: "GET",
+    cache: "no-store",
+    headers: {
+      Accept: "application/json, text/plain, */*",
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
+    },
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const payload = (await response.json()) as NetshortWatchResponse;
+  return payload?.data ?? null;
 }
 
 export async function GET(request: NextRequest) {
-  const shortPlayId = request.nextUrl.searchParams.get("dramaId")?.trim() ?? "";
-  const numericDramaId = Number(
-    request.nextUrl.searchParams.get("numericDramaId") ?? "0",
-  );
-
-  if (!shortPlayId || !Number.isFinite(numericDramaId) || numericDramaId <= 0) {
-    return NextResponse.json(
-      { error: "dramaId and numericDramaId are required." },
-      { status: 400 },
-    );
-  }
-
-  if (!NETSHORT_WATCH_CODE) {
-    return NextResponse.json(
-      { error: "NETSHORT_WATCH_CODE is required." },
-      { status: 500 },
-    );
-  }
-
   try {
-    const detail = (await fetchJson(
-      `${NETSHORT_DRAMABOS_BASE_URL}/drama/${encodeURIComponent(shortPlayId)}?lang=in`,
-    )) as NetshortDramaDetailResponse;
+    const dramaId = request.nextUrl.searchParams.get("dramaId")?.trim() || "";
+    const numericDramaIdRaw =
+      request.nextUrl.searchParams.get("numericDramaId")?.trim() || "0";
+    const numericDramaId = Number(numericDramaIdRaw) || 0;
 
-    const resolvedShortPlayId =
-      typeof detail?.shortPlayId === "string" &&
-      detail.shortPlayId.trim().length > 0
-        ? detail.shortPlayId.trim()
-        : shortPlayId;
-
-    const totalEpisode =
-      typeof detail?.totalEpisode === "number" &&
-      Number.isFinite(detail.totalEpisode)
-        ? detail.totalEpisode
-        : 0;
-
-    if (totalEpisode <= 0) {
-      return NextResponse.json([]);
+    if (!dramaId) {
+      return NextResponse.json({ error: "Missing dramaId" }, { status: 400 });
     }
 
+    const payload = await fetchNetshortAllepisodes(dramaId);
+    const rawEpisodeList = Array.isArray(payload?.shortPlayEpisodeInfos)
+      ? payload.shortPlayEpisodeInfos
+      : [];
+
     const watchResults = await Promise.all(
-      Array.from({ length: totalEpisode }, async (_, index) => {
-        const episodeNumber = index + 1;
-
-        try {
-          const watch = (await fetchJson(
-            `${NETSHORT_DRAMABOS_BASE_URL}/watch/${encodeURIComponent(
-              resolvedShortPlayId,
-            )}/${episodeNumber}?lang=in&code=${encodeURIComponent(NETSHORT_WATCH_CODE)}`,
-          )) as NetshortWatchResponse;
-
-          const videoUrl =
-            typeof watch?.data?.videoUrl === "string" &&
-            watch.data.videoUrl.trim().length > 0
-              ? watch.data.videoUrl.trim()
-              : "";
-
-          const subtitle = pickSubtitle(watch?.data?.subtitles);
-
-          const directSubtitleUrl = subtitle.subtitleUrl || undefined;
-
-          const episode: Episode = {
-            id: toEpisodeId(numericDramaId, episodeNumber),
-            dramaId: numericDramaId,
-            episodeNumber,
-            title: `Episode ${episodeNumber}`,
-            duration: "--:--",
-            videoUrl: videoUrl || undefined,
-            sortOrder: index,
-            netshortEpisodeId: String(episodeNumber),
-            netshortVid: undefined,
-            subtitleUrl: directSubtitleUrl,
-            subtitleLang: directSubtitleUrl ? "id-ID" : undefined,
-            subtitleLabel: directSubtitleUrl ? "Indonesian" : undefined,
-          };
-
-          return episode;
-        } catch {
-          const episode: Episode = {
-            id: toEpisodeId(numericDramaId, episodeNumber),
-            dramaId: numericDramaId,
-            episodeNumber,
-            title: `Episode ${episodeNumber}`,
-            duration: "--:--",
-            sortOrder: index,
-            isLocked: true,
-            isVipOnly: true,
-            netshortEpisodeId: String(episodeNumber),
-          };
-
-          return episode;
-        }
+      rawEpisodeList.map(async (item, index) => {
+        const episodeNumber = toNumberValue(item.episodeNo, index + 1);
+        const watchData = await fetchWatchEpisode(dramaId, episodeNumber);
+        return { item, index, episodeNumber, watchData };
       }),
     );
 
-    return NextResponse.json(watchResults);
+    const episodes: Episode[] = watchResults
+      .map(({ item, episodeNumber, watchData }) => {
+        const rawEpisodeId =
+          toStringValue(item.episodeId) || `${dramaId}-${episodeNumber}`;
+
+        const rawVideoUrl = toStringValue(watchData?.videoUrl);
+
+        const subtitle =
+          Array.isArray(watchData?.subtitles) && watchData.subtitles.length > 0
+            ? watchData.subtitles[0]
+            : Array.isArray(item.subtitleList) && item.subtitleList.length > 0
+              ? item.subtitleList[0]
+              : undefined;
+
+        const subtitleUrl = toStringValue(subtitle?.url);
+        const subtitleLang =
+          toStringValue(
+            (subtitle as { lang?: string; subtitleLanguage?: string } | undefined)
+              ?.lang,
+          ) ||
+          toStringValue(
+            (subtitle as { subtitleLanguage?: string } | undefined)
+              ?.subtitleLanguage,
+          ) ||
+          "id-ID";
+
+        return {
+          id: buildStableEpisodeId(numericDramaId, rawEpisodeId, episodeNumber),
+          dramaId: numericDramaId,
+          episodeNumber,
+          title: `Episode ${episodeNumber}`,
+          duration: "",
+          description: "",
+          thumbnail: toStringValue(item.episodeCover) || undefined,
+          videoUrl: rawVideoUrl
+            ? `/api/netshort/stream?u=${encodeUrlToken(rawVideoUrl)}`
+            : "",
+          originalVideoUrl: rawVideoUrl || undefined,
+          isLocked: toBooleanValue(item.isLock),
+          isVipOnly: toBooleanValue(item.isVip),
+          sortOrder: episodeNumber,
+          subtitleUrl: subtitleUrl
+            ? `/api/netshort/subtitle?url=${encodeURIComponent(subtitleUrl)}`
+            : undefined,
+          subtitleLang,
+          subtitleLabel: "Indonesian",
+        } satisfies Episode;
+      })
+      .filter((episode) => episode.videoUrl)
+      .sort((a, b) => a.episodeNumber - b.episodeNumber);
+
+    return NextResponse.json(episodes, { status: 200 });
   } catch (error) {
-    return toErrorResponse(error, "Failed to load Netshort episodes.");
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to load Netshort episodes.",
+      },
+      { status: 500 },
+    );
   }
 }

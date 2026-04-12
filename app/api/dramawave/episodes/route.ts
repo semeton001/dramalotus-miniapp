@@ -3,6 +3,10 @@ import { NextResponse } from "next/server";
 import { normalizeDramawaveEpisodes } from "@/lib/adapters/episode/dramawave";
 import type { Episode } from "@/types/episode";
 
+function encodeUrlToken(value: string): string {
+  return Buffer.from(value, "utf8").toString("base64url");
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -44,9 +48,13 @@ export async function GET(request: Request) {
         : 1,
     ).map((episode) => {
       const subtitleUrl = episode.subtitleUrl?.trim();
+      const rawVideoUrl = episode.videoUrl?.trim();
 
       return {
         ...episode,
+        videoUrl: rawVideoUrl
+          ? `/api/dramawave/stream?u=${encodeUrlToken(rawVideoUrl)}`
+          : "",
         subtitleUrl: subtitleUrl
           ? `/api/dramawave/subtitle?url=${encodeURIComponent(subtitleUrl)}`
           : undefined,

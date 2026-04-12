@@ -1,34 +1,14 @@
-import { NextResponse } from "next/server";
-import { adaptDramaBoxEpisodeList } from "@/lib/adapters/episode";
+import { NextRequest, NextResponse } from "next/server";
+import {
+  fetchDramaBoxEpisodeList,
+  getLang,
+  mapDramaBoxEpisodes,
+} from "../_shared";
 
-const DRAMABOX_BASE_URL = "https://dramabox.dramabos.my.id/api/v1";
-const DRAMABOX_LANG = "in";
-const DRAMABOX_EPISODE_CODE = "4D96F22760EA30FB0FFBA9AA87A979A6";
-
-async function fetchDramaBoxEpisodeList(bookId: string) {
-  const response = await fetch(
-    `${DRAMABOX_BASE_URL}/allepisode?bookId=${encodeURIComponent(bookId)}&lang=${DRAMABOX_LANG}&code=${DRAMABOX_EPISODE_CODE}`,
-    {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-      },
-      cache: "no-store",
-    },
-  );
-
-  if (!response.ok) {
-    throw new Error(
-      `DramaBox allepisode request failed with status ${response.status}`,
-    );
-  }
-
-  return response.json();
-}
-
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const bookId = searchParams.get("bookId");
+export async function GET(request: NextRequest) {
+  const bookId = request.nextUrl.searchParams.get("bookId")?.trim() || "";
+  const debug = request.nextUrl.searchParams.get("debug")?.trim() == "1";
+  const lang = getLang(request);
 
   if (!bookId || !/^\d+$/.test(bookId)) {
     return NextResponse.json(
@@ -38,11 +18,26 @@ export async function GET(request: Request) {
   }
 
   try {
-    const rawItems = await fetchDramaBoxEpisodeList(bookId);
-    const episodeItems = Array.isArray(rawItems) ? rawItems : [];
-    const episodes = adaptDramaBoxEpisodeList(episodeItems, Number(bookId));
+    const rawItems = await fetchDramaBoxEpisodeList(bookId, lang);
+    const mappedEpisodes = mapDramaBoxEpisodes(rawItems, bookId);
 
-    return NextResponse.json(episodes);
+    if (debug) {
+      const items = Array.isArray(rawItems) ? rawItems : [];
+      return NextResponse.json(
+        {
+          ok: true,
+          bookId,
+          rawCount: items.length,
+          mappedCount: mappedEpisodes.length,
+          firstRaw: items[0] ?? null,
+          firstMapped: mappedEpisodes[0] ?? null,
+          firstFiveMapped: mappedEpisodes.slice(0, 5),
+        },
+        { status: 200 },
+      );
+    }
+
+    return NextResponse.json(mappedEpisodes, { status: 200 });
   } catch (error) {
     console.error("Failed to fetch DramaBox episodes:", error);
 

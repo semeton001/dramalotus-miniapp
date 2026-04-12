@@ -24,12 +24,22 @@ import {
   buildNetshortDrama,
   normalizeNetshortFeed,
 } from "./netshort";
+import {
+  buildFlickreelsDrama,
+  normalizeFlickreelsFeed,
+} from "./flickreels";
+import {
+  buildShortmaxDrama,
+  normalizeShortmaxFeed,
+} from "./shortmax";
 
 export * from "./dramabox";
 export * from "./reelshort";
 export * from "./melolo";
 export * from "./dramawave";
 export * from "./netshort";
+export * from "./flickreels";
+export * from "./shortmax";
 
 export {
   adaptDramaBoxDetail,
@@ -46,6 +56,10 @@ export {
   normalizeDramawaveFeed,
   buildNetshortDrama,
   normalizeNetshortFeed,
+  buildFlickreelsDrama,
+  normalizeFlickreelsFeed,
+  buildShortmaxDrama,
+  normalizeShortmaxFeed,
 };
 
 function adaptDramawaveDramaList(rawItems: unknown[]): Drama[] {
@@ -88,6 +102,46 @@ function adaptNetshortDramaDetail(
   return adapted as Partial<Drama> & { id: number };
 }
 
+function adaptFlickreelsDramaList(rawItems: unknown[]): Drama[] {
+  return normalizeFlickreelsFeed({ data: { data: rawItems } }, "home", "6");
+}
+
+function adaptFlickreelsSearchList(rawItems: unknown[]): Drama[] {
+  return normalizeFlickreelsFeed({ data: { data: rawItems } }, "search", "6");
+}
+
+function adaptFlickreelsDramaDetail(
+  rawItem: unknown,
+): Partial<Drama> & { id: number } {
+  const adapted = buildFlickreelsDrama(rawItem, 0, "detail", "6");
+
+  if (!adapted) {
+    throw new Error("Invalid Flickreels detail payload.");
+  }
+
+  return adapted as Partial<Drama> & { id: number };
+}
+
+function adaptShortmaxDramaList(rawItems: unknown[]): Drama[] {
+  return normalizeShortmaxFeed({ data: { list: rawItems } }, "home", "7");
+}
+
+function adaptShortmaxSearchList(rawItems: unknown[]): Drama[] {
+  return normalizeShortmaxFeed({ data: { list: rawItems } }, "search", "7");
+}
+
+function adaptShortmaxDramaDetail(
+  rawItem: unknown,
+): Partial<Drama> & { id: number } {
+  const adapted = buildShortmaxDrama(rawItem, 0, "detail", "7");
+
+  if (!adapted) {
+    throw new Error("Invalid Shortmax detail payload.");
+  }
+
+  return adapted as Partial<Drama> & { id: number };
+}
+
 export function adaptDramaListBySource(
   sourceSlug: string,
   rawItems: unknown[],
@@ -103,6 +157,10 @@ export function adaptDramaListBySource(
       return adaptDramawaveDramaList(rawItems);
     case "netshort":
       return adaptNetshortDramaList(rawItems);
+    case "flickreels":
+      return adaptFlickreelsDramaList(rawItems);
+    case "shortmax":
+      return adaptShortmaxDramaList(rawItems);
     default:
       throw new Error(`No drama adapter registered for source: ${sourceSlug}`);
   }
@@ -123,6 +181,10 @@ export function adaptDramaSearchListBySource(
       return adaptDramawaveSearchList(rawItems);
     case "netshort":
       return adaptNetshortSearchList(rawItems);
+    case "flickreels":
+      return adaptFlickreelsSearchList(rawItems);
+    case "shortmax":
+      return adaptShortmaxSearchList(rawItems);
     default:
       throw new Error(
         `No drama search adapter registered for source: ${sourceSlug}`,
@@ -159,6 +221,10 @@ export function adaptDramaDetailBySource(
       return adaptDramawaveDramaDetail(rawItem);
     case "netshort":
       return adaptNetshortDramaDetail(rawItem);
+    case "flickreels":
+      return adaptFlickreelsDramaDetail(rawItem);
+    case "shortmax":
+      return adaptShortmaxDramaDetail(rawItem);
     default:
       throw new Error(
         `No drama detail adapter registered for source: ${sourceSlug}`,
