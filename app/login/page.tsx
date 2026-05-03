@@ -5,7 +5,7 @@ export default async function LoginPage() {
   const user = await getCurrentUser();
 
   if (user) {
-    redirect("/me");
+    redirect("/");
   }
 
   return (
@@ -29,6 +29,8 @@ export default async function LoginPage() {
           `,
         }}
       />
+
+      {/* Reviewer iPaymu login disabled */}
     </main>
   );
 }

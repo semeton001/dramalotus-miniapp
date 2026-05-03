@@ -2,17 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { adaptDramaBoxDramaList } from "@/lib/adapters/drama";
 import {
   dedupeDramaBoxItems,
+  enrichDramaBoxDramaMeta,
   extractDramaBoxItemsDeep,
-  fetchDramaBoxDubbed,
+  fetchDramaBoxForYou,
   fetchDramaBoxHomePage,
-  fetchDramaBoxLatest,
+  fetchDramaBoxRanking,
   getLang,
   getPage,
 } from "../_shared";
-
-const HOMEPAGE_PAGES = [1, 2, 3, 4, 5];
-const DUBBED_PAGES = [1, 2, 3, 4];
-const PAGE_SIZE = 24;
 
 function seededShuffle<T>(items: T[], seed: number): T[] {
   const copied = [...items];
@@ -36,65 +33,29 @@ export async function GET(request: NextRequest) {
     const lang = getLang(request);
     const page = getPage(request, 1);
 
-    const [latestPayload, homepagePayloads, dubbedPayloads] = await Promise.all([
-      fetchDramaBoxLatest(lang).catch((error) => {
-        console.error("DramaBox latest fetch failed in random pool:", error);
-        return null;
-      }),
-      Promise.all(
-        HOMEPAGE_PAGES.map((homepage) =>
-          fetchDramaBoxHomePage(homepage, lang).catch((error) => {
-            console.error(
-              `DramaBox homepage fetch failed in random pool page ${homepage}:`,
-              error,
-            );
-            return null;
-          }),
-        ),
-      ),
-      Promise.all(
-        DUBBED_PAGES.map((upstreamPage) =>
-          fetchDramaBoxDubbed(upstreamPage, lang).catch((error) => {
-            console.error(
-              `DramaBox dubbed fetch failed in random pool page ${upstreamPage}:`,
-              error,
-            );
-            return null;
-          }),
-        ),
-      ),
+    const [homePayload, rankingPayload, forYouPayload] = await Promise.all([
+      fetchDramaBoxHomePage(1, lang).catch(() => null),
+      fetchDramaBoxRanking(lang).catch(() => null),
+      fetchDramaBoxForYou(lang).catch(() => null),
     ]);
 
-    const latestItems = latestPayload
-      ? extractDramaBoxItemsDeep(latestPayload)
-      : [];
-    const homepageItems = homepagePayloads.flatMap((raw) =>
-      raw ? extractDramaBoxItemsDeep(raw) : [],
-    );
-    const dubbedItems = dubbedPayloads.flatMap((raw) =>
-      raw ? extractDramaBoxItemsDeep(raw) : [],
-    );
-
-    const mergedItems = dedupeDramaBoxItems([
-      ...homepageItems,
-      ...latestItems,
-      ...dubbedItems,
+    const rawItems = dedupeDramaBoxItems([
+      ...(homePayload ? extractDramaBoxItemsDeep(homePayload) : []),
+      ...(rankingPayload ? extractDramaBoxItemsDeep(rankingPayload) : []),
+      ...(forYouPayload ? extractDramaBoxItemsDeep(forYouPayload) : []),
     ]);
 
-    const dramas = adaptDramaBoxDramaList(mergedItems).filter(
+    const adapted = adaptDramaBoxDramaList(rawItems).filter(
       (item) => item.id > 0 && item.title.trim().length > 0,
     );
 
-    const randomized = seededShuffle(dramas, 73021);
-    const start = (page - 1) * PAGE_SIZE;
-    const end = start + PAGE_SIZE;
-    const items = randomized.slice(start, end);
-    const hasNextPage = end < randomized.length;
+    const mergedItems = enrichDramaBoxDramaMeta(adapted, rawItems);
+    const randomized = seededShuffle(mergedItems, Date.now() % 100000);
 
     return NextResponse.json(
       {
-        items,
-        hasNextPage,
+        items: randomized,
+        hasNextPage: false,
         page,
       },
       { status: 200 },

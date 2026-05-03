@@ -2,12 +2,14 @@ import type { Episode } from "@/types/episode";
 
 type MeloloRawVideo = {
   episode?: string | number;
+  index?: string | number;
   vid?: string | number;
   duration?: string | number;
   video_url?: string;
   play_url?: string;
   stream_url?: string;
   url?: string;
+  cover?: string;
   locked?: boolean | number | string;
   is_locked?: boolean | number | string;
   vip?: boolean | number | string;
@@ -18,6 +20,7 @@ type MeloloRawVideo = {
 type MeloloDetailPayload = {
   id?: string | number;
   videos?: unknown[];
+  episodes?: unknown[];
   [key: string]: unknown;
 };
 
@@ -83,7 +86,11 @@ function extractVideos(rawPayload: unknown): MeloloRawVideo[] {
   }
 
   const detail = rawPayload as MeloloDetailPayload;
-  const videos = Array.isArray(detail.videos) ? detail.videos : [];
+  const videos = Array.isArray(detail.episodes)
+    ? detail.episodes
+    : Array.isArray(detail.videos)
+      ? detail.videos
+      : [];
 
   return videos.filter(
     (item): item is MeloloRawVideo => !!item && typeof item === "object",
@@ -120,7 +127,7 @@ export function adaptMeloloEpisodeList(
   const meloloDramaId = options?.meloloDramaId ?? "";
 
   return extractVideos(rawPayload).map((video, index) => {
-    const episodeNumber = asNumber(video.episode, index + 1);
+    const episodeNumber = asNumber(video.episode, asNumber(video.index, index + 1));
     const vid = firstNonEmptyString(video.vid, `episode-${episodeNumber}`);
     const durationSeconds = asNumber(video.duration, 0);
     const videoUrl = extractVideoUrl(video);

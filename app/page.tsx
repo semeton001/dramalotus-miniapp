@@ -29,6 +29,7 @@ declare global {
             first_name?: string;
             last_name?: string;
             username?: string;
+            photo_url?: string;
           };
         };
         themeParams?: {
@@ -46,8 +47,7 @@ declare global {
 
 const isArray = <T,>(value: unknown): value is T[] => Array.isArray(value);
 
-const DRAMABOX_SEARCH_BASE_URL =
-  "https://dramabox.sansekai.my.id/api/dramabox/search";
+const DRAMABOX_SEARCH_BASE_URL = "/api/dramabox/search";
 
 const REELSHORT_HOME_URL = "/api/reelshort/home";
 const REELSHORT_FOR_YOU_URL = "/api/reelshort/foryou";
@@ -59,16 +59,21 @@ const MELOLO_HOME_URL = "/api/melolo/home";
 const MELOLO_LATEST_URL = "/api/melolo/latest";
 const MELOLO_FORYOU_URL = "/api/melolo/foryou";
 const MELOLO_TRENDING_URL = "/api/melolo/trending";
+const MELOLO_ROMANCE_URL = "/api/melolo/romance";
+const MELOLO_PEWARIS_URL = "/api/melolo/pewaris";
 const MELOLO_SEARCH_BASE_URL = "/api/melolo/search";
 const DRAMAWAVE_HOME_URL = "/api/dramawave/home";
 const DRAMAWAVE_FORYOU_URL = "/api/dramawave/foryou";
 const DRAMAWAVE_ANIME_URL = "/api/dramawave/anime";
 const DRAMAWAVE_RANDOM_URL = "/api/dramawave/random";
+const DRAMAWAVE_LATEST_URL = "/api/dramawave/latest";
+const DRAMAWAVE_DUBBING_URL = "/api/dramawave/dubbing";
+const DRAMAWAVE_VIP_URL = "/api/dramawave/vip";
 const DRAMAWAVE_SEARCH_BASE_URL = "/api/dramawave/search";
 const NETSHORT_HOME_URL = "/api/netshort/home";
 const NETSHORT_FORYOU_URL = "/api/netshort/foryou";
-const NETSHORT_THEATERS_URL = "/api/netshort/theaters";
-const NETSHORT_RANDOM_URL = "/api/netshort/random";
+const NETSHORT_NEW_URL = "/api/netshort/new";
+const NETSHORT_VIP_URL = "/api/netshort/vip";
 const NETSHORT_SEARCH_BASE_URL = "/api/netshort/search";
 const FLICKREELS_HOME_URL = "/api/flickreels/home";
 const FLICKREELS_FORYOU_URL = "/api/flickreels/foryou";
@@ -85,9 +90,47 @@ const GOODSHORT_POPULAR_URL = "/api/goodshort/popular";
 const GOODSHORT_SEARCH_BASE_URL = "/api/goodshort/search";
 const IDRAMA_HOME_URL = "/api/idrama/home";
 const IDRAMA_POPULAR_URL = "/api/idrama/popular";
-const IDRAMA_HOT_URL = "/api/idrama/hot";
+const IDRAMA_TRENDING_URL = "/api/idrama/hot";
 const IDRAMA_RANDOM_URL = "/api/idrama/random";
+const IDRAMA_LATEST_URL = "/api/idrama/latest";
 const IDRAMA_SEARCH_BASE_URL = "/api/idrama/search";
+const BILITV_HOME_URL = "/api/bilitv/home";
+const BILITV_FORYOU_URL = "/api/bilitv/foryou";
+const BILITV_VIP_URL = "/api/bilitv/vip";
+const BILITV_SEARCH_BASE_URL = "/api/bilitv/search";
+const BILITV_HOME_MAX_PAGE = 10;
+const BILITV_VIP_MAX_PAGE = 5;
+const DRAMANOVA_HOME_URL = "/api/dramanova/home";
+const DRAMANOVA_LATEST_URL = "/api/dramanova/latest";
+const DRAMANOVA_FORYOU_URL = "/api/dramanova/foryou";
+const DRAMANOVA_VIP_URL = "/api/dramanova/vip";
+const DRAMANOVA_SEARCH_BASE_URL = "/api/dramanova/search";
+const DRAMAPOPS_HOME_URL = "/api/dramapops/home";
+const DRAMAPOPS_POPULAR_URL = "/api/dramapops/popular";
+const DRAMAPOPS_TRENDING_URL = "/api/dramapops/trending";
+const DRAMAPOPS_SEARCH_BASE_URL = "/api/dramapops/search";
+const MICRODRAMA_HOME_URL = "/api/microdrama/home";
+const MICRODRAMA_SEARCH_BASE_URL = "/api/microdrama/search";
+const FUNDRAMA_HOME_URL = "/api/fundrama/home";
+const FUNDRAMA_FORYOU_URL = "/api/fundrama/foryou";
+const FUNDRAMA_HOT_URL = "/api/fundrama/hot";
+const FUNDRAMA_VIP_URL = "/api/fundrama/vip";
+const FUNDRAMA_SEARCH_BASE_URL = "/api/fundrama/search";
+const STARDUSTTV_HOME_URL = "/api/stardusttv/home";
+const STARDUSTTV_FANTASY_URL = "/api/stardusttv/fantasy";
+const STARDUSTTV_ROMANCE_URL = "/api/stardusttv/romance";
+const STARDUSTTV_VIP_URL = "/api/stardusttv/vip";
+const STARDUSTTV_SEARCH_BASE_URL = "/api/stardusttv/search";
+const FLEXTV_HOME_URL = "/api/flextv/home";
+const FLEXTV_POPULAR_URL = "/api/flextv/popular";
+const FLEXTV_LATEST_URL = "/api/flextv/latest";
+const FLEXTV_VIP_URL = "/api/flextv/foryou";
+const FLEXTV_SEARCH_BASE_URL = "/api/flextv/search";
+const DRAMABITE_HOME_URL = "/api/dramabite/home";
+const DRAMABITE_FORYOU_URL = "/api/dramabite/foryou";
+const DRAMABITE_RANKING_URL = "/api/dramabite/ranking";
+const DRAMABITE_VIP_URL = "/api/dramabite/vip";
+const DRAMABITE_SEARCH_BASE_URL = "/api/dramabite/search";
 const REELIFE_HOME_URL = "/api/reelife/home";
 const REELIFE_SEARCH_BASE_URL = "/api/reelife/search";
 const REELIFE_TRENDING_URL = "/api/reelife/trending";
@@ -104,6 +147,7 @@ type SafeTelegramUser = {
   username: string | null;
   firstName: string | null;
   lastName: string | null;
+  photoUrl: string | null;
 };
 
 type HistoryItem = {
@@ -111,19 +155,43 @@ type HistoryItem = {
   episodeId: number;
 };
 
-type DramaBoxTab = "Beranda" | "Terbaru" | "Dubbing" | "Acak";
+type DramaBoxTab = "Beranda" | "Ranking" | "ForYou" | "Acak";
 type ReelShortTab = "Beranda" | "For You" | "Trending" | "Romance";
-type MeloloTab = "Beranda" | "Terbaru" | "Trending" | "ForYou";
-type DramawaveTab = "Beranda" | "ForYou" | "Anime" | "Acak";
-type NetshortTab = "Beranda" | "ForYou" | "Teater" | "Acak";
-type FlickreelsTab = "Beranda" | "ForYou" | "Trending" | "Acak";
-type ShortmaxTab = "Beranda" | "Terbaru" | "Trending" | "Hot";
+type MeloloTab = "Beranda" | "Romance" | "ForYou" | "Pewaris";
+type DramawaveTab =
+  | "Beranda"
+  | "ForYou"
+  | "Anime"
+  | "Acak"
+  | "Terbaru"
+  | "Dubbing"
+  | "VIP";
+type NetshortTab = "Beranda" | "ForYou" | "Terbaru" | "VIP";
+type FlickreelsTab = "Beranda" | "Terbaru" | "ForYou" | "Acak";
+type ShortmaxTab = "Beranda" | "Terbaru" | "Trending" | "ForYou";
 type GoodshortTab = "Beranda" | "Populer" | "Trending" | "Acak";
-type ReelifeTab = "Beranda" | "Trending" | "Hot" | "Acak";
-type IdramaTab = "Beranda" | "Populer" | "Hot" | "Acak";
+type ReelifeTab = "Beranda" | "Trending" | "Pewaris" | "ForYou";
+type DramabiteTab = "Beranda" | "ForYou" | "Ranking" | "VIP";
+type FlextvTab = "Beranda" | "Populer" | "Terbaru" | "VIP";
+type BilitvTab = "Beranda" | "ForYou" | "VIP";
+type DramanovaTab = "Beranda" | "Terbaru" | "ForYou" | "VIP";
+type DramapopsTab = "Beranda" | "Populer" | "Trending";
+type MicrodramaTab = "Beranda";
+type FundramaTab = "Beranda" | "ForYou" | "Hot" | "VIP";
+type StardusttvTab = "Beranda" | "Fantasi" | "Romance" | "VIP";
+type IdramaTab = "Beranda" | "Populer" | "Trending" | "Terbaru";
 type FreeReelsTab = "Beranda" | "Populer" | "Terbaru" | "ForYou";
 type DefaultSourceTab = DramaBoxTab;
+type ExtraSourceTab =
+  | "Hot"
+  | "Pewaris"
+  | "For You"
+  | "Romance"
+  | "Fantasi"
+  | "Anime";
+
 type SourceTab =
+  | ExtraSourceTab
   | DramaBoxTab
   | ReelShortTab
   | MeloloTab
@@ -133,6 +201,14 @@ type SourceTab =
   | ShortmaxTab
   | GoodshortTab
   | ReelifeTab
+  | DramabiteTab
+  | FlextvTab
+  | BilitvTab
+  | DramanovaTab
+  | DramapopsTab
+  | MicrodramaTab
+  | FundramaTab
+  | StardusttvTab
   | IdramaTab
   | FreeReelsTab
   | DefaultSourceTab;
@@ -185,6 +261,46 @@ type ReelifeDramaMeta = {
   reelifeCode?: string;
 };
 
+type DramabiteDramaMeta = {
+  dramabiteRawId?: string;
+  dramabiteDramaId?: string;
+};
+
+type FlextvDramaMeta = {
+  flextvRawId?: string;
+  flextvSeriesId?: string;
+};
+
+type BilitvDramaMeta = {
+  bilitvRawId?: string;
+  bilitvDramaId?: string;
+};
+
+type DramanovaDramaMeta = {
+  dramanovaRawId?: string;
+  dramanovaDramaId?: string;
+};
+
+type DramapopsDramaMeta = {
+  dramapopsRawId?: string;
+  dramapopsMovieId?: string;
+};
+
+type MicrodramaDramaMeta = {
+  microdramaRawId?: string;
+  microdramaDramaId?: string;
+};
+
+type FundramaDramaMeta = {
+  fundramaRawId?: string;
+  fundramaDramaId?: string;
+};
+
+type StardusttvDramaMeta = {
+  stardusttvRawId?: string;
+  stardusttvVideoId?: string;
+};
+
 type FreeReelsDramaMeta = {
   freereelsRawId?: string;
   freereelsDramaId?: string;
@@ -219,11 +335,17 @@ function getValidatedTelegramUser(): SafeTelegramUser | null {
       ? rawUser.last_name.trim()
       : null;
 
+  const photoUrl =
+    typeof rawUser.photo_url === "string" && rawUser.photo_url.trim().length > 0
+      ? rawUser.photo_url.trim()
+      : null;
+
   return {
     id: userId,
     username,
     firstName,
     lastName,
+    photoUrl,
   };
 }
 
@@ -383,6 +505,134 @@ function isIdramaSource(source: Source | null): boolean {
   );
 }
 
+function isBilitvDrama(drama: Drama | null): boolean {
+  return (
+    !!drama &&
+    (drama.sourceName === "BiliTV" ||
+      drama.source?.toLowerCase() === "bilitv")
+  );
+}
+
+function isBilitvSource(source: Source | null): boolean {
+  return (
+    !!source &&
+    (source.slug?.toLowerCase() === "bilitv" ||
+      source.name?.toLowerCase() === "bilitv")
+  );
+}
+
+function isDramanovaDrama(drama: Drama | null): boolean {
+  return (
+    !!drama &&
+    (drama.sourceName === "DramaNova" ||
+      drama.source?.toLowerCase() === "dramanova")
+  );
+}
+
+function isDramanovaSource(source: Source | null): boolean {
+  return (
+    !!source &&
+    (source.slug?.toLowerCase() === "dramanova" ||
+      source.name?.toLowerCase() === "dramanova")
+  );
+}
+
+function isDramapopsDrama(drama: Drama | null): boolean {
+  return (
+    !!drama &&
+    (drama.sourceName === "Dramapops" ||
+      drama.source?.toLowerCase() === "dramapops")
+  );
+}
+
+function isDramapopsSource(source: Source | null): boolean {
+  return (
+    !!source &&
+    (source.slug?.toLowerCase() === "dramapops" ||
+      source.name?.toLowerCase() === "dramapops")
+  );
+}
+
+function isMicrodramaDrama(drama: Drama | null): boolean {
+  return (
+    !!drama &&
+    (drama.sourceName === "MicroDrama" ||
+      drama.source?.toLowerCase() === "microdrama")
+  );
+}
+
+function isMicrodramaSource(source: Source | null): boolean {
+  return (
+    !!source &&
+    (source.slug?.toLowerCase() === "microdrama" ||
+      source.name?.toLowerCase() === "microdrama")
+  );
+}
+
+function isFundramaDrama(drama: Drama | null): boolean {
+  return (
+    !!drama &&
+    (drama.sourceName === "FunDrama" ||
+      drama.source?.toLowerCase() === "fundrama")
+  );
+}
+
+function isFundramaSource(source: Source | null): boolean {
+  return (
+    !!source &&
+    (source.slug?.toLowerCase() === "fundrama" ||
+      source.name?.toLowerCase() === "fundrama")
+  );
+}
+
+function isStardusttvDrama(drama: Drama | null): boolean {
+  return (
+    !!drama &&
+    (drama.sourceName === "StardustTV" ||
+      drama.source?.toLowerCase() === "stardusttv")
+  );
+}
+
+function isStardusttvSource(source: Source | null): boolean {
+  return (
+    !!source &&
+    (source.slug?.toLowerCase() === "stardusttv" ||
+      source.name?.toLowerCase() === "stardusttv")
+  );
+}
+
+function isFlextvDrama(drama: Drama | null): boolean {
+  return (
+    !!drama &&
+    (drama.sourceName === "FlexTV" ||
+      drama.source?.toLowerCase() === "flextv")
+  );
+}
+
+function isFlextvSource(source: Source | null): boolean {
+  return (
+    !!source &&
+    (source.slug?.toLowerCase() === "flextv" ||
+      source.name?.toLowerCase() === "flextv")
+  );
+}
+
+function isDramabiteDrama(drama: Drama | null): boolean {
+  return (
+    !!drama &&
+    (drama.sourceName === "DramaBite" ||
+      drama.source?.toLowerCase() === "dramabite")
+  );
+}
+
+function isDramabiteSource(source: Source | null): boolean {
+  return (
+    !!source &&
+    (source.slug?.toLowerCase() === "dramabite" ||
+      source.name?.toLowerCase() === "dramabite")
+  );
+}
+
 function isReelifeDrama(drama: Drama | null): boolean {
   return (
     !!drama &&
@@ -416,18 +666,18 @@ function isFreeReelsSource(source: Source | null): boolean {
 }
 
 function getDramaBoxTabEndpoint(
-  tab: "Beranda" | "Terbaru" | "Dubbing" | "Acak",
+  tab: "Beranda" | "Ranking" | "ForYou" | "Acak",
   page = 1,
 ): string {
   switch (tab) {
     case "Beranda":
       return `/api/dramabox/home?page=${page}`;
-    case "Terbaru":
-      return `/api/dramabox/latest?page=${page}`;
-    case "Dubbing":
-      return `/api/dramabox/dubbing?page=${page}`;
+    case "Ranking":
+      return "/api/dramabox/latest";
+    case "ForYou":
+      return "/api/dramabox/dubbing";
     case "Acak":
-      return `/api/dramabox/random?page=${page}`;
+      return "/api/dramabox/random";
     default:
       return `/api/dramabox/home?page=${page}`;
   }
@@ -460,18 +710,18 @@ function getReelShortSearchEndpoint(query: string): string {
 }
 
 function getMeloloTabEndpoint(
-  tab: "Beranda" | "Terbaru" | "ForYou" | "Trending",
+  tab: "Beranda" | "Romance" | "ForYou" | "Pewaris",
   offset = 0,
 ): string {
   switch (tab) {
     case "Beranda":
       return `${MELOLO_HOME_URL}?offset=${offset}`;
-    case "Terbaru":
-      return MELOLO_LATEST_URL;
+    case "Romance":
+      return MELOLO_ROMANCE_URL;
     case "ForYou":
       return MELOLO_FORYOU_URL;
-    case "Trending":
-      return MELOLO_TRENDING_URL;
+    case "Pewaris":
+      return MELOLO_PEWARIS_URL;
     default:
       return `${MELOLO_HOME_URL}?offset=${offset}`;
   }
@@ -482,20 +732,19 @@ function getMeloloSearchEndpoint(query: string): string {
 }
 
 function getDramawaveTabEndpoint(
-  tab: "Beranda" | "ForYou" | "Anime" | "Acak",
+  tab: DramawaveTab,
   page = 1,
 ): string {
   switch (tab) {
-    case "Beranda":
-      return `${DRAMAWAVE_HOME_URL}?page=${page}`;
     case "ForYou":
-      return DRAMAWAVE_FORYOU_URL;
-    case "Anime":
-      return DRAMAWAVE_ANIME_URL;
-    case "Acak":
-      return DRAMAWAVE_RANDOM_URL;
+      return `${DRAMAWAVE_FORYOU_URL}?page=${page}`;
+    case "Dubbing":
+      return `${DRAMAWAVE_DUBBING_URL}?page=${page}`;
+    case "VIP":
+      return `${DRAMAWAVE_VIP_URL}?page=${page}`;
+    case "Terbaru":
     default:
-      return `${DRAMAWAVE_HOME_URL}?page=${page}`;
+      return `${DRAMAWAVE_LATEST_URL}?page=${page}`;
   }
 }
 
@@ -504,16 +753,16 @@ function getDramawaveSearchEndpoint(query: string): string {
 }
 
 function getNetshortTabEndpoint(
-  tab: "Beranda" | "ForYou" | "Teater" | "Acak",
+  tab: NetshortTab,
   page = 1,
 ): string {
   switch (tab) {
     case "ForYou":
-      return NETSHORT_FORYOU_URL;
-    case "Teater":
-      return NETSHORT_THEATERS_URL;
-    case "Acak":
-      return NETSHORT_RANDOM_URL;
+      return `${NETSHORT_FORYOU_URL}?page=${page}`;
+    case "Terbaru":
+      return `${NETSHORT_NEW_URL}?page=${page}`;
+    case "VIP":
+      return `${NETSHORT_VIP_URL}?page=${page}`;
     case "Beranda":
     default:
       return `${NETSHORT_HOME_URL}?page=${page}`;
@@ -525,16 +774,16 @@ function getNetshortSearchEndpoint(query: string): string {
 }
 
 function getFlickreelsTabEndpoint(
-  tab: "Beranda" | "ForYou" | "Trending" | "Acak",
+  tab: "Beranda" | "Terbaru" | "ForYou" | "Acak",
   page = 1,
 ): string {
   switch (tab) {
     case "Beranda":
       return `/api/flickreels/home?page=${page}`;
+    case "Terbaru":
+      return "/api/flickreels/trending";
     case "ForYou":
       return "/api/flickreels/foryou";
-    case "Trending":
-      return "/api/flickreels/trending";
     case "Acak":
       return "/api/flickreels/random";
     default:
@@ -547,7 +796,7 @@ function getFlickreelsSearchEndpoint(query: string): string {
 }
 
 function getShortmaxTabEndpoint(
-  tab: "Beranda" | "Terbaru" | "Trending" | "Hot",
+  tab: "Beranda" | "Terbaru" | "Trending" | "ForYou",
   page = 1,
 ): string {
   switch (tab) {
@@ -555,7 +804,7 @@ function getShortmaxTabEndpoint(
       return `${SHORTMAX_LATEST_URL}?page=${page}`;
     case "Trending":
       return `${SHORTMAX_TRENDING_URL}?page=${page}`;
-    case "Hot":
+    case "ForYou":
       return `${SHORTMAX_HOT_URL}?page=${page}`;
     case "Beranda":
     default:
@@ -585,16 +834,16 @@ function getGoodshortSearchEndpoint(query: string): string {
 }
 
 function getIdramaTabEndpoint(
-  tab: "Beranda" | "Populer" | "Hot" | "Acak",
+  tab: "Beranda" | "Populer" | "Trending" | "Terbaru",
   page = 1,
 ): string {
   switch (tab) {
     case "Populer":
       return `${IDRAMA_POPULAR_URL}?page=${page}`;
-    case "Hot":
-      return `${IDRAMA_HOT_URL}?page=${page}`;
-    case "Acak":
-      return `${IDRAMA_RANDOM_URL}?page=${page}`;
+    case "Trending":
+      return `${IDRAMA_TRENDING_URL}?page=${page}`;
+    case "Terbaru":
+      return `${IDRAMA_LATEST_URL}?page=${page}`;
     case "Beranda":
     default:
       return `${IDRAMA_HOME_URL}?page=${page}`;
@@ -605,16 +854,197 @@ function getIdramaSearchEndpoint(query: string, page = 1): string {
   return `${IDRAMA_SEARCH_BASE_URL}?query=${encodeURIComponent(query)}&page=${page}`;
 }
 
+function getBilitvTabEndpoint(tab: BilitvTab, page: number): string {
+  switch (tab) {
+    case "ForYou":
+      return BILITV_FORYOU_URL;
+    case "VIP":
+      return `${BILITV_VIP_URL}?page=${Math.min(
+        BILITV_VIP_MAX_PAGE,
+        Math.max(1, page),
+      )}`;
+    case "Beranda":
+    default:
+      return `${BILITV_HOME_URL}?page=${Math.min(
+        BILITV_HOME_MAX_PAGE,
+        Math.max(1, page),
+      )}`;
+  }
+}
+
+function getBilitvFeedEndpoint(
+  query: string,
+  tab: BilitvTab,
+  page: number,
+): string {
+  const keyword = query.trim();
+
+  return keyword.length > 0
+    ? `${BILITV_SEARCH_BASE_URL}?query=${encodeURIComponent(keyword)}`
+    : getBilitvTabEndpoint(tab, page);
+}
+
+function getDramanovaTabEndpoint(tab: DramanovaTab): string {
+  switch (tab) {
+    case "Terbaru":
+      return DRAMANOVA_LATEST_URL;
+    case "ForYou":
+      return DRAMANOVA_FORYOU_URL;
+    case "VIP":
+      return DRAMANOVA_VIP_URL;
+    case "Beranda":
+    default:
+      return DRAMANOVA_HOME_URL;
+  }
+}
+
+function getDramanovaFeedEndpoint(query: string, tab: DramanovaTab): string {
+  const keyword = query.trim();
+
+  return keyword.length > 0
+    ? `${DRAMANOVA_SEARCH_BASE_URL}?query=${encodeURIComponent(keyword)}`
+    : getDramanovaTabEndpoint(tab);
+}
+
+function getDramapopsTabEndpoint(tab: DramapopsTab): string {
+  switch (tab) {
+    case "Populer":
+      return DRAMAPOPS_POPULAR_URL;
+    case "Trending":
+      return DRAMAPOPS_TRENDING_URL;
+    case "Beranda":
+    default:
+      return DRAMAPOPS_HOME_URL;
+  }
+}
+
+function getDramapopsFeedEndpoint(query: string, tab: DramapopsTab): string {
+  const keyword = query.trim();
+
+  return keyword.length > 0
+    ? `${DRAMAPOPS_SEARCH_BASE_URL}?query=${encodeURIComponent(keyword)}`
+    : getDramapopsTabEndpoint(tab);
+}
+
+function getMicrodramaFeedEndpoint(query: string): string {
+  const keyword = query.trim();
+
+  return keyword.length > 0
+    ? `${MICRODRAMA_SEARCH_BASE_URL}?query=${encodeURIComponent(keyword)}`
+    : MICRODRAMA_HOME_URL;
+}
+
+function getFundramaTabEndpoint(tab: FundramaTab): string {
+  switch (tab) {
+    case "ForYou":
+      return FUNDRAMA_FORYOU_URL;
+    case "Hot":
+      return FUNDRAMA_HOT_URL;
+    case "VIP":
+      return FUNDRAMA_VIP_URL;
+    case "Beranda":
+    default:
+      return FUNDRAMA_HOME_URL;
+  }
+}
+
+function getFundramaFeedEndpoint(query: string, tab: FundramaTab): string {
+  const keyword = query.trim();
+
+  return keyword.length > 0
+    ? `${FUNDRAMA_SEARCH_BASE_URL}?query=${encodeURIComponent(keyword)}`
+    : getFundramaTabEndpoint(tab);
+}
+
+function getStardusttvTabEndpoint(
+  tab: StardusttvTab,
+  page = 1,
+): string {
+  switch (tab) {
+    case "Fantasi":
+      return STARDUSTTV_FANTASY_URL;
+    case "Romance":
+      return STARDUSTTV_ROMANCE_URL;
+    case "VIP":
+      return STARDUSTTV_VIP_URL;
+    case "Beranda":
+    default:
+      return `${STARDUSTTV_HOME_URL}?page=${Math.min(5, Math.max(1, page))}`;
+  }
+}
+
+function getStardusttvFeedEndpoint(
+  query: string,
+  tab: StardusttvTab,
+  page = 1,
+): string {
+  const keyword = query.trim();
+
+  return keyword.length > 0
+    ? `${STARDUSTTV_SEARCH_BASE_URL}?query=${encodeURIComponent(keyword)}`
+    : getStardusttvTabEndpoint(tab, page);
+}
+
+function getFlextvTabEndpoint(
+  tab: FlextvTab,
+): string {
+  switch (tab) {
+    case "Populer":
+      return FLEXTV_POPULAR_URL;
+    case "Terbaru":
+      return FLEXTV_LATEST_URL;
+    case "VIP":
+      return FLEXTV_VIP_URL;
+    case "Beranda":
+    default:
+      return FLEXTV_HOME_URL;
+  }
+}
+
+function getFlextvFeedEndpoint(query: string, tab: FlextvTab): string {
+  const keyword = query.trim();
+
+  return keyword.length > 0
+    ? `${FLEXTV_SEARCH_BASE_URL}?query=${encodeURIComponent(keyword)}`
+    : getFlextvTabEndpoint(tab);
+}
+
+function getDramabiteTabEndpoint(
+  tab: "Beranda" | "ForYou" | "Ranking" | "VIP",
+): string {
+  switch (tab) {
+    case "ForYou":
+      return DRAMABITE_FORYOU_URL;
+    case "Ranking":
+      return DRAMABITE_RANKING_URL;
+    case "VIP":
+      return DRAMABITE_VIP_URL;
+    case "Beranda":
+    default:
+      return DRAMABITE_HOME_URL;
+  }
+}
+
+function getDramabiteFeedEndpoint(
+  query: string,
+  tab: "Beranda" | "ForYou" | "Ranking" | "VIP",
+): string {
+  const keyword = query.trim();
+  return keyword.length > 0
+    ? `${DRAMABITE_SEARCH_BASE_URL}?query=${encodeURIComponent(keyword)}`
+    : getDramabiteTabEndpoint(tab);
+}
+
 function getReelifeTabEndpoint(
-  tab: "Beranda" | "Trending" | "Hot" | "Acak",
+  tab: "Beranda" | "Trending" | "Pewaris" | "ForYou",
   page = 1,
 ): string {
   switch (tab) {
     case "Trending":
       return `${REELIFE_TRENDING_URL}?page=${page}`;
-    case "Hot":
+    case "Pewaris":
       return `${REELIFE_HOT_URL}?page=${page}`;
-    case "Acak":
+    case "ForYou":
       return `${REELIFE_RANDOM_URL}?page=${page}`;
     case "Beranda":
     default:
@@ -624,7 +1054,7 @@ function getReelifeTabEndpoint(
 
 function getReelifeFeedEndpoint(
   query: string,
-  tab: "Beranda" | "Trending" | "Hot" | "Acak",
+  tab: "Beranda" | "Trending" | "Pewaris" | "ForYou",
   page = 1,
 ): string {
   const keyword = query.trim();
@@ -672,6 +1102,8 @@ function getFirstDramaBoxEpisode(episodes: Episode[]): Episode | null {
   return episodes.length > 0 ? episodes[0] : null;
 }
 
+const FREE_REELS_FREE_EPISODE_LIMIT = 10;
+
 function createFreeReelsBootstrapEpisode(drama: Drama): Episode | null {
   const freeReelsDramaId = extractFreeReelsDramaId(drama);
   if (!freeReelsDramaId) return null;
@@ -689,7 +1121,7 @@ function createFreeReelsBootstrapEpisode(drama: Drama): Episode | null {
     thumbnail: drama.coverImage || drama.posterImage || undefined,
     videoUrl: `/api/freereels/stream?dramaId=${encodeURIComponent(
       freeReelsDramaId,
-    )}&episodeId=1&code=${encodeURIComponent(freereelsCode || "")}`,
+    )}&episodeId=1`,
     originalVideoUrl: "",
     isLocked: false,
     isVipOnly: false,
@@ -701,6 +1133,43 @@ function createFreeReelsBootstrapEpisode(drama: Drama): Episode | null {
     freereelsPlayId: "1",
     freereelsCode: freereelsCode || undefined,
   };
+}
+
+function createFreeReelsFallbackEpisodes(drama: Drama): Episode[] {
+  const freeReelsDramaId = extractFreeReelsDramaId(drama);
+  if (!freeReelsDramaId) return [];
+
+  const totalEpisodes =
+    typeof drama.episodes === "number" && Number.isFinite(drama.episodes)
+      ? Math.max(1, Math.floor(drama.episodes))
+      : 1;
+
+  return Array.from({ length: totalEpisodes }, (_item, index) => {
+    const episodeNumber = index + 1;
+
+    return {
+      id: createStableNumericId(`${freeReelsDramaId}:${episodeNumber}`, episodeNumber),
+      dramaId: drama.id,
+      episodeNumber,
+      title: `Episode ${episodeNumber}`,
+      duration: "",
+      slug: `freereels-${freeReelsDramaId}-ep-${episodeNumber}`,
+      description: "",
+      thumbnail: drama.coverImage || drama.posterImage || undefined,
+      videoUrl: `/api/freereels/stream?dramaId=${encodeURIComponent(
+        freeReelsDramaId,
+      )}&episodeId=${episodeNumber}`,
+      originalVideoUrl: "",
+      isLocked: episodeNumber > FREE_REELS_FREE_EPISODE_LIMIT,
+      isVipOnly: episodeNumber > FREE_REELS_FREE_EPISODE_LIMIT,
+      sortOrder: episodeNumber,
+      subtitleUrl: undefined,
+      subtitleLang: "id-ID",
+      subtitleLabel: "Indonesia",
+      freereelsEpisodeId: String(episodeNumber),
+      freereelsPlayId: String(episodeNumber),
+    };
+  });
 }
 
 function getResumeEpisodeFromHistory(
@@ -928,6 +1397,234 @@ function extractIdramaDramaId(drama: Drama | null): string {
   return "";
 }
 
+function getBilitvMeta(drama: Drama | null): BilitvDramaMeta {
+  if (!drama) return {};
+
+  const meta = drama as Drama & BilitvDramaMeta;
+
+  return {
+    bilitvRawId:
+      typeof meta.bilitvRawId === "string" ? meta.bilitvRawId.trim() : "",
+    bilitvDramaId:
+      typeof meta.bilitvDramaId === "string" ? meta.bilitvDramaId.trim() : "",
+  };
+}
+
+function extractBilitvDramaId(drama: Drama | null): string {
+  const meta = getBilitvMeta(drama);
+  if (meta.bilitvDramaId) return meta.bilitvDramaId;
+  if (meta.bilitvRawId) return meta.bilitvRawId;
+
+  if (drama?.slug) {
+    const match = drama.slug.match(/bilitv-(\d+)/i);
+    if (match?.[1]) return match[1];
+  }
+
+  return "";
+}
+
+function getDramanovaMeta(drama: Drama | null): DramanovaDramaMeta {
+  if (!drama) return {};
+
+  const meta = drama as Drama & DramanovaDramaMeta;
+
+  return {
+    dramanovaRawId:
+      typeof meta.dramanovaRawId === "string"
+        ? meta.dramanovaRawId.trim()
+        : "",
+    dramanovaDramaId:
+      typeof meta.dramanovaDramaId === "string"
+        ? meta.dramanovaDramaId.trim()
+        : "",
+  };
+}
+
+function extractDramanovaDramaId(drama: Drama | null): string {
+  const meta = getDramanovaMeta(drama);
+  if (meta.dramanovaDramaId) return meta.dramanovaDramaId;
+  if (meta.dramanovaRawId) return meta.dramanovaRawId;
+
+  if (drama?.slug) {
+    const match = drama.slug.match(/dramanova-(\d+)/i);
+    if (match?.[1]) return match[1];
+  }
+
+  return "";
+}
+
+function getDramapopsMeta(drama: Drama | null): DramapopsDramaMeta {
+  if (!drama) return {};
+
+  const meta = drama as Drama & DramapopsDramaMeta;
+
+  return {
+    dramapopsRawId:
+      typeof meta.dramapopsRawId === "string"
+        ? meta.dramapopsRawId.trim()
+        : "",
+    dramapopsMovieId:
+      typeof meta.dramapopsMovieId === "string"
+        ? meta.dramapopsMovieId.trim()
+        : "",
+  };
+}
+
+function extractDramapopsMovieId(drama: Drama | null): string {
+  const meta = getDramapopsMeta(drama);
+  if (meta.dramapopsMovieId) return meta.dramapopsMovieId;
+  if (meta.dramapopsRawId) return meta.dramapopsRawId;
+
+  if (drama?.slug) {
+    const match = drama.slug.match(/dramapops-(\d+)/i);
+    if (match?.[1]) return match[1];
+  }
+
+  return "";
+}
+
+function getMicrodramaMeta(drama: Drama | null): MicrodramaDramaMeta {
+  if (!drama) return {};
+
+  const meta = drama as Drama & MicrodramaDramaMeta;
+
+  return {
+    microdramaRawId:
+      typeof meta.microdramaRawId === "string"
+        ? meta.microdramaRawId.trim()
+        : "",
+    microdramaDramaId:
+      typeof meta.microdramaDramaId === "string"
+        ? meta.microdramaDramaId.trim()
+        : "",
+  };
+}
+
+function extractMicrodramaDramaId(drama: Drama | null): string {
+  const meta = getMicrodramaMeta(drama);
+  if (meta.microdramaDramaId) return meta.microdramaDramaId;
+  if (meta.microdramaRawId) return meta.microdramaRawId;
+
+  if (drama?.slug) {
+    const match = drama.slug.match(/microdrama-(\d+)/i);
+    if (match?.[1]) return match[1];
+  }
+
+  return "";
+}
+
+function getFundramaMeta(drama: Drama | null): FundramaDramaMeta {
+  if (!drama) return {};
+
+  const meta = drama as Drama & FundramaDramaMeta;
+
+  return {
+    fundramaRawId:
+      typeof meta.fundramaRawId === "string" ? meta.fundramaRawId.trim() : "",
+    fundramaDramaId:
+      typeof meta.fundramaDramaId === "string"
+        ? meta.fundramaDramaId.trim()
+        : "",
+  };
+}
+
+function extractFundramaDramaId(drama: Drama | null): string {
+  const meta = getFundramaMeta(drama);
+  if (meta.fundramaDramaId) return meta.fundramaDramaId;
+  if (meta.fundramaRawId) return meta.fundramaRawId;
+
+  if (drama?.slug) {
+    const match = drama.slug.match(/fundrama-(\d+)/i);
+    if (match?.[1]) return match[1];
+  }
+
+  return "";
+}
+
+function getStardusttvMeta(drama: Drama | null): StardusttvDramaMeta {
+  if (!drama) return {};
+
+  const meta = drama as Drama & StardusttvDramaMeta;
+
+  return {
+    stardusttvRawId:
+      typeof meta.stardusttvRawId === "string"
+        ? meta.stardusttvRawId.trim()
+        : "",
+    stardusttvVideoId:
+      typeof meta.stardusttvVideoId === "string"
+        ? meta.stardusttvVideoId.trim()
+        : "",
+  };
+}
+
+function extractStardusttvVideoId(drama: Drama | null): string {
+  const meta = getStardusttvMeta(drama);
+  if (meta.stardusttvVideoId) return meta.stardusttvVideoId;
+  if (meta.stardusttvRawId) return meta.stardusttvRawId;
+
+  if (drama?.slug) {
+    const match = drama.slug.match(/stardusttv-(\d+)/i);
+    if (match?.[1]) return match[1];
+  }
+
+  return "";
+}
+
+function getFlextvMeta(drama: Drama | null): FlextvDramaMeta {
+  if (!drama) return {};
+
+  const meta = drama as Drama & FlextvDramaMeta;
+
+  return {
+    flextvRawId:
+      typeof meta.flextvRawId === "string" ? meta.flextvRawId.trim() : "",
+    flextvSeriesId:
+      typeof meta.flextvSeriesId === "string" ? meta.flextvSeriesId.trim() : "",
+  };
+}
+
+function extractFlextvSeriesId(drama: Drama | null): string {
+  const meta = getFlextvMeta(drama);
+  if (meta.flextvSeriesId) return meta.flextvSeriesId;
+  if (meta.flextvRawId) return meta.flextvRawId;
+
+  if (drama?.slug) {
+    const match = drama.slug.match(/flextv-(\d+)/i);
+    if (match?.[1]) return match[1];
+  }
+
+  return "";
+}
+
+function getDramabiteMeta(drama: Drama | null): DramabiteDramaMeta {
+  if (!drama) return {};
+
+  const meta = drama as Drama & DramabiteDramaMeta;
+
+  return {
+    dramabiteRawId:
+      typeof meta.dramabiteRawId === "string" ? meta.dramabiteRawId.trim() : "",
+    dramabiteDramaId:
+      typeof meta.dramabiteDramaId === "string"
+        ? meta.dramabiteDramaId.trim()
+        : "",
+  };
+}
+
+function extractDramabiteDramaId(drama: Drama | null): string {
+  const meta = getDramabiteMeta(drama);
+  if (meta.dramabiteDramaId) return meta.dramabiteDramaId;
+  if (meta.dramabiteRawId) return meta.dramabiteRawId;
+
+  if (drama?.slug) {
+    const match = drama.slug.match(/dramabite-(\d+)/i);
+    if (match?.[1]) return match[1];
+  }
+
+  return "";
+}
+
 function getReelifeMeta(drama: Drama | null): ReelifeDramaMeta {
   if (!drama) return {};
 
@@ -1045,7 +1742,15 @@ const ENABLED_HOME_SOURCE_SLUGS = new Set([
   "shortmax",
   "goodshort",
   "idrama",
+  "stardusttv",
+  "fundrama",
+  "microdrama",
+  "dramapops",
+  "dramanova",
+  "bilitv",
   "reelife",
+  "dramabite",
+  "flextv",
   "freereels",
 ]);
 
@@ -1074,6 +1779,10 @@ type WebMeResponse = {
   ok?: boolean;
   user?: {
     membership_status?: "free" | "vip";
+    telegram_username?: string | null;
+    telegram_user_id?: number | null;
+    first_name?: string | null;
+    last_name?: string | null;
   } | null;
 };
 
@@ -1097,6 +1806,71 @@ async function loadMembershipFromWebSession(): Promise<"free" | "vip"> {
 }
 
 export default function Home() {
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkAuth() {
+      try {
+        const response = await fetch("/api/me", {
+          cache: "no-store",
+          credentials: "include",
+        });
+
+        if (!response.ok) {
+          if (!getValidatedTelegramUser()) {
+            window.location.replace("/login");
+            return;
+          }
+
+          if (!cancelled) {
+            setAuthChecked(true);
+          }
+          return;
+        }
+
+        const data = (await response.json()) as WebMeResponse;
+        const user = data?.user ?? null;
+
+        if (!cancelled) {
+          const username =
+            typeof user?.telegram_username === "string" &&
+            user.telegram_username.trim().length > 0
+              ? user.telegram_username.trim()
+              : null;
+
+          const fullName = [user?.first_name, user?.last_name]
+            .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+            .join(" ")
+            .trim();
+
+          setWebProfileUsername(username);
+          setWebProfileUserId(
+            typeof user?.telegram_user_id === "number" ? user.telegram_user_id : null,
+          );
+          setWebProfileName(fullName || username || null);
+          setAuthChecked(true);
+        }
+      } catch {
+        if (!getValidatedTelegramUser()) {
+          window.location.replace("/login");
+          return;
+        }
+
+        if (!cancelled) {
+          setAuthChecked(true);
+        }
+      }
+    }
+
+    void checkAuth();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const FAVORITES_STORAGE_KEY = "dramalotus.favoriteIds";
   const HISTORY_STORAGE_KEY = "dramalotus.historyItems";
   const DRAMABOX_CACHE_STORAGE_KEY = "dramalotus.dramaBoxDramaCache";
@@ -1108,16 +1882,21 @@ export default function Home() {
   const SHORTMAX_CACHE_STORAGE_KEY = "dramalotus.shortmaxDramaCache";
   const IDRAMA_CACHE_STORAGE_KEY = "dramalotus.idramaDramaCache";
   const REELIFE_CACHE_STORAGE_KEY = "dramalotus.reelifeDramaCache";
+  const DRAMABITE_CACHE_STORAGE_KEY = "dramalotus.dramabiteDramaCache";
   const FREEREELS_CACHE_STORAGE_KEY = "dramalotus.freeReelsDramaCache";
 
   const [telegramUserName, setTelegramUserName] = useState<string | null>(null);
   const [telegramUserId, setTelegramUserId] = useState<number | null>(null);
+  const [telegramPhotoUrl, setTelegramPhotoUrl] = useState<string | null>(null);
   const [isTelegramWebAppReady, setIsTelegramWebAppReady] = useState(false);
   const [isTelegramUserValid, setIsTelegramUserValid] = useState(false);
   const [hasSyncedProfile, setHasSyncedProfile] = useState(false);
   const [hasLoadedServerFavorites, setHasLoadedServerFavorites] =
     useState(false);
   const [hasLoadedServerHistory, setHasLoadedServerHistory] = useState(false);
+  const [webProfileName, setWebProfileName] = useState<string | null>(null);
+  const [webProfileUsername, setWebProfileUsername] = useState<string | null>(null);
+  const [webProfileUserId, setWebProfileUserId] = useState<number | null>(null);
 
   const [sources, setSources] = useState<Source[]>([]);
   const [dramas, setDramas] = useState<Drama[]>([]);
@@ -1144,6 +1923,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<
     "home" | "history" | "favorites" | "profile"
   >("home");
+  const [showPaymentSuccessNotice, setShowPaymentSuccessNotice] = useState(false);
   const [dramaBoxTab, setDramaBoxTab] = useState<DramaBoxTab>("Beranda");
   const [reelShortTab, setReelShortTab] = useState<ReelShortTab>("Beranda");
   const [meloloTab, setMeloloTab] = useState<MeloloTab>("Beranda");
@@ -1151,6 +1931,7 @@ export default function Home() {
   const [dramaBoxPage, setDramaBoxPage] = useState(1);
   const [reelShortPage, setReelShortPage] = useState(1);
   const [dramawavePage, setDramawavePage] = useState(1);
+  const [dramawaveHasNextPage, setDramawaveHasNextPage] = useState(false);
   const [netshortPage, setNetshortPage] = useState(1);
   const [flickreelsPage, setFlickreelsPage] = useState(1);
   const [shortmaxPage, setShortmaxPage] = useState(1);
@@ -1176,6 +1957,7 @@ export default function Home() {
   const [membershipStatus, setMembershipStatus] = useState<"free" | "vip">(
     "free",
   );
+  const [membershipVipUntil, setMembershipVipUntil] = useState<string | null>(null);
   const [isResolvingMembership, setIsResolvingMembership] = useState(true);
   const [resolvedAdResponse, setResolvedAdResponse] =
     useState<ResolveAdCampaignResponse>(EMPTY_RESOLVED_AD_RESPONSE);
@@ -1383,7 +2165,6 @@ export default function Home() {
       isMounted = false;
     };
   }, [selectedDrama, selectedEpisode, membershipStatus]);
-
   const [showSplash, setShowSplash] = useState(true);
   const [isLoadingDramaBoxEpisodes, setIsLoadingDramaBoxEpisodes] =
     useState(false);
@@ -1418,7 +2199,7 @@ export default function Home() {
   const [dramawaveEpisodesError, setDramawaveEpisodesError] = useState<
     string | null
   >(null);
-  const [dramawaveTab, setDramawaveTab] = useState<DramawaveTab>("Beranda");
+  const [dramawaveTab, setDramawaveTab] = useState<DramawaveTab>("Terbaru");
   const [liveDramawaveDramas, setLiveDramawaveDramas] = useState<Drama[]>([]);
   const [isLoadingDramawaveFeed, setIsLoadingDramawaveFeed] = useState(false);
   const [dramawaveFeedError, setDramawaveFeedError] = useState<string | null>(
@@ -1488,6 +2269,119 @@ export default function Home() {
   const [idramaFeedError, setIdramaFeedError] = useState<string | null>(null);
   const [idramaDramaCache, setIdramaDramaCache] = useState<Drama[]>([]);
 
+  const [dramabiteEpisodes, setDramabiteEpisodes] = useState<Episode[]>([]);
+  const [isLoadingDramabiteEpisodes, setIsLoadingDramabiteEpisodes] =
+    useState(false);
+  const [dramabiteEpisodesError, setDramabiteEpisodesError] = useState<
+    string | null
+  >(null);
+  const [liveDramabiteDramas, setLiveDramabiteDramas] = useState<Drama[]>([]);
+  const [isLoadingDramabiteFeed, setIsLoadingDramabiteFeed] = useState(false);
+  const [dramabiteFeedError, setDramabiteFeedError] = useState<string | null>(
+    null,
+  );
+  const [dramabiteDramaCache, setDramabiteDramaCache] = useState<Drama[]>([]);
+  const [dramabiteTab, setDramabiteTab] = useState<DramabiteTab>("Beranda");
+
+  const [flextvEpisodes, setFlextvEpisodes] = useState<Episode[]>([]);
+  const [isLoadingFlextvEpisodes, setIsLoadingFlextvEpisodes] =
+    useState(false);
+  const [flextvEpisodesError, setFlextvEpisodesError] = useState<
+    string | null
+  >(null);
+  const [liveFlextvDramas, setLiveFlextvDramas] = useState<Drama[]>([]);
+  const [isLoadingFlextvFeed, setIsLoadingFlextvFeed] = useState(false);
+  const [flextvFeedError, setFlextvFeedError] = useState<string | null>(null);
+  const [flextvTab, setFlextvTab] = useState<FlextvTab>("Beranda");
+
+  const [stardusttvEpisodes, setStardusttvEpisodes] = useState<Episode[]>([]);
+  const [isLoadingStardusttvEpisodes, setIsLoadingStardusttvEpisodes] =
+    useState(false);
+  const [stardusttvEpisodesError, setStardusttvEpisodesError] = useState<
+    string | null
+  >(null);
+  const [liveStardusttvDramas, setLiveStardusttvDramas] = useState<Drama[]>([]);
+  const [isLoadingStardusttvFeed, setIsLoadingStardusttvFeed] = useState(false);
+  const [stardusttvFeedError, setStardusttvFeedError] = useState<string | null>(
+    null,
+  );
+  const [stardusttvTab, setStardusttvTab] =
+    useState<StardusttvTab>("Beranda");
+  const [stardusttvPage, setStardusttvPage] = useState(1);
+  const [stardusttvHasNextPage, setStardusttvHasNextPage] = useState(false);
+
+  const [fundramaEpisodes, setFundramaEpisodes] = useState<Episode[]>([]);
+  const [isLoadingFundramaEpisodes, setIsLoadingFundramaEpisodes] =
+    useState(false);
+  const [fundramaEpisodesError, setFundramaEpisodesError] = useState<
+    string | null
+  >(null);
+  const [liveFundramaDramas, setLiveFundramaDramas] = useState<Drama[]>([]);
+  const [isLoadingFundramaFeed, setIsLoadingFundramaFeed] = useState(false);
+  const [fundramaFeedError, setFundramaFeedError] = useState<string | null>(
+    null,
+  );
+  const [fundramaTab, setFundramaTab] = useState<FundramaTab>("Beranda");
+
+  const [microdramaEpisodes, setMicrodramaEpisodes] = useState<Episode[]>([]);
+  const [isLoadingMicrodramaEpisodes, setIsLoadingMicrodramaEpisodes] =
+    useState(false);
+  const [microdramaEpisodesError, setMicrodramaEpisodesError] = useState<
+    string | null
+  >(null);
+  const [liveMicrodramaDramas, setLiveMicrodramaDramas] = useState<Drama[]>([]);
+  const [isLoadingMicrodramaFeed, setIsLoadingMicrodramaFeed] = useState(false);
+  const [microdramaFeedError, setMicrodramaFeedError] = useState<string | null>(
+    null,
+  );
+  const [microdramaTab, setMicrodramaTab] =
+    useState<MicrodramaTab>("Beranda");
+
+  const [bilitvEpisodes, setBilitvEpisodes] = useState<Episode[]>([]);
+  const [isLoadingBilitvEpisodes, setIsLoadingBilitvEpisodes] =
+    useState(false);
+  const [bilitvEpisodesError, setBilitvEpisodesError] = useState<
+    string | null
+  >(null);
+  const [liveBilitvDramas, setLiveBilitvDramas] = useState<Drama[]>([]);
+  const [isLoadingBilitvFeed, setIsLoadingBilitvFeed] = useState(false);
+  const [bilitvFeedError, setBilitvFeedError] = useState<string | null>(
+    null,
+  );
+  const [bilitvTab, setBilitvTab] = useState<BilitvTab>("Beranda");
+  const [bilitvPage, setBilitvPage] = useState(1);
+  const [bilitvHasNextPage, setBilitvHasNextPage] = useState(false);
+
+  const [dramanovaEpisodes, setDramanovaEpisodes] = useState<Episode[]>([]);
+  const [isLoadingDramanovaEpisodes, setIsLoadingDramanovaEpisodes] =
+    useState(false);
+  const [dramanovaEpisodesError, setDramanovaEpisodesError] = useState<
+    string | null
+  >(null);
+  const [liveDramanovaDramas, setLiveDramanovaDramas] = useState<Drama[]>([]);
+  const [isLoadingDramanovaFeed, setIsLoadingDramanovaFeed] = useState(false);
+  const [dramanovaFeedError, setDramanovaFeedError] = useState<string | null>(
+    null,
+  );
+  const [dramanovaTab, setDramanovaTab] =
+    useState<DramanovaTab>("Beranda");
+
+  const [dramapopsEpisodes, setDramapopsEpisodes] = useState<Episode[]>([]);
+  const [isLoadingDramapopsEpisodes, setIsLoadingDramapopsEpisodes] =
+    useState(false);
+  const [dramapopsEpisodesError, setDramapopsEpisodesError] = useState<
+    string | null
+  >(null);
+  const [liveDramapopsDramas, setLiveDramapopsDramas] = useState<Drama[]>([]);
+  const [isLoadingDramapopsFeed, setIsLoadingDramapopsFeed] = useState(false);
+  const [dramapopsFeedError, setDramapopsFeedError] = useState<string | null>(
+    null,
+  );
+  const [dramapopsTab, setDramapopsTab] =
+    useState<DramapopsTab>("Beranda");
+
+
+
   const [reelifeEpisodes, setReelifeEpisodes] = useState<Episode[]>([]);
   const [isLoadingReelifeEpisodes, setIsLoadingReelifeEpisodes] =
     useState(false);
@@ -1539,6 +2433,14 @@ export default function Home() {
     if (isGoodshortSource(selectedSource)) return goodshortTab;
     if (isIdramaSource(selectedSource)) return idramaTab;
     if (isReelifeSource(selectedSource)) return reelifeTab;
+    if (isDramabiteSource(selectedSource)) return dramabiteTab;
+    if (isFlextvSource(selectedSource)) return flextvTab;
+    if (isBilitvSource(selectedSource)) return bilitvTab;
+    if (isDramanovaSource(selectedSource)) return dramanovaTab;
+    if (isDramapopsSource(selectedSource)) return dramapopsTab;
+    if (isMicrodramaSource(selectedSource)) return microdramaTab;
+    if (isFundramaSource(selectedSource)) return fundramaTab;
+    if (isStardusttvSource(selectedSource)) return stardusttvTab;
     if (isFreeReelsSource(selectedSource)) return freeReelsTab;
     return defaultSourceTab;
   }, [
@@ -1553,6 +2455,14 @@ export default function Home() {
     goodshortTab,
     idramaTab,
     reelifeTab,
+    dramabiteTab,
+    flextvTab,
+    bilitvTab,
+    dramanovaTab,
+    dramapopsTab,
+    microdramaTab,
+    fundramaTab,
+    stardusttvTab,
     freeReelsTab,
     defaultSourceTab,
   ]);
@@ -1564,8 +2474,8 @@ export default function Home() {
 
         if (
           tab === "Beranda" ||
-          tab === "Terbaru" ||
-          tab === "Dubbing" ||
+          tab === "Ranking" ||
+          tab === "ForYou" ||
           tab === "Acak"
         ) {
           setDramaBoxTab(tab);
@@ -1594,9 +2504,9 @@ export default function Home() {
       if (isMeloloSource(selectedSource)) {
         if (
           tab === "Beranda" ||
-          tab === "Terbaru" ||
+          tab === "Romance" ||
           tab === "ForYou" ||
-          tab === "Trending"
+          tab === "Pewaris"
         ) {
           setMeloloTab(tab);
           setMeloloOffset(0);
@@ -1609,16 +2519,19 @@ export default function Home() {
 
       if (isDramawaveSource(selectedSource)) {
         setDramawavePage(1);
+        setDramawaveHasNextPage(false);
+        setLiveDramawaveDramas([]);
+        setDramawaveFeedError(null);
 
         if (
-          tab === "Beranda" ||
+          tab === "Terbaru" ||
           tab === "ForYou" ||
-          tab === "Anime" ||
-          tab === "Acak"
+          tab === "Dubbing" ||
+          tab === "VIP"
         ) {
           setDramawaveTab(tab);
         } else {
-          setDramawaveTab("Beranda");
+          setDramawaveTab("Terbaru");
         }
         return;
       }
@@ -1629,8 +2542,8 @@ export default function Home() {
         if (
           tab === "Beranda" ||
           tab === "ForYou" ||
-          tab === "Teater" ||
-          tab === "Acak"
+          tab === "Terbaru" ||
+          tab === "VIP"
         ) {
           setNetshortTab(tab);
         } else {
@@ -1645,7 +2558,7 @@ export default function Home() {
         if (
           tab === "Beranda" ||
           tab === "ForYou" ||
-          tab === "Trending" ||
+          tab === "Terbaru" ||
           tab === "Acak"
         ) {
           setFlickreelsTab(tab);
@@ -1663,7 +2576,7 @@ export default function Home() {
           tab === "Beranda" ||
           tab === "Terbaru" ||
           tab === "Trending" ||
-          tab === "Hot"
+          tab === "ForYou"
         ) {
           setShortmaxTab(tab);
         } else {
@@ -1695,12 +2608,108 @@ export default function Home() {
         if (
           tab === "Beranda" ||
           tab === "Populer" ||
-          tab === "Hot" ||
-          tab === "Acak"
+          tab === "Trending" ||
+          tab === "Terbaru"
         ) {
           setIdramaTab(tab);
         } else {
           setIdramaTab("Beranda");
+        }
+        return;
+      }
+
+      if (isBilitvSource(selectedSource)) {
+        if (tab === "Beranda" || tab === "ForYou" || tab === "VIP") {
+          setBilitvTab(tab);
+        } else {
+          setBilitvTab("Beranda");
+        }
+        setBilitvPage(1);
+        return;
+      }
+
+      if (isDramanovaSource(selectedSource)) {
+        if (
+          tab === "Beranda" ||
+          tab === "Terbaru" ||
+          tab === "ForYou" ||
+          tab === "VIP"
+        ) {
+          setDramanovaTab(tab);
+        } else {
+          setDramanovaTab("Beranda");
+        }
+        return;
+      }
+
+      if (isDramapopsSource(selectedSource)) {
+        if (tab === "Beranda" || tab === "Populer" || tab === "Trending") {
+          setDramapopsTab(tab);
+        } else {
+          setDramapopsTab("Beranda");
+        }
+        return;
+      }
+
+      if (isMicrodramaSource(selectedSource)) {
+        setMicrodramaTab("Beranda");
+        return;
+      }
+
+      if (isFundramaSource(selectedSource)) {
+        if (
+          tab === "Beranda" ||
+          tab === "ForYou" ||
+          tab === "Hot" ||
+          tab === "VIP"
+        ) {
+          setFundramaTab(tab);
+        } else {
+          setFundramaTab("Beranda");
+        }
+        return;
+      }
+
+      if (isStardusttvSource(selectedSource)) {
+        setStardusttvPage(1);
+
+        if (
+          tab === "Beranda" ||
+          tab === "Fantasi" ||
+          tab === "Romance" ||
+          tab === "VIP"
+        ) {
+          setStardusttvTab(tab);
+        } else {
+          setStardusttvTab("Beranda");
+        }
+        return;
+      }
+
+      if (isFlextvSource(selectedSource)) {
+        if (
+          tab === "Beranda" ||
+          tab === "Populer" ||
+          tab === "Terbaru" ||
+          tab === "VIP"
+        ) {
+          setFlextvTab(tab);
+        } else {
+          setFlextvTab("Beranda");
+        }
+        return;
+      }
+
+      if (isDramabiteSource(selectedSource)) {
+        if (
+          tab === "Beranda" ||
+          tab === "ForYou" ||
+          tab === "Ranking" ||
+          tab === "VIP"
+        ) {
+          setDramabiteTab(tab);
+        } else {
+          setDramabiteTab("Beranda");
         }
         return;
       }
@@ -1711,8 +2720,8 @@ export default function Home() {
         if (
           tab === "Beranda" ||
           tab === "Trending" ||
-          tab === "Hot" ||
-          tab === "Acak"
+          tab === "Pewaris" ||
+          tab === "ForYou"
         ) {
           setReelifeTab(tab);
         } else {
@@ -1763,12 +2772,33 @@ export default function Home() {
                       ? idramaEpisodes
                       : isReelifeDrama(selectedDrama)
                         ? reelifeEpisodes
-                        : isFreeReelsDrama(selectedDrama)
-                          ? freeReelsEpisodes
+                        : isDramabiteDrama(selectedDrama)
+                          ? dramabiteEpisodes
+                          : isFlextvDrama(selectedDrama)
+                            ? flextvEpisodes
+                            : isBilitvDrama(selectedDrama)
+                              ? bilitvEpisodes
+                              : isDramanovaDrama(selectedDrama)
+                                ? dramanovaEpisodes
+                              : isDramapopsDrama(selectedDrama)
+                                ? dramapopsEpisodes
+                              : isMicrodramaDrama(selectedDrama)
+                                ? microdramaEpisodes
+                              : isFundramaDrama(selectedDrama)
+                                ? fundramaEpisodes
+                              : isStardusttvDrama(selectedDrama)
+                                ? stardusttvEpisodes
+                          : isFreeReelsDrama(selectedDrama)
+                            ? freeReelsEpisodes
                           : episodes.filter(
                               (episode) => episode.dramaId === selectedDrama.id,
                             )
     : [];
+
+  const handleClearSearch = useCallback(() => {
+    setSearchQuery("");
+    setSubmittedSearchQuery("");
+  }, []);
 
   const handleSubmitSearch = useCallback(() => {
     setSubmittedSearchQuery(searchQuery.trim());
@@ -1815,6 +2845,20 @@ export default function Home() {
       setReelifePage(1);
     }
 
+    if (isDramabiteSource(selectedSource)) {
+      setDramabiteTab("Beranda");
+    }
+
+    if (isFlextvSource(selectedSource)) {
+      setFlextvTab("Beranda");
+    }
+
+    if (isStardusttvSource(selectedSource)) {
+      setStardusttvTab("Beranda");
+      setStardusttvPage(1);
+      setStardusttvHasNextPage(false);
+    }
+
     if (isFreeReelsSource(selectedSource)) {
       setFreeReelsPage(1);
     }
@@ -1842,6 +2886,7 @@ export default function Home() {
       setIsTelegramUserValid(false);
       setTelegramUserId(null);
       setTelegramUserName(null);
+      setTelegramPhotoUrl(null);
       return;
     }
 
@@ -1865,12 +2910,19 @@ export default function Home() {
     if (!validatedUser) {
       setTelegramUserId(null);
       setTelegramUserName(null);
+      setTelegramPhotoUrl(null);
       setIsTelegramUserValid(false);
       return;
     }
 
     setTelegramUserId(validatedUser.id);
     setTelegramUserName(getTelegramDisplayName(validatedUser));
+    setTelegramPhotoUrl(
+      typeof validatedUser.photoUrl === "string" &&
+        validatedUser.photoUrl.trim().length > 0
+        ? validatedUser.photoUrl.trim()
+        : null,
+    );
     setIsTelegramUserValid(true);
   }, []);
 
@@ -1911,7 +2963,16 @@ export default function Home() {
 
           const nextStatus =
             data?.membership_status === "vip" ? "vip" : "free";
+          const nextVipUntil =
+            nextStatus === "vip" &&
+            typeof data?.vip_until === "string" &&
+            data.vip_until.trim().length > 0
+              ? data.vip_until.trim()
+              : null;
+
           setMembershipStatus(nextStatus);
+        setMembershipVipUntil(null);
+          setMembershipVipUntil(nextVipUntil);
           return;
         }
 
@@ -1925,6 +2986,7 @@ export default function Home() {
         if (!isMounted) return;
 
         setMembershipStatus("free");
+        setMembershipVipUntil(null);
       } finally {
         if (isMounted) {
           setIsResolvingMembership(false);
@@ -3462,17 +4524,12 @@ export default function Home() {
   }, [goodshortHasNextPage]);
 
   const handleReelifePrevPage = useCallback(() => {
-    setReelifePage((currentPage) => Math.max(1, currentPage - 1));
+    return;
   }, []);
 
   const handleReelifeNextPage = useCallback(() => {
-    setReelifePage((currentPage) => {
-      if (!reelifeHasNextPage) {
-        return currentPage;
-      }
-      return currentPage + 1;
-    });
-  }, [reelifeHasNextPage]);
+    return;
+  }, []);
 
   const handleFreeReelsPrevPage = useCallback(() => {
     setFreeReelsPage((currentPage) => Math.max(1, currentPage - 1));
@@ -3974,10 +5031,26 @@ export default function Home() {
 
         if (!isMounted) return;
 
-        if (Array.isArray(data)) {
-          setLiveDramawaveDramas(data as Drama[]);
+        setDramawaveHasNextPage(
+          Boolean(
+            data &&
+              typeof data === "object" &&
+              "hasNextPage" in data &&
+              (data as { hasNextPage?: unknown }).hasNextPage,
+          ),
+        );
+
+        const dramas = Array.isArray(data)
+          ? data
+          : data && typeof data === "object" && Array.isArray((data as { items?: unknown }).items)
+            ? (data as { items: unknown[] }).items
+            : [];
+
+        if (dramas.length > 0) {
+          setLiveDramawaveDramas(dramas as Drama[]);
         } else {
           setLiveDramawaveDramas([]);
+          setDramawaveHasNextPage(false);
           setDramawaveFeedError("Format feed Dramawave tidak valid.");
         }
       } catch (error) {
@@ -4228,7 +5301,8 @@ export default function Home() {
               ...normalizeStringArray(rawItem.tags),
               ...normalizeStringArray(rawItem.category),
               ...normalizeStringArray(rawItem.genre),
-              ...(netshortTab === "Teater" ? ["Teater"] : []),
+              ...(netshortTab === "Terbaru" ? ["Terbaru"] : []),
+              ...(netshortTab === "VIP" ? ["VIP"] : []),
               "Drama",
             ]),
           ).slice(0, 8);
@@ -4250,10 +5324,10 @@ export default function Home() {
             badge:
               netshortTab === "ForYou"
                 ? "ForYou"
-                : netshortTab === "Teater"
-                  ? "Teater"
-                  : netshortTab === "Acak"
-                    ? "Acak"
+                : netshortTab === "Terbaru"
+                  ? "Terbaru"
+                  : netshortTab === "VIP"
+                    ? "VIP"
                     : "Netshort",
             tags: normalizedTags,
             posterClass: "from-[#10203A] via-[#12131A] to-[#090B12]",
@@ -4265,10 +5339,10 @@ export default function Home() {
             description: normalizedDescription,
             coverImage: normalizedCoverImage || undefined,
             posterImage: normalizedPosterImage || undefined,
-            category: netshortTab === "Teater" ? "Teater" : "Drama",
+            category: netshortTab === "VIP" ? "VIP" : "Drama",
             language: "in",
             country: undefined,
-            isNew: netshortTab === "Beranda",
+            isNew: netshortTab === "Beranda" || netshortTab === "Terbaru",
             isDubbed: false,
             isTrending: false,
             sortOrder:
@@ -4368,6 +5442,14 @@ export default function Home() {
         if (!isMounted) return;
 
         if (Array.isArray(data)) {
+          console.log("[FlickReels feed]", {
+            tab: flickreelsTab,
+            page: flickreelsPage,
+            endpoint,
+            count: data.length,
+            firstTitle: data[0]?.title || null,
+            firstBadge: data[0]?.badge || null,
+          });
           setLiveFlickreelsDramas(data as Drama[]);
         } else {
           setLiveFlickreelsDramas([]);
@@ -4399,21 +5481,9 @@ export default function Home() {
   }, [selectedSource, flickreelsTab, flickreelsPage, submittedSearchQuery]);
 
   useEffect(() => {
-    if (liveFlickreelsDramas.length === 0) return;
-
-    setFlickreelsDramaCache((currentCache) => {
-      const map = new Map<number, Drama>();
-
-      currentCache.forEach((drama) => {
-        map.set(drama.id, drama);
-      });
-
-      liveFlickreelsDramas.forEach((drama) => {
-        map.set(drama.id, drama);
-      });
-
-      return Array.from(map.values());
-    });
+    // FlickReels source explorer harus menampilkan hasil tab aktif saja.
+    // Jangan merge lintas tab ke cache, karena membuat Beranda/Terbaru/ForYou/Acak tercampur.
+    setFlickreelsDramaCache(liveFlickreelsDramas);
   }, [liveFlickreelsDramas]);
 
   useEffect(() => {
@@ -4454,24 +5524,23 @@ export default function Home() {
 
         if (!isMounted) return;
 
-        const headerHasMore = response.headers.get("x-has-more");
-        const parsedHasMore =
-          headerHasMore === null ? null : headerHasMore === "1";
+        const items = Array.isArray(data)
+          ? data
+          : Array.isArray((data as { items?: unknown[] })?.items)
+            ? (data as { items: unknown[] }).items
+            : [];
 
-        if (Array.isArray(data)) {
-          setLiveGoodshortDramas(data as Drama[]);
+        const hasNextPage =
+          !Array.isArray(data) &&
+          typeof (data as { hasNextPage?: unknown })?.hasNextPage === "boolean"
+            ? Boolean((data as { hasNextPage: boolean }).hasNextPage)
+            : false;
 
-          if (shouldUseSearch || goodshortTab === "Trending") {
-            setGoodshortHasNextPage(false);
-          } else if (parsedHasMore !== null) {
-            setGoodshortHasNextPage(parsedHasMore);
-          } else {
-            setGoodshortHasNextPage((data as Drama[]).length > 0);
-          }
-        } else {
-          setLiveGoodshortDramas([]);
-          setGoodshortHasNextPage(false);
-          setGoodshortFeedError("Format feed GoodShort tidak valid.");
+        setLiveGoodshortDramas(items as Drama[]);
+        setGoodshortHasNextPage(hasNextPage);
+
+        if (items.length === 0) {
+          setGoodshortFeedError(null);
         }
       } catch (error) {
         console.error("Gagal memuat feed GoodShort:", error);
@@ -4853,11 +5922,10 @@ export default function Home() {
       setIsLoadingReelShortEpisodes(true);
       setReelShortEpisodesError(null);
       setReelShortEpisodes([]);
-      setSelectedEpisode(null);
 
       try {
         const reelShortRawId = extractReelShortRawId(selectedDrama);
-        const { reelShortCode } = getReelShortMeta(selectedDrama);
+        getReelShortMeta(selectedDrama);
 
         if (!reelShortRawId) {
           throw new Error(
@@ -4870,44 +5938,95 @@ export default function Home() {
           dramaId: String(selectedDrama.id),
         });
 
-        if (reelShortCode?.trim()) {
-          params.set("code", reelShortCode.trim());
-        }
+        const reelShortEpisodesCacheKey = `dramalotus.reelShortEpisodes.${reelShortRawId}`;
+
+        const readCachedReelShortEpisodes = (): Episode[] => {
+          try {
+            const cached = window.localStorage.getItem(reelShortEpisodesCacheKey);
+            const parsed = cached ? JSON.parse(cached) : [];
+            return Array.isArray(parsed) ? (parsed as Episode[]) : [];
+          } catch {
+            return [];
+          }
+        };
+
+        const writeCachedReelShortEpisodes = (episodes: Episode[]) => {
+          try {
+            window.localStorage.setItem(
+              reelShortEpisodesCacheKey,
+              JSON.stringify(episodes),
+            );
+          } catch {
+            // ignore cache write error
+          }
+        };
 
         const response = await fetch(
           `/api/reelshort/episodes?${params.toString()}`,
         );
 
         if (!response.ok) {
-          throw new Error("Gagal memuat episode ReelShort.");
+          const cachedEpisodes = readCachedReelShortEpisodes();
+
+          if (cachedEpisodes.length > 0) {
+            setReelShortEpisodes(cachedEpisodes);
+            setReelShortEpisodesError(null);
+            return;
+          }
+
+          setReelShortEpisodes([]);
+          setSelectedEpisode(null);
+          setReelShortEpisodesError(null);
+          return;
         }
 
         const data = await response.json();
 
         if (!isMounted) return;
 
-        if (Array.isArray(data)) {
+        if (Array.isArray(data) && data.length > 0) {
           setReelShortEpisodes(data);
-
-          if (data.length === 0) {
-            setReelShortEpisodesError(
-              "Episode belum tersedia untuk drama ini.",
-            );
-          }
+          setReelShortEpisodesError(null);
+          writeCachedReelShortEpisodes(data);
         } else {
-          setReelShortEpisodes([]);
-          setReelShortEpisodesError("Format episode ReelShort tidak valid.");
+          const cachedEpisodes = readCachedReelShortEpisodes();
+
+          if (cachedEpisodes.length > 0) {
+            setReelShortEpisodes(cachedEpisodes);
+            setSelectedEpisode(cachedEpisodes[0]);
+          } else {
+            setReelShortEpisodes([]);
+            setSelectedEpisode(null);
+          }
+
+          setReelShortEpisodesError(null);
         }
       } catch (error) {
-        console.error("Gagal memuat episode ReelShort:", error);
+        console.warn("Gagal memuat episode ReelShort, memakai cache jika ada:", error);
 
         if (isMounted) {
-          setReelShortEpisodes([]);
-          setReelShortEpisodesError(
-            error instanceof Error
-              ? error.message
-              : "Terjadi kesalahan saat memuat episode ReelShort.",
-          );
+          const fallbackReelShortRawId = extractReelShortRawId(selectedDrama);
+          const fallbackCacheKey = `dramalotus.reelShortEpisodes.${fallbackReelShortRawId}`;
+
+          let cachedEpisodes: Episode[] = [];
+
+          try {
+            const cached = window.localStorage.getItem(fallbackCacheKey);
+            const parsed = cached ? JSON.parse(cached) : [];
+            cachedEpisodes = Array.isArray(parsed) ? (parsed as Episode[]) : [];
+          } catch {
+            cachedEpisodes = [];
+          }
+
+          if (cachedEpisodes.length > 0) {
+            setReelShortEpisodes(cachedEpisodes);
+            setSelectedEpisode(cachedEpisodes[0]);
+          } else {
+            setReelShortEpisodes([]);
+            setSelectedEpisode(null);
+          }
+
+          setReelShortEpisodesError(null);
         }
       } finally {
         if (isMounted) {
@@ -4922,6 +6041,241 @@ export default function Home() {
       isMounted = false;
     };
   }, [selectedDrama]);
+
+  useEffect(() => {
+    if (!selectedDrama || !isBilitvDrama(selectedDrama) || selectedEpisode) {
+      return;
+    }
+
+    if (bilitvEpisodes.length === 0) return;
+
+    const resumeEpisode = getResumeEpisodeFromHistory(
+      selectedDrama.id,
+      bilitvEpisodes,
+      historyByDramaId,
+    );
+
+    const targetEpisode = resumeEpisode ?? bilitvEpisodes[0];
+
+    if (!targetEpisode) return;
+
+    setSelectedEpisode(targetEpisode);
+    handleSaveToHistory(selectedDrama.id, targetEpisode.id);
+  }, [
+    selectedDrama,
+    selectedEpisode,
+    bilitvEpisodes,
+    historyByDramaId,
+    handleSaveToHistory,
+  ]);
+
+  useEffect(() => {
+    if (!selectedDrama || !isDramanovaDrama(selectedDrama) || selectedEpisode) {
+      return;
+    }
+
+    if (dramanovaEpisodes.length === 0) return;
+
+    const resumeEpisode = getResumeEpisodeFromHistory(
+      selectedDrama.id,
+      dramanovaEpisodes,
+      historyByDramaId,
+    );
+
+    const targetEpisode = resumeEpisode ?? dramanovaEpisodes[0];
+
+    if (!targetEpisode) return;
+
+    setSelectedEpisode(targetEpisode);
+    handleSaveToHistory(selectedDrama.id, targetEpisode.id);
+  }, [
+    selectedDrama,
+    selectedEpisode,
+    dramanovaEpisodes,
+    historyByDramaId,
+    handleSaveToHistory,
+  ]);
+
+  useEffect(() => {
+    if (!selectedDrama || !isDramapopsDrama(selectedDrama) || selectedEpisode) {
+      return;
+    }
+
+    if (dramapopsEpisodes.length === 0) return;
+
+    const resumeEpisode = getResumeEpisodeFromHistory(
+      selectedDrama.id,
+      dramapopsEpisodes,
+      historyByDramaId,
+    );
+
+    const targetEpisode = resumeEpisode ?? dramapopsEpisodes[0];
+
+    if (!targetEpisode) return;
+
+    setSelectedEpisode(targetEpisode);
+    handleSaveToHistory(selectedDrama.id, targetEpisode.id);
+  }, [
+    selectedDrama,
+    selectedEpisode,
+    dramapopsEpisodes,
+    historyByDramaId,
+    handleSaveToHistory,
+  ]);
+
+  useEffect(() => {
+    if (!selectedDrama || !isMicrodramaDrama(selectedDrama) || selectedEpisode) {
+      return;
+    }
+
+    if (microdramaEpisodes.length === 0) return;
+
+    const resumeEpisode = getResumeEpisodeFromHistory(
+      selectedDrama.id,
+      microdramaEpisodes,
+      historyByDramaId,
+    );
+
+    const targetEpisode = resumeEpisode ?? microdramaEpisodes[0];
+
+    if (!targetEpisode) return;
+
+    setSelectedEpisode(targetEpisode);
+    handleSaveToHistory(selectedDrama.id, targetEpisode.id);
+  }, [
+    selectedDrama,
+    selectedEpisode,
+    microdramaEpisodes,
+    historyByDramaId,
+    handleSaveToHistory,
+  ]);
+
+  useEffect(() => {
+    if (!selectedDrama || !isFundramaDrama(selectedDrama) || selectedEpisode) {
+      return;
+    }
+
+    if (fundramaEpisodes.length === 0) return;
+
+    const resumeEpisode = getResumeEpisodeFromHistory(
+      selectedDrama.id,
+      fundramaEpisodes,
+      historyByDramaId,
+    );
+
+    const targetEpisode = resumeEpisode ?? fundramaEpisodes[0];
+
+    if (!targetEpisode) return;
+
+    setSelectedEpisode(targetEpisode);
+    handleSaveToHistory(selectedDrama.id, targetEpisode.id);
+  }, [
+    selectedDrama,
+    selectedEpisode,
+    fundramaEpisodes,
+    historyByDramaId,
+    handleSaveToHistory,
+  ]);
+
+  useEffect(() => {
+    if (!selectedDrama || !isStardusttvDrama(selectedDrama) || selectedEpisode) {
+      return;
+    }
+
+    if (stardusttvEpisodes.length === 0) return;
+
+    const resumeEpisode = getResumeEpisodeFromHistory(
+      selectedDrama.id,
+      stardusttvEpisodes,
+      historyByDramaId,
+    );
+
+    const targetEpisode = resumeEpisode ?? stardusttvEpisodes[0];
+
+    if (!targetEpisode) return;
+
+    setSelectedEpisode(targetEpisode);
+    handleSaveToHistory(selectedDrama.id, targetEpisode.id);
+  }, [
+    selectedDrama,
+    selectedEpisode,
+    stardusttvEpisodes,
+    historyByDramaId,
+    handleSaveToHistory,
+  ]);
+
+  useEffect(() => {
+    if (!selectedDrama || !isFlextvDrama(selectedDrama)) {
+      return;
+    }
+
+    if (flextvEpisodes.length === 0) return;
+
+    const selectedFlextvEpisode = selectedEpisode as
+      | (Episode & { flextvEpisodeId?: string; flextvPlayId?: string })
+      | null;
+
+    const isSelectedEpisodeFromSameDrama =
+      !!selectedEpisode && selectedEpisode.dramaId === selectedDrama.id;
+    const selectedFlextvVideoUrl = selectedEpisode?.videoUrl || "";
+
+    const isRealFlextvEpisodeSelected =
+      isSelectedEpisodeFromSameDrama &&
+      !!selectedFlextvEpisode?.flextvEpisodeId &&
+      selectedFlextvEpisode.flextvEpisodeId !== "1" &&
+      selectedFlextvVideoUrl.includes("episodeId=") &&
+      !selectedFlextvVideoUrl.endsWith("episodeId=1");
+
+    if (isRealFlextvEpisodeSelected) {
+      return;
+    }
+
+    const resumeEpisode = getResumeEpisodeFromHistory(
+      selectedDrama.id,
+      flextvEpisodes,
+      historyByDramaId,
+    );
+
+    const targetEpisode = resumeEpisode ?? flextvEpisodes[0];
+
+    if (!targetEpisode) return;
+
+    setSelectedEpisode(targetEpisode);
+    handleSaveToHistory(selectedDrama.id, targetEpisode.id);
+  }, [
+    selectedDrama,
+    selectedEpisode,
+    flextvEpisodes,
+    historyByDramaId,
+    handleSaveToHistory,
+  ]);
+
+  useEffect(() => {
+    if (!selectedDrama || !isDramabiteDrama(selectedDrama) || selectedEpisode) {
+      return;
+    }
+
+    if (dramabiteEpisodes.length === 0) return;
+
+    const resumeEpisode = getResumeEpisodeFromHistory(
+      selectedDrama.id,
+      dramabiteEpisodes,
+      historyByDramaId,
+    );
+
+    const targetEpisode = resumeEpisode ?? dramabiteEpisodes[0];
+
+    if (!targetEpisode) return;
+
+    setSelectedEpisode(targetEpisode);
+    handleSaveToHistory(selectedDrama.id, targetEpisode.id);
+  }, [
+    selectedDrama,
+    selectedEpisode,
+    dramabiteEpisodes,
+    historyByDramaId,
+    handleSaveToHistory,
+  ]);
 
   useEffect(() => {
     if (!selectedDrama || !isMeloloDrama(selectedDrama)) return;
@@ -5311,7 +6665,7 @@ export default function Home() {
                   ? "Terbaru"
                   : shortmaxTab === "Trending"
                     ? "Trending"
-                    : shortmaxTab === "Hot"
+                    : shortmaxTab === "ForYou"
                       ? "Hot"
                       : "Shortmax",
               tags: normalizedTags,
@@ -5325,7 +6679,7 @@ export default function Home() {
               country: undefined,
               isNew: shortmaxTab === "Terbaru",
               isDubbed: normalizedTitle.toLowerCase().includes("dubbing"),
-              isTrending: shortmaxTab === "Trending" || shortmaxTab === "Hot",
+              isTrending: shortmaxTab === "Trending" || shortmaxTab === "ForYou",
               sortOrder: index,
               rating: undefined,
               releaseYear: undefined,
@@ -5474,6 +6828,1168 @@ export default function Home() {
     };
 
     loadShortmaxEpisodes();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedDrama]);
+
+  useEffect(() => {
+    if (!isBilitvSource(selectedSource)) {
+      setLiveBilitvDramas([]);
+      setIsLoadingBilitvFeed(false);
+      setBilitvFeedError(null);
+      setBilitvHasNextPage(false);
+      return;
+    }
+
+    let isMounted = true;
+    const keyword = submittedSearchQuery.trim();
+
+    const loadBilitvFeed = async () => {
+      setIsLoadingBilitvFeed(true);
+      setBilitvFeedError(null);
+      setLiveBilitvDramas([]);
+
+      try {
+        const endpoint = getBilitvFeedEndpoint(keyword, bilitvTab, bilitvPage);
+
+        const response = await fetch(endpoint, {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `Gagal memuat feed BiliTV. endpoint=${endpoint} status=${response.status}`,
+          );
+        }
+
+        const data = await response.json();
+
+        if (!isMounted) return;
+
+        const items = Array.isArray(data)
+          ? data
+          : Array.isArray((data as { items?: unknown[] })?.items)
+            ? (data as { items: unknown[] }).items
+            : [];
+
+        const nextFromApi =
+          !Array.isArray(data) &&
+          Boolean((data as { hasNextPage?: boolean })?.hasNextPage);
+
+        setLiveBilitvDramas(items as Drama[]);
+        setBilitvHasNextPage(keyword.length > 0 ? false : nextFromApi);
+      } catch (error) {
+        console.error("Gagal memuat feed BiliTV:", error);
+
+        if (!isMounted) return;
+
+        setLiveBilitvDramas([]);
+        setBilitvHasNextPage(false);
+        setBilitvFeedError(
+          error instanceof Error
+            ? error.message
+            : "Terjadi kesalahan saat memuat feed BiliTV.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingBilitvFeed(false);
+        }
+      }
+    };
+
+    loadBilitvFeed();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedSource, bilitvTab, bilitvPage, submittedSearchQuery]);
+
+  useEffect(() => {
+    if (!isDramanovaSource(selectedSource)) {
+      setLiveDramanovaDramas([]);
+      setIsLoadingDramanovaFeed(false);
+      setDramanovaFeedError(null);
+      return;
+    }
+
+    let isMounted = true;
+    const keyword = submittedSearchQuery.trim();
+
+    const loadDramanovaFeed = async () => {
+      setIsLoadingDramanovaFeed(true);
+      setDramanovaFeedError(null);
+      setLiveDramanovaDramas([]);
+
+      try {
+        const endpoint = getDramanovaFeedEndpoint(keyword, dramanovaTab);
+
+        const response = await fetch(endpoint, {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `Gagal memuat feed DramaNova. endpoint=${endpoint} status=${response.status}`,
+          );
+        }
+
+        const data = await response.json();
+
+        if (!isMounted) return;
+
+        const items = Array.isArray(data)
+          ? data
+          : Array.isArray((data as { items?: unknown[] })?.items)
+            ? (data as { items: unknown[] }).items
+            : [];
+
+        setLiveDramanovaDramas(items as Drama[]);
+      } catch (error) {
+        console.error("Gagal memuat feed DramaNova:", error);
+
+        if (!isMounted) return;
+
+        setLiveDramanovaDramas([]);
+        setDramanovaFeedError(
+          error instanceof Error
+            ? error.message
+            : "Terjadi kesalahan saat memuat feed DramaNova.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingDramanovaFeed(false);
+        }
+      }
+    };
+
+    loadDramanovaFeed();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedSource, dramanovaTab, submittedSearchQuery]);
+
+  useEffect(() => {
+    if (!isDramapopsSource(selectedSource)) {
+      setLiveDramapopsDramas([]);
+      setIsLoadingDramapopsFeed(false);
+      setDramapopsFeedError(null);
+      return;
+    }
+
+    let isMounted = true;
+    const keyword = submittedSearchQuery.trim();
+
+    const loadDramapopsFeed = async () => {
+      setIsLoadingDramapopsFeed(true);
+      setDramapopsFeedError(null);
+      setLiveDramapopsDramas([]);
+
+      try {
+        const endpoint = getDramapopsFeedEndpoint(keyword, dramapopsTab);
+
+        const response = await fetch(endpoint, {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `Gagal memuat feed Dramapops. endpoint=${endpoint} status=${response.status}`,
+          );
+        }
+
+        const data = await response.json();
+
+        if (!isMounted) return;
+
+        const items = Array.isArray(data)
+          ? data
+          : Array.isArray((data as { items?: unknown[] })?.items)
+            ? (data as { items: unknown[] }).items
+            : [];
+
+        setLiveDramapopsDramas(items as Drama[]);
+      } catch (error) {
+        console.error("Gagal memuat feed Dramapops:", error);
+
+        if (!isMounted) return;
+
+        setLiveDramapopsDramas([]);
+        setDramapopsFeedError(
+          error instanceof Error
+            ? error.message
+            : "Terjadi kesalahan saat memuat feed Dramapops.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingDramapopsFeed(false);
+        }
+      }
+    };
+
+    loadDramapopsFeed();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedSource, dramapopsTab, submittedSearchQuery]);
+
+  useEffect(() => {
+    if (!isMicrodramaSource(selectedSource)) {
+      setLiveMicrodramaDramas([]);
+      setIsLoadingMicrodramaFeed(false);
+      setMicrodramaFeedError(null);
+      return;
+    }
+
+    let isMounted = true;
+    const keyword = submittedSearchQuery.trim();
+
+    const loadMicrodramaFeed = async () => {
+      setIsLoadingMicrodramaFeed(true);
+      setMicrodramaFeedError(null);
+      setLiveMicrodramaDramas([]);
+
+      try {
+        const endpoint = getMicrodramaFeedEndpoint(keyword);
+
+        const response = await fetch(endpoint, {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `Gagal memuat feed MicroDrama. endpoint=${endpoint} status=${response.status}`,
+          );
+        }
+
+        const data = await response.json();
+
+        if (!isMounted) return;
+
+        const items = Array.isArray(data)
+          ? data
+          : Array.isArray((data as { items?: unknown[] })?.items)
+            ? (data as { items: unknown[] }).items
+            : [];
+
+        setLiveMicrodramaDramas(items as Drama[]);
+      } catch (error) {
+        console.error("Gagal memuat feed MicroDrama:", error);
+
+        if (!isMounted) return;
+
+        setLiveMicrodramaDramas([]);
+        setMicrodramaFeedError(
+          error instanceof Error
+            ? error.message
+            : "Terjadi kesalahan saat memuat feed MicroDrama.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingMicrodramaFeed(false);
+        }
+      }
+    };
+
+    loadMicrodramaFeed();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedSource, submittedSearchQuery]);
+
+  useEffect(() => {
+    if (!isFundramaSource(selectedSource)) {
+      setLiveFundramaDramas([]);
+      setIsLoadingFundramaFeed(false);
+      setFundramaFeedError(null);
+      return;
+    }
+
+    let isMounted = true;
+    const keyword = submittedSearchQuery.trim();
+
+    const loadFundramaFeed = async () => {
+      setIsLoadingFundramaFeed(true);
+      setFundramaFeedError(null);
+      setLiveFundramaDramas([]);
+
+      try {
+        const endpoint = getFundramaFeedEndpoint(keyword, fundramaTab);
+
+        const response = await fetch(endpoint, {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `Gagal memuat feed FunDrama. endpoint=${endpoint} status=${response.status}`,
+          );
+        }
+
+        const data = await response.json();
+
+        if (!isMounted) return;
+
+        const items = Array.isArray(data)
+          ? data
+          : Array.isArray((data as { items?: unknown[] })?.items)
+            ? (data as { items: unknown[] }).items
+            : [];
+
+        setLiveFundramaDramas(items as Drama[]);
+      } catch (error) {
+        console.error("Gagal memuat feed FunDrama:", error);
+
+        if (!isMounted) return;
+
+        setLiveFundramaDramas([]);
+        setFundramaFeedError(
+          error instanceof Error
+            ? error.message
+            : "Terjadi kesalahan saat memuat feed FunDrama.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingFundramaFeed(false);
+        }
+      }
+    };
+
+    loadFundramaFeed();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedSource, fundramaTab, submittedSearchQuery]);
+
+  useEffect(() => {
+    if (!isStardusttvSource(selectedSource)) {
+      setLiveStardusttvDramas([]);
+      setIsLoadingStardusttvFeed(false);
+      setStardusttvFeedError(null);
+      setStardusttvHasNextPage(false);
+      return;
+    }
+
+    let isMounted = true;
+    const keyword = submittedSearchQuery.trim();
+
+    const loadStardusttvFeed = async () => {
+      setIsLoadingStardusttvFeed(true);
+      setStardusttvFeedError(null);
+      setLiveStardusttvDramas([]);
+
+      try {
+        const endpoint = getStardusttvFeedEndpoint(
+          keyword,
+          stardusttvTab,
+          stardusttvPage,
+        );
+
+        const response = await fetch(endpoint, {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `Gagal memuat feed StardustTV. endpoint=${endpoint} status=${response.status}`,
+          );
+        }
+
+        const data = await response.json();
+
+        if (!isMounted) return;
+
+        const items = Array.isArray(data)
+          ? data
+          : Array.isArray((data as { items?: unknown[] })?.items)
+            ? (data as { items: unknown[] }).items
+            : [];
+
+        setLiveStardusttvDramas(items as Drama[]);
+        setStardusttvHasNextPage(
+          stardusttvTab === "Beranda" &&
+            keyword.length === 0 &&
+            Boolean((data as { hasNextPage?: boolean })?.hasNextPage),
+        );
+      } catch (error) {
+        console.error("Gagal memuat feed StardustTV:", error);
+
+        if (!isMounted) return;
+
+        setLiveStardusttvDramas([]);
+        setStardusttvHasNextPage(false);
+        setStardusttvFeedError(
+          error instanceof Error
+            ? error.message
+            : "Terjadi kesalahan saat memuat feed StardustTV.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingStardusttvFeed(false);
+        }
+      }
+    };
+
+    loadStardusttvFeed();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedSource, stardusttvTab, stardusttvPage, submittedSearchQuery]);
+
+  useEffect(() => {
+    if (!isFlextvSource(selectedSource)) {
+      setLiveFlextvDramas([]);
+      setIsLoadingFlextvFeed(false);
+      setFlextvFeedError(null);
+      return;
+    }
+
+    let isMounted = true;
+    const keyword = submittedSearchQuery.trim();
+
+    const loadFlextvFeed = async () => {
+      setIsLoadingFlextvFeed(true);
+      setFlextvFeedError(null);
+      setLiveFlextvDramas([]);
+
+      try {
+        const endpoint = getFlextvFeedEndpoint(keyword, flextvTab);
+
+        const response = await fetch(endpoint, {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `Gagal memuat feed FlexTV. endpoint=${endpoint} status=${response.status}`,
+          );
+        }
+
+        const data = await response.json();
+
+        if (!isMounted) return;
+
+        const items = Array.isArray(data)
+          ? data
+          : Array.isArray((data as { items?: unknown[] })?.items)
+            ? (data as { items: unknown[] }).items
+            : [];
+
+        setLiveFlextvDramas(items as Drama[]);
+      } catch (error) {
+        console.error("Gagal memuat feed FlexTV:", error);
+
+        if (!isMounted) return;
+
+        setLiveFlextvDramas([]);
+        setFlextvFeedError(
+          error instanceof Error
+            ? error.message
+            : "Terjadi kesalahan saat memuat feed FlexTV.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingFlextvFeed(false);
+        }
+      }
+    };
+
+    loadFlextvFeed();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedSource, flextvTab, submittedSearchQuery]);
+
+  useEffect(() => {
+    if (!isDramabiteSource(selectedSource)) {
+      setLiveDramabiteDramas([]);
+      setIsLoadingDramabiteFeed(false);
+      setDramabiteFeedError(null);
+      return;
+    }
+
+    let isMounted = true;
+    const keyword = submittedSearchQuery.trim();
+
+    const loadDramabiteFeed = async () => {
+      setIsLoadingDramabiteFeed(true);
+      setDramabiteFeedError(null);
+      setLiveDramabiteDramas([]);
+
+      try {
+        const endpoint = getDramabiteFeedEndpoint(keyword, dramabiteTab);
+
+        const response = await fetch(endpoint, {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `Gagal memuat feed DramaBite. endpoint=${endpoint} status=${response.status}`,
+          );
+        }
+
+        const data = await response.json();
+
+        if (!isMounted) return;
+
+        const items = Array.isArray(data)
+          ? data
+          : Array.isArray((data as { items?: unknown[] })?.items)
+            ? (data as { items: unknown[] }).items
+            : [];
+
+        setLiveDramabiteDramas(items as Drama[]);
+      } catch (error) {
+        console.error("Gagal memuat feed DramaBite:", error);
+
+        if (!isMounted) return;
+
+        setLiveDramabiteDramas([]);
+        setDramabiteFeedError(
+          error instanceof Error
+            ? error.message
+            : "Terjadi kesalahan saat memuat feed DramaBite.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingDramabiteFeed(false);
+        }
+      }
+    };
+
+    loadDramabiteFeed();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedSource, dramabiteTab, submittedSearchQuery]);
+
+  useEffect(() => {
+    if (!isBilitvDrama(selectedDrama)) {
+      setBilitvEpisodes([]);
+      setIsLoadingBilitvEpisodes(false);
+      setBilitvEpisodesError(null);
+      return;
+    }
+
+    const activeBilitvDrama = selectedDrama!;
+    const dramaId = extractBilitvDramaId(activeBilitvDrama);
+
+    if (!dramaId) {
+      setBilitvEpisodes([]);
+      setBilitvEpisodesError("BiliTV dramaId tidak ditemukan.");
+      setIsLoadingBilitvEpisodes(false);
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadBilitvEpisodes = async () => {
+      setIsLoadingBilitvEpisodes(true);
+      setBilitvEpisodesError(null);
+      setBilitvEpisodes([]);
+      setSelectedEpisode(null);
+
+      try {
+        const response = await fetch(
+          `/api/bilitv/episodes?dramaId=${encodeURIComponent(
+            dramaId,
+          )}&numericDramaId=${activeBilitvDrama.id}`,
+          { cache: "no-store" },
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `Gagal memuat episode BiliTV. status=${response.status}`,
+          );
+        }
+
+        const data = await response.json();
+
+        if (!isMounted) return;
+
+        setBilitvEpisodes(Array.isArray(data) ? (data as Episode[]) : []);
+      } catch (error) {
+        console.error("Gagal memuat episode BiliTV:", error);
+
+        if (!isMounted) return;
+
+        setBilitvEpisodes([]);
+        setBilitvEpisodesError(
+          error instanceof Error
+            ? error.message
+            : "Terjadi kesalahan saat memuat episode BiliTV.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingBilitvEpisodes(false);
+        }
+      }
+    };
+
+    loadBilitvEpisodes();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedDrama]);
+
+  useEffect(() => {
+    if (!isDramanovaDrama(selectedDrama)) {
+      setDramanovaEpisodes([]);
+      setIsLoadingDramanovaEpisodes(false);
+      setDramanovaEpisodesError(null);
+      return;
+    }
+
+    const activeDramanovaDrama = selectedDrama!;
+    const dramaId = extractDramanovaDramaId(activeDramanovaDrama);
+
+    if (!dramaId) {
+      setDramanovaEpisodes([]);
+      setDramanovaEpisodesError("DramaNova dramaId tidak ditemukan.");
+      setIsLoadingDramanovaEpisodes(false);
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadDramanovaEpisodes = async () => {
+      setIsLoadingDramanovaEpisodes(true);
+      setDramanovaEpisodesError(null);
+      setDramanovaEpisodes([]);
+      setSelectedEpisode(null);
+
+      try {
+        const response = await fetch(
+          `/api/dramanova/episodes?dramaId=${encodeURIComponent(
+            dramaId,
+          )}&numericDramaId=${activeDramanovaDrama.id}`,
+          { cache: "no-store" },
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `Gagal memuat episode DramaNova. status=${response.status}`,
+          );
+        }
+
+        const data = await response.json();
+
+        if (!isMounted) return;
+
+        setDramanovaEpisodes(Array.isArray(data) ? (data as Episode[]) : []);
+      } catch (error) {
+        console.error("Gagal memuat episode DramaNova:", error);
+
+        if (!isMounted) return;
+
+        setDramanovaEpisodes([]);
+        setDramanovaEpisodesError(
+          error instanceof Error
+            ? error.message
+            : "Terjadi kesalahan saat memuat episode DramaNova.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingDramanovaEpisodes(false);
+        }
+      }
+    };
+
+    loadDramanovaEpisodes();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedDrama]);
+
+  useEffect(() => {
+    if (!isDramapopsDrama(selectedDrama)) {
+      setDramapopsEpisodes([]);
+      setIsLoadingDramapopsEpisodes(false);
+      setDramapopsEpisodesError(null);
+      return;
+    }
+
+    const activeDramapopsDrama = selectedDrama!;
+    const movieId = extractDramapopsMovieId(activeDramapopsDrama);
+
+    if (!movieId) {
+      setDramapopsEpisodes([]);
+      setDramapopsEpisodesError("Dramapops movieId tidak ditemukan.");
+      setIsLoadingDramapopsEpisodes(false);
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadDramapopsEpisodes = async () => {
+      setIsLoadingDramapopsEpisodes(true);
+      setDramapopsEpisodesError(null);
+      setDramapopsEpisodes([]);
+      setSelectedEpisode(null);
+
+      try {
+        const response = await fetch(
+          `/api/dramapops/episodes?movieId=${encodeURIComponent(
+            movieId,
+          )}&numericDramaId=${activeDramapopsDrama.id}`,
+          { cache: "no-store" },
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `Gagal memuat episode Dramapops. status=${response.status}`,
+          );
+        }
+
+        const data = await response.json();
+
+        if (!isMounted) return;
+
+        setDramapopsEpisodes(Array.isArray(data) ? (data as Episode[]) : []);
+      } catch (error) {
+        console.error("Gagal memuat episode Dramapops:", error);
+
+        if (!isMounted) return;
+
+        setDramapopsEpisodes([]);
+        setDramapopsEpisodesError(
+          error instanceof Error
+            ? error.message
+            : "Terjadi kesalahan saat memuat episode Dramapops.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingDramapopsEpisodes(false);
+        }
+      }
+    };
+
+    loadDramapopsEpisodes();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedDrama]);
+
+  useEffect(() => {
+    if (!isMicrodramaDrama(selectedDrama)) {
+      setMicrodramaEpisodes([]);
+      setIsLoadingMicrodramaEpisodes(false);
+      setMicrodramaEpisodesError(null);
+      return;
+    }
+
+    const activeMicrodramaDrama = selectedDrama!;
+    const dramaId = extractMicrodramaDramaId(activeMicrodramaDrama);
+
+    if (!dramaId) {
+      setMicrodramaEpisodes([]);
+      setMicrodramaEpisodesError("MicroDrama dramaId tidak ditemukan.");
+      setIsLoadingMicrodramaEpisodes(false);
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadMicrodramaEpisodes = async () => {
+      setIsLoadingMicrodramaEpisodes(true);
+      setMicrodramaEpisodesError(null);
+      setMicrodramaEpisodes([]);
+      setSelectedEpisode(null);
+
+      try {
+        const response = await fetch(
+          `/api/microdrama/episodes?dramaId=${encodeURIComponent(
+            dramaId,
+          )}&numericDramaId=${activeMicrodramaDrama.id}`,
+          { cache: "no-store" },
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `Gagal memuat episode MicroDrama. status=${response.status}`,
+          );
+        }
+
+        const data = await response.json();
+
+        if (!isMounted) return;
+
+        setMicrodramaEpisodes(Array.isArray(data) ? (data as Episode[]) : []);
+      } catch (error) {
+        console.error("Gagal memuat episode MicroDrama:", error);
+
+        if (!isMounted) return;
+
+        setMicrodramaEpisodes([]);
+        setMicrodramaEpisodesError(
+          error instanceof Error
+            ? error.message
+            : "Terjadi kesalahan saat memuat episode MicroDrama.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingMicrodramaEpisodes(false);
+        }
+      }
+    };
+
+    loadMicrodramaEpisodes();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedDrama]);
+
+  useEffect(() => {
+    if (!isFundramaDrama(selectedDrama)) {
+      setFundramaEpisodes([]);
+      setIsLoadingFundramaEpisodes(false);
+      setFundramaEpisodesError(null);
+      return;
+    }
+
+    const activeFundramaDrama = selectedDrama!;
+    const dramaId = extractFundramaDramaId(activeFundramaDrama);
+
+    if (!dramaId) {
+      setFundramaEpisodes([]);
+      setFundramaEpisodesError("FunDrama dramaId tidak ditemukan.");
+      setIsLoadingFundramaEpisodes(false);
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadFundramaEpisodes = async () => {
+      setIsLoadingFundramaEpisodes(true);
+      setFundramaEpisodesError(null);
+      setFundramaEpisodes([]);
+      setSelectedEpisode(null);
+
+      try {
+        const response = await fetch(
+          `/api/fundrama/episodes?dramaId=${encodeURIComponent(
+            dramaId,
+          )}&numericDramaId=${activeFundramaDrama.id}`,
+          { cache: "no-store" },
+        );
+
+        if (!response.ok) {
+          throw new Error(`Gagal memuat episode FunDrama. status=${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (!isMounted) return;
+
+        setFundramaEpisodes(Array.isArray(data) ? (data as Episode[]) : []);
+      } catch (error) {
+        console.error("Gagal memuat episode FunDrama:", error);
+
+        if (!isMounted) return;
+
+        setFundramaEpisodes([]);
+        setFundramaEpisodesError(
+          error instanceof Error
+            ? error.message
+            : "Terjadi kesalahan saat memuat episode FunDrama.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingFundramaEpisodes(false);
+        }
+      }
+    };
+
+    loadFundramaEpisodes();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedDrama]);
+
+  useEffect(() => {
+    if (!isStardusttvDrama(selectedDrama)) {
+      setStardusttvEpisodes([]);
+      setIsLoadingStardusttvEpisodes(false);
+      setStardusttvEpisodesError(null);
+      return;
+    }
+
+    const activeStardusttvDrama = selectedDrama!;
+    const videoId = extractStardusttvVideoId(activeStardusttvDrama);
+
+    if (!videoId) {
+      setStardusttvEpisodes([]);
+      setStardusttvEpisodesError("StardustTV videoId tidak ditemukan.");
+      setIsLoadingStardusttvEpisodes(false);
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadStardusttvEpisodes = async () => {
+      setIsLoadingStardusttvEpisodes(true);
+      setStardusttvEpisodesError(null);
+      setStardusttvEpisodes([]);
+      setSelectedEpisode(null);
+
+      try {
+        const response = await fetch(
+          `/api/stardusttv/episodes?videoId=${encodeURIComponent(
+            videoId,
+          )}&numericDramaId=${activeStardusttvDrama.id}`,
+          { cache: "no-store" },
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `Gagal memuat episode StardustTV. status=${response.status}`,
+          );
+        }
+
+        const data = await response.json();
+
+        if (!isMounted) return;
+
+        setStardusttvEpisodes(Array.isArray(data) ? (data as Episode[]) : []);
+      } catch (error) {
+        console.error("Gagal memuat episode StardustTV:", error);
+
+        if (!isMounted) return;
+
+        setStardusttvEpisodes([]);
+        setStardusttvEpisodesError(
+          error instanceof Error
+            ? error.message
+            : "Terjadi kesalahan saat memuat episode StardustTV.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingStardusttvEpisodes(false);
+        }
+      }
+    };
+
+    loadStardusttvEpisodes();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedDrama]);
+
+  useEffect(() => {
+    if (!isFlextvDrama(selectedDrama)) {
+      setFlextvEpisodes([]);
+      setIsLoadingFlextvEpisodes(false);
+      setFlextvEpisodesError(null);
+      return;
+    }
+
+    const activeFlextvDrama = selectedDrama!;
+    const seriesId = extractFlextvSeriesId(activeFlextvDrama);
+
+    if (!seriesId) {
+      setFlextvEpisodes([]);
+      setFlextvEpisodesError("FlexTV seriesId tidak ditemukan.");
+      setIsLoadingFlextvEpisodes(false);
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadFlextvEpisodes = async () => {
+      setIsLoadingFlextvEpisodes(true);
+      setFlextvEpisodesError(null);
+      setFlextvEpisodes([]);
+
+      setSelectedEpisode((currentEpisode) => {
+        if (
+          currentEpisode &&
+          currentEpisode.episodeNumber > 0 &&
+          currentEpisode.dramaId === activeFlextvDrama.id
+        ) {
+          return currentEpisode;
+        }
+
+        return {
+          id: createStableNumericId(`${seriesId}:1`, 1),
+          dramaId: activeFlextvDrama.id,
+          episodeNumber: 1,
+          title: "Episode 1",
+          duration: "",
+          slug: `flextv-${seriesId}-ep-1`,
+          description: "",
+          thumbnail: activeFlextvDrama.coverImage || activeFlextvDrama.posterImage || undefined,
+          videoUrl: `/api/flextv/stream?seriesId=${encodeURIComponent(
+            seriesId,
+          )}&episodeId=1`,
+          originalVideoUrl: "",
+          isLocked: false,
+          isVipOnly: false,
+          sortOrder: 1,
+          subtitleUrl: undefined,
+          subtitleLang: undefined,
+          subtitleLabel: undefined,
+          flextvEpisodeId: "1",
+          flextvPlayId: "1",
+        } as Episode;
+      });
+
+      try {
+        const response = await fetch(
+          `/api/flextv/episodes?seriesId=${encodeURIComponent(
+            seriesId,
+          )}&numericDramaId=${activeFlextvDrama.id}`,
+          { cache: "no-store" },
+        );
+
+        if (!response.ok) {
+          throw new Error(`Gagal memuat episode FlexTV. status=${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (!isMounted) return;
+
+        setFlextvEpisodes(Array.isArray(data) ? (data as Episode[]) : []);
+      } catch (error) {
+        console.error("Gagal memuat episode FlexTV:", error);
+
+        if (!isMounted) return;
+
+        setFlextvEpisodes([]);
+        setFlextvEpisodesError(
+          error instanceof Error
+            ? error.message
+            : "Terjadi kesalahan saat memuat episode FlexTV.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingFlextvEpisodes(false);
+        }
+      }
+    };
+
+    loadFlextvEpisodes();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedDrama]);
+
+  useEffect(() => {
+    if (!isDramabiteDrama(selectedDrama)) {
+      setDramabiteEpisodes([]);
+      setIsLoadingDramabiteEpisodes(false);
+      setDramabiteEpisodesError(null);
+      return;
+    }
+
+    const activeDramabiteDrama = selectedDrama!;
+    const dramaId = extractDramabiteDramaId(activeDramabiteDrama);
+
+    if (!dramaId) {
+      setDramabiteEpisodes([]);
+      setDramabiteEpisodesError("DramaBite dramaId tidak ditemukan.");
+      setIsLoadingDramabiteEpisodes(false);
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadDramabiteEpisodes = async () => {
+      setIsLoadingDramabiteEpisodes(true);
+      setDramabiteEpisodesError(null);
+      setDramabiteEpisodes([]);
+
+      setSelectedEpisode((currentEpisode) => {
+        if (
+          currentEpisode &&
+          currentEpisode.episodeNumber > 0 &&
+          currentEpisode.dramaId === activeDramabiteDrama.id
+        ) {
+          return currentEpisode;
+        }
+
+        return {
+          id: createStableNumericId(`${dramaId}:1`, 1),
+          dramaId: activeDramabiteDrama.id,
+          episodeNumber: 1,
+          title: "Episode 1",
+          duration: "",
+          slug: `dramabite-${dramaId}-ep-1`,
+          description: "",
+          thumbnail: activeDramabiteDrama.coverImage || activeDramabiteDrama.posterImage || undefined,
+          videoUrl: `/api/dramabite/stream?dramaId=${encodeURIComponent(
+            dramaId,
+          )}&episode=1`,
+          originalVideoUrl: "",
+          isLocked: false,
+          isVipOnly: false,
+          sortOrder: 1,
+          subtitleUrl: undefined,
+          subtitleLang: undefined,
+          subtitleLabel: undefined,
+          dramabiteEpisodeId: "1",
+          dramabitePlayId: "1",
+        } as Episode;
+      });
+
+      try {
+        const response = await fetch(
+          `/api/dramabite/episodes?dramaId=${encodeURIComponent(dramaId)}`,
+          { cache: "no-store" },
+        );
+
+        if (!response.ok) {
+          throw new Error(`Gagal memuat episode DramaBite. status=${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (!isMounted) return;
+
+        setDramabiteEpisodes(Array.isArray(data) ? (data as Episode[]) : []);
+      } catch (error) {
+        console.error("Gagal memuat episode DramaBite:", error);
+
+        if (!isMounted) return;
+
+        setDramabiteEpisodes([]);
+        setDramabiteEpisodesError(
+          error instanceof Error
+            ? error.message
+            : "Terjadi kesalahan saat memuat episode DramaBite.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingDramabiteEpisodes(false);
+        }
+      }
+    };
+
+    loadDramabiteEpisodes();
 
     return () => {
       isMounted = false;
@@ -5733,12 +8249,14 @@ export default function Home() {
 
         if (!isMounted) return;
 
-        if (Array.isArray(data)) {
-          setLiveIdramaDramas(data);
-        } else {
-          setLiveIdramaDramas([]);
-          setIdramaFeedError("Format feed iDrama tidak valid.");
-        }
+        const items = Array.isArray(data)
+          ? data
+          : Array.isArray((data as { items?: unknown[] })?.items)
+            ? (data as { items: unknown[] }).items
+            : [];
+
+        setLiveIdramaDramas(items as Drama[]);
+        setIdramaFeedError(null);
       } catch (error) {
         console.error("Gagal memuat feed iDrama:", error);
 
@@ -5896,12 +8414,12 @@ export default function Home() {
       return matchesSource && matchesSearch;
     });
 
-    if (defaultSourceTab === "Terbaru") {
-      return baseFiltered.filter((drama) => drama.isNew);
+    if (defaultSourceTab === "Ranking") {
+      return baseFiltered.filter((drama) => drama.isTrending);
     }
 
-    if (defaultSourceTab === "Dubbing") {
-      return baseFiltered.filter((drama) => drama.isDubbed);
+    if (defaultSourceTab === "ForYou") {
+      return baseFiltered;
     }
 
     if (defaultSourceTab === "Acak") {
@@ -6054,33 +8572,46 @@ export default function Home() {
           numericDramaId: String(selectedDrama.id),
         });
 
-        if (freereelsCode?.trim()) {
-          params.set("code", freereelsCode.trim());
-        }
-
         const response = await fetch(
           `/api/freereels/episodes?${params.toString()}`,
         );
 
         if (!response.ok) {
-          throw new Error("Gagal memuat episode FreeReels.");
+          console.warn("Gagal memuat episode FreeReels, memakai bootstrap episode.");
+
+          if (!isMounted) return;
+
+          const fallbackEpisodes = createFreeReelsFallbackEpisodes(selectedDrama);
+          const fallbackSelectedEpisode = fallbackEpisodes[0] ?? bootstrapEpisode;
+
+          if (!fallbackSelectedEpisode) return;
+
+          setFreeReelsEpisodes(fallbackEpisodes.length > 0 ? fallbackEpisodes : [fallbackSelectedEpisode]);
+          setSelectedEpisode(fallbackSelectedEpisode);
+          return;
         }
 
         const data = await response.json();
 
         if (!isMounted) return;
 
-        if (Array.isArray(data)) {
+        if (Array.isArray(data) && data.length > 0) {
           setFreeReelsEpisodes(data);
-
-          if (data.length === 0) {
-            setFreeReelsEpisodesError(
-              "Episode belum tersedia untuk drama ini.",
-            );
-          }
         } else {
-          setFreeReelsEpisodes(bootstrapEpisode ? [bootstrapEpisode] : []);
-          setFreeReelsEpisodesError("Format episode FreeReels tidak valid.");
+          const fallbackEpisodes = createFreeReelsFallbackEpisodes(selectedDrama);
+          const fallbackSelectedEpisode = fallbackEpisodes[0] ?? bootstrapEpisode;
+
+          setFreeReelsEpisodes(
+            fallbackEpisodes.length > 0
+              ? fallbackEpisodes
+              : fallbackSelectedEpisode
+                ? [fallbackSelectedEpisode]
+                : [],
+          );
+
+          if (fallbackSelectedEpisode) {
+            setSelectedEpisode(fallbackSelectedEpisode);
+          }
         }
       } catch (error) {
         console.error("Gagal memuat episode FreeReels:", error);
@@ -6139,7 +8670,9 @@ export default function Home() {
     }
 
     if (isReelShortSource(selectedSource)) {
-      return liveReelShortDramas;
+      return liveReelShortDramas.length > 0
+        ? liveReelShortDramas
+        : reelShortDramaCache;
     }
 
     if (isMeloloSource(selectedSource)) {
@@ -6174,6 +8707,38 @@ export default function Home() {
       return liveReelifeDramas;
     }
 
+    if (isDramabiteSource(selectedSource)) {
+      return liveDramabiteDramas;
+    }
+
+    if (isFlextvSource(selectedSource)) {
+      return liveFlextvDramas;
+    }
+
+    if (isBilitvSource(selectedSource)) {
+      return liveBilitvDramas;
+    }
+
+    if (isDramanovaSource(selectedSource)) {
+      return liveDramanovaDramas;
+    }
+
+    if (isDramapopsSource(selectedSource)) {
+      return liveDramapopsDramas;
+    }
+
+    if (isMicrodramaSource(selectedSource)) {
+      return liveMicrodramaDramas;
+    }
+
+    if (isFundramaSource(selectedSource)) {
+      return liveFundramaDramas;
+    }
+
+    if (isStardusttvSource(selectedSource)) {
+      return liveStardusttvDramas;
+    }
+
     if (isFreeReelsSource(selectedSource)) {
       return liveFreeReelsDramas;
     }
@@ -6183,6 +8748,7 @@ export default function Home() {
     selectedSource,
     liveDramaBoxDramas,
     liveReelShortDramas,
+    reelShortDramaCache,
     liveMeloloDramas,
     liveDramawaveDramas,
     liveNetshortDramas,
@@ -6191,6 +8757,14 @@ export default function Home() {
     liveGoodshortDramas,
     liveIdramaDramas,
     liveReelifeDramas,
+    liveDramabiteDramas,
+    liveFlextvDramas,
+    liveBilitvDramas,
+    liveDramanovaDramas,
+    liveDramapopsDramas,
+    liveMicrodramaDramas,
+    liveFundramaDramas,
+    liveStardusttvDramas,
     liveFreeReelsDramas,
     visibleDramas,
   ]);
@@ -6208,7 +8782,7 @@ export default function Home() {
     setDramaBoxTab("Beranda");
     setReelShortTab("Beranda");
     setMeloloTab("Beranda");
-    setDramawaveTab("Beranda");
+    setDramawaveTab("Terbaru");
     setNetshortTab("Beranda");
     setFlickreelsTab("Beranda");
     setShortmaxTab("Beranda");
@@ -6291,16 +8865,19 @@ export default function Home() {
 
   const handleGoHome = () => {
     resetNavigationState();
+    setShowPaymentSuccessNotice(false);
     setActiveTab("home");
   };
 
   const handleGoHistory = () => {
     resetNavigationState();
+    setShowPaymentSuccessNotice(false);
     setActiveTab("history");
   };
 
   const handleGoFavorites = () => {
     resetNavigationState();
+    setShowPaymentSuccessNotice(false);
     setActiveTab("favorites");
   };
 
@@ -6309,8 +8886,42 @@ export default function Home() {
     setActiveTab("profile");
   };
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    const shouldOpenProfile = params.get("tab") === "profile";
+
+    if (!shouldOpenProfile) return;
+
+    handleGoProfile();
+
+    if (params.get("payment") === "success") {
+      setShowPaymentSuccessNotice(true);
+      window.history.replaceState(null, "", "/");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const effectiveBottomTab: "home" | "history" | "favorites" | "profile" =
     selectedSource || selectedDrama ? "home" : activeTab;
+
+  useEffect(() => {
+    const header = document.querySelector("body > header") as HTMLElement | null;
+    if (!header) return;
+
+    const shouldShowMainHeader =
+      activeTab === "home" &&
+      !selectedSource &&
+      !selectedDrama &&
+      !selectedEpisode;
+
+    header.style.display = shouldShowMainHeader ? "" : "none";
+
+    return () => {
+      header.style.display = "";
+    };
+  }, [activeTab, selectedSource, selectedDrama, selectedEpisode]);
 
   const currentPagedHomePage = useMemo(() => {
     if (isDramaBoxSource(selectedSource)) return dramaBoxPage;
@@ -6327,6 +8938,7 @@ export default function Home() {
     dramaBoxPage,
     reelShortPage,
     dramawavePage,
+    dramawaveHasNextPage,
     netshortPage,
     flickreelsPage,
     shortmaxPage,
@@ -6339,40 +8951,22 @@ export default function Home() {
       isShortmaxSource(selectedSource) &&
       submittedSearchQuery.trim().length === 0
     ) {
-      const isAllowedShortmaxTab =
-        activeSourceTab === "Beranda" ||
-        activeSourceTab === "Terbaru" ||
-        activeSourceTab === "Trending" ||
-        activeSourceTab === "Hot";
-
-      if (!isAllowedShortmaxTab) return false;
-
-      if (activeSourceTab === "Terbaru") {
-        return shortmaxPage > 1 || shortmaxHasMorePages;
-      }
-
-      return true;
+      return activeSourceTab === "Beranda";
     }
 
     return (
       !!selectedSource &&
       !isMeloloSource(selectedSource) &&
       submittedSearchQuery.trim().length === 0 &&
-      ((isDramaBoxSource(selectedSource) && activeSourceTab === "Beranda") ||
-        (isReelShortSource(selectedSource) && activeSourceTab === "Beranda") ||
-        (isDramawaveSource(selectedSource) && activeSourceTab === "Beranda") ||
-        (isNetshortSource(selectedSource) && activeSourceTab === "Beranda") ||
-        (isFlickreelsSource(selectedSource) && activeSourceTab === "Beranda") ||
-        (isGoodshortSource(selectedSource) &&
-          (activeSourceTab === "Beranda" ||
-            activeSourceTab === "Populer" ||
-            activeSourceTab === "Trending" ||
-            activeSourceTab === "Acak")) ||
-        (isIdramaSource(selectedSource) &&
-          (activeSourceTab === "Beranda" ||
-            activeSourceTab === "Populer" ||
-            activeSourceTab === "Hot" ||
-            activeSourceTab === "Acak")))
+      (false ||
+        (isReelShortSource(selectedSource) && activeSourceTab !== "Beranda") ||
+        (isDramawaveSource(selectedSource) &&
+          (activeSourceTab === "Terbaru" ||
+            activeSourceTab === "Dubbing" ||
+            activeSourceTab === "VIP")) ||
+        false ||
+        false ||
+        false)
     );
   }, [
     selectedSource,
@@ -6380,11 +8974,11 @@ export default function Home() {
     submittedSearchQuery,
     shortmaxPage,
     shortmaxHasMorePages,
+    dramawaveHasNextPage,
   ]);
 
   const handleGenericPrevPage = useCallback(() => {
     if (isDramaBoxSource(selectedSource)) {
-      setDramaBoxPage((current) => Math.max(1, current - 1));
       return;
     }
 
@@ -6399,12 +8993,14 @@ export default function Home() {
     }
 
     if (isNetshortSource(selectedSource)) {
+      setLiveNetshortDramas([]);
+      setNetshortFeedError(null);
       setNetshortPage((current) => Math.max(1, current - 1));
+      window.scrollTo({ top: 0, behavior: "auto" });
       return;
     }
 
     if (isFlickreelsSource(selectedSource)) {
-      setFlickreelsPage((current) => Math.max(1, current - 1));
       return;
     }
 
@@ -6414,18 +9010,16 @@ export default function Home() {
     }
 
     if (isGoodshortSource(selectedSource)) {
-      setGoodshortPage((current) => Math.max(1, current - 1));
       return;
     }
 
     if (isIdramaSource(selectedSource)) {
-      setIdramaPage((current) => Math.max(1, current - 1));
+      return;
     }
   }, [selectedSource, activeSourceTab, shortmaxHasMorePages]);
 
   const handleGenericNextPage = useCallback(() => {
     if (isDramaBoxSource(selectedSource)) {
-      setDramaBoxPage((current) => current + 1);
       return;
     }
 
@@ -6440,32 +9034,34 @@ export default function Home() {
     }
 
     if (isNetshortSource(selectedSource)) {
+      setLiveNetshortDramas([]);
+      setNetshortFeedError(null);
       setNetshortPage((current) => current + 1);
+      window.scrollTo({ top: 0, behavior: "auto" });
       return;
     }
 
     if (isFlickreelsSource(selectedSource)) {
-      setFlickreelsPage((current) => current + 1);
       return;
     }
 
     if (isShortmaxSource(selectedSource)) {
       setShortmaxPage((current) => {
-        if (activeSourceTab === "Terbaru" && !shortmaxHasMorePages) {
-          return current;
+        if (shortmaxTab !== "Beranda") {
+          return 1;
         }
-        return current + 1;
+
+        return Math.min(5, current + 1);
       });
       return;
     }
 
     if (isGoodshortSource(selectedSource)) {
-      setGoodshortPage((current) => current + 1);
       return;
     }
 
     if (isIdramaSource(selectedSource)) {
-      setIdramaPage((current) => current + 1);
+      return;
     }
   }, [selectedSource, activeSourceTab, shortmaxHasMorePages]);
 
@@ -6488,7 +9084,7 @@ export default function Home() {
                 />
               </div>
 
-              <h1 className="font-ExoBold mt-6 text-4xl tracking-[0.02em] text-[#D9B36A]">
+              <h1 className="font-ExoBold mt-6 text-4xl font-extrabold tracking-[0.02em] text-[#D9B36A] [text-shadow:0_0_22px_rgba(201,164,92,0.18)]">
                 DRAMALOTUS
               </h1>
 
@@ -6806,8 +9402,12 @@ export default function Home() {
           historyCount={historyItems.length}
           mostWatchedLabel={mostWatchedLabel}
           membershipStatus={membershipStatus}
-          telegramUserName={telegramUserName}
-          telegramUserId={telegramUserId}
+          telegramUserName={telegramUserName ?? webProfileName ?? webProfileUsername}
+          telegramUserId={telegramUserId ?? webProfileUserId}
+          telegramPhotoUrl={telegramPhotoUrl}
+          vipUntil={membershipVipUntil}
+          paymentSuccessNotice={showPaymentSuccessNotice}
+          onDismissPaymentSuccessNotice={() => setShowPaymentSuccessNotice(false)}
           onBack={handleGoHome}
           onOpenHistory={handleGoHistory}
           onOpenFavorites={handleGoFavorites}
@@ -6863,7 +9463,23 @@ export default function Home() {
                               ? isLoadingIdramaEpisodes
                               : isReelifeDrama(selectedDrama)
                                 ? isLoadingReelifeEpisodes
-                                : false
+                                : isDramabiteDrama(selectedDrama)
+                                  ? isLoadingDramabiteEpisodes
+                                  : isFlextvDrama(selectedDrama)
+                                    ? isLoadingFlextvEpisodes
+                                    : isBilitvDrama(selectedDrama)
+                                      ? isLoadingBilitvEpisodes
+                                      : isDramanovaDrama(selectedDrama)
+                                        ? isLoadingDramanovaEpisodes
+                                      : isDramapopsDrama(selectedDrama)
+                                        ? isLoadingDramapopsEpisodes
+                                      : isMicrodramaDrama(selectedDrama)
+                                        ? isLoadingMicrodramaEpisodes
+                                        : isFundramaDrama(selectedDrama)
+                                        ? isLoadingFundramaEpisodes
+                                        : isStardusttvDrama(selectedDrama)
+                                        ? isLoadingStardusttvEpisodes
+                                        : false
           }
           episodesError={
             isDramaBoxDrama(selectedDrama)
@@ -6886,7 +9502,23 @@ export default function Home() {
                               ? idramaEpisodesError
                               : isReelifeDrama(selectedDrama)
                                 ? reelifeEpisodesError
-                                : null
+                                : isDramabiteDrama(selectedDrama)
+                                  ? dramabiteEpisodesError
+                                  : isFlextvDrama(selectedDrama)
+                                    ? flextvEpisodesError
+                                    : isBilitvDrama(selectedDrama)
+                                      ? bilitvEpisodesError
+                                      : isDramanovaDrama(selectedDrama)
+                                        ? dramanovaEpisodesError
+                                      : isDramapopsDrama(selectedDrama)
+                                        ? dramapopsEpisodesError
+                                      : isMicrodramaDrama(selectedDrama)
+                                        ? microdramaEpisodesError
+                                        : isFundramaDrama(selectedDrama)
+                                        ? fundramaEpisodesError
+                                        : isStardusttvDrama(selectedDrama)
+                                        ? stardusttvEpisodesError
+                                        : null
           }
           onBack={() => {
             setSelectedDrama(null);
@@ -6912,6 +9544,20 @@ export default function Home() {
             setIdramaEpisodesError(null);
             setReelifeEpisodes([]);
             setReelifeEpisodesError(null);
+            setDramabiteEpisodes([]);
+            setDramabiteEpisodesError(null);
+            setFlextvEpisodes([]);
+            setFlextvEpisodesError(null);
+            setDramanovaEpisodes([]);
+            setDramanovaEpisodesError(null);
+            setDramapopsEpisodes([]);
+            setDramapopsEpisodesError(null);
+            setMicrodramaEpisodes([]);
+            setMicrodramaEpisodesError(null);
+            setFundramaEpisodes([]);
+            setFundramaEpisodesError(null);
+            setStardusttvEpisodes([]);
+            setStardusttvEpisodesError(null);
             setFreeReelsEpisodes([]);
             setFreeReelsEpisodesError(null);
           }}
@@ -6940,6 +9586,7 @@ export default function Home() {
     return (
       <>
         <SourceScreen
+          key={`${selectedSource?.slug || selectedSource?.name || "source"}-${activeSourceTab}`}
           selectedSource={selectedSource}
           searchQuery={searchQuery}
           sourceTab={
@@ -6956,12 +9603,29 @@ export default function Home() {
             isDramaBoxSource(selectedSource) &&
             submittedSearchQuery.trim().length === 0 &&
             (dramaBoxTab === "Beranda" ||
-              dramaBoxTab === "Terbaru" ||
-              dramaBoxTab === "Dubbing" ||
+              dramaBoxTab === "Ranking" ||
+              dramaBoxTab === "ForYou" ||
               dramaBoxTab === "Acak")
           }
           onDramaBoxPrevPage={handleDramaBoxPrevPage}
           onDramaBoxNextPage={handleDramaBoxNextPage}
+          bilitvPage={bilitvPage}
+          bilitvHasNextPage={bilitvHasNextPage}
+          showBilitvPagination={
+            isBilitvSource(selectedSource) &&
+            submittedSearchQuery.trim().length === 0 &&
+            (bilitvTab === "Beranda" || bilitvTab === "VIP")
+          }
+          onBilitvPrevPage={() =>
+            setBilitvPage((prev) => Math.max(1, prev - 1))
+          }
+          onBilitvNextPage={() =>
+            setBilitvPage((prev) =>
+              bilitvTab === "VIP"
+                ? Math.min(BILITV_VIP_MAX_PAGE, prev + 1)
+                : Math.min(BILITV_HOME_MAX_PAGE, prev + 1),
+            )
+          }
           reelifePage={reelifePage}
           reelifeHasNextPage={reelifeHasNextPage}
           showReelifePagination={
@@ -6969,8 +9633,8 @@ export default function Home() {
             submittedSearchQuery.trim().length === 0 &&
             (reelifeTab === "Beranda" ||
               reelifeTab === "Trending" ||
-              reelifeTab === "Hot" ||
-              reelifeTab === "Acak")
+              reelifeTab === "Pewaris" ||
+              reelifeTab === "ForYou")
           }
           onReelifePrevPage={handleReelifePrevPage}
           onReelifeNextPage={handleReelifeNextPage}
@@ -6984,6 +9648,14 @@ export default function Home() {
             isShortmaxSource(selectedSource) ||
             isGoodshortSource(selectedSource) ||
             isIdramaSource(selectedSource) ||
+            isStardusttvSource(selectedSource) ||
+            isDramabiteSource(selectedSource) ||
+            isFlextvSource(selectedSource) ||
+            isBilitvSource(selectedSource) ||
+            isDramanovaSource(selectedSource) ||
+            isDramapopsSource(selectedSource) ||
+            isMicrodramaSource(selectedSource) ||
+            isFundramaSource(selectedSource) ||
             isReelifeSource(selectedSource) ||
             isFreeReelsSource(selectedSource)
           }
@@ -6993,9 +9665,9 @@ export default function Home() {
             isMeloloSource(selectedSource) &&
             submittedSearchQuery.trim().length === 0 &&
             (meloloTab === "Beranda" ||
-              meloloTab === "Terbaru" ||
+              meloloTab === "Romance" ||
               meloloTab === "ForYou" ||
-              meloloTab === "Trending")
+              meloloTab === "Pewaris")
           }
           onMeloloPrevPage={() =>
             setMeloloOffset((prev) => Math.max(0, prev - 20))
@@ -7012,7 +9684,11 @@ export default function Home() {
           onShortmaxPrevPage={() =>
             setShortmaxPage((prev) => Math.max(1, prev - 1))
           }
-          onShortmaxNextPage={() => setShortmaxPage((prev) => prev + 1)}
+          onShortmaxNextPage={() =>
+            setShortmaxPage((prev) =>
+              shortmaxTab === "Beranda" ? Math.min(5, prev + 1) : 1,
+            )
+          }
           goodshortPage={goodshortPage}
           goodshortHasNextPage={goodshortHasNextPage}
           showGoodshortPagination={
@@ -7036,10 +9712,11 @@ export default function Home() {
             setShortmaxHasMorePages(true);
             setGoodshortPage(1);
             setIdramaPage(1);
+            setBilitvPage(1);
             setDramaBoxTab("Beranda");
             setReelShortTab("Beranda");
             setMeloloTab("Beranda");
-            setDramawaveTab("Beranda");
+            setDramawaveTab("Terbaru");
             setNetshortTab("Beranda");
             setFlickreelsTab("Beranda");
             setShortmaxTab("Beranda");
@@ -7047,6 +9724,7 @@ export default function Home() {
 
             setGoodshortTab("Beranda");
             setIdramaTab("Beranda");
+            setBilitvTab("Beranda");
             setLiveDramaBoxDramas([]);
             setDramaBoxFeedError(null);
             setLiveReelShortDramas([]);
@@ -7065,16 +9743,33 @@ export default function Home() {
             setGoodshortFeedError(null);
             setLiveIdramaDramas([]);
             setIdramaFeedError(null);
+            setLiveBilitvDramas([]);
+            setBilitvFeedError(null);
+            setBilitvHasNextPage(false);
             setLiveReelifeDramas([]);
             setReelifeFeedError(null);
           }}
           onSearchChange={setSearchQuery}
           onSubmitSearch={handleSubmitSearch}
+          onClearSearch={handleClearSearch}
           onTabChange={handleSourceTabChange}
           onSelectDrama={(drama) => {
             setSelectedDrama(drama);
             setSelectedEpisode(null);
             setShowEpisodes(false);
+          }}
+          stardusttvPage={stardusttvPage}
+          stardusttvHasNextPage={stardusttvHasNextPage}
+          showStardusttvPagination={
+            isStardusttvSource(selectedSource) &&
+            stardusttvTab === "Beranda" &&
+            submittedSearchQuery.trim().length === 0
+          }
+          onStardusttvPrevPage={() => {
+            setStardusttvPage((current) => Math.max(1, current - 1));
+          }}
+          onStardusttvNextPage={() => {
+            setStardusttvPage((current) => Math.min(5, current + 1));
           }}
           onToggleFavorite={handleToggleFavorite}
         />
@@ -7096,7 +9791,16 @@ export default function Home() {
             <button
               type="button"
               onClick={handleGenericNextPage}
-              className="rounded-full border border-white/10 bg-white/[0.05] px-4 py-2 text-sm text-white"
+              disabled={
+                isReelShortSource(selectedSource) ||
+                (isDramawaveSource(selectedSource) && !dramawaveHasNextPage)
+              }
+              className={`rounded-full border px-4 py-2 text-sm ${
+                isReelShortSource(selectedSource) ||
+                (isDramawaveSource(selectedSource) && !dramawaveHasNextPage)
+                  ? "cursor-not-allowed border-white/5 bg-white/[0.02] text-white/30"
+                  : "border-white/10 bg-white/[0.05] text-white"
+              }`}
             >
               Next →
             </button>
@@ -7112,6 +9816,10 @@ export default function Home() {
         />
       </>
     );
+  }
+
+  if (!authChecked) {
+    return null;
   }
 
   return (
@@ -7133,7 +9841,7 @@ export default function Home() {
           setNetshortPage(1);
           setFlickreelsPage(1);
           setShortmaxPage(1);
-          setDramawaveTab("Beranda");
+          setDramawaveTab("Terbaru");
           setNetshortTab("Beranda");
           setFlickreelsTab("Beranda");
           setShortmaxTab("Beranda");

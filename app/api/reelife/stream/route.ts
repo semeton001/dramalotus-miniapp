@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireApiVip } from "@/lib/auth/requireApiVip";
 import {
   REELIFE_DEFAULT_PLAY_CODE,
   ReelifeBookDetailResponse,
@@ -117,6 +118,9 @@ async function resolveFromBookPreview(
 }
 
 export async function GET(req: NextRequest) {
+  const vipError = await requireApiVip();
+  if (vipError) return vipError;
+
   try {
     const passthroughUrl = getString(req.nextUrl.searchParams.get("url"));
     if (passthroughUrl) {

@@ -96,10 +96,19 @@ export function buildFlickreelsDrama(
   );
   const coverImage = pickString(raw, "cover", "poster", "thumbnail", "image", "image_url", "cover_image");
   const posterImage = pickString(raw, "poster", "cover", "thumbnail", "image", "image_url", "cover_image") || coverImage;
-  const episodeCount = pickNumber(raw, "upload_num", "episode_num", "episode_count", "episodes", "chapterCount");
+  const episodeCount = pickNumber(
+    raw,
+    "upload_num",
+    "chapter_num",
+    "episode_num",
+    "episode_count",
+    "episodes",
+    "chapterCount",
+  );
   const tags = Array.from(
     new Set([
       ...normalizeTagNames(raw.tag_list),
+      ...normalizeTagNames(raw.playlet_tag_name),
       ...normalizeTagNames(raw.tags),
       ...normalizeTagNames(raw.tagNames),
       ...(variant === "foryou" ? ["ForYou"] : []),
@@ -150,15 +159,23 @@ export function normalizeFlickreelsFeed(
 ): Drama[] {
   const root = asRecord(payload);
   const nestedData = asRecord(root.data);
-  const list = Array.isArray(payload)
+
+  const baseList = Array.isArray(payload)
     ? payload
-    : Array.isArray(nestedData.data)
-      ? nestedData.data
-      : Array.isArray(root.data)
-        ? (root.data as unknown[])
-        : Array.isArray(root.items)
-          ? (root.items as unknown[])
-          : [];
+    : Array.isArray(nestedData.list)
+      ? nestedData.list
+      : Array.isArray(nestedData.data)
+        ? nestedData.data
+        : Array.isArray(root.data)
+          ? (root.data as unknown[])
+          : Array.isArray(root.items)
+            ? (root.items as unknown[])
+            : [];
+
+  const list = baseList.flatMap((item) => {
+    const raw = asRecord(item);
+    return Array.isArray(raw.list) ? raw.list : [item];
+  });
 
   return list
     .map((item, index) => buildFlickreelsDrama(item, index, variant, sourceId))

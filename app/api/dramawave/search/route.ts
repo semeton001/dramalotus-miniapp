@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 
 import { normalizeDramawaveFeed } from "@/lib/adapters/drama/dramawave";
 
+const DRAMAWAVE_SEARCH_BASE_URL =
+  "https://streamapi.web.id/p/dramawave/api/v1/search/keywords";
+
+const DRAMAWAVE_TOKEN = process.env.DRAMAWAVE_TOKEN?.trim() || "";
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -11,8 +16,19 @@ export async function GET(request: Request) {
       return NextResponse.json([]);
     }
 
-    const upstreamUrl = `https://dramawave.dramabos.my.id/api/search?q=${encodeURIComponent(query)}&lang=in`;
-    const response = await fetch(upstreamUrl, { cache: "no-store" });
+    const upstreamUrl = `${DRAMAWAVE_SEARCH_BASE_URL}?q=${encodeURIComponent(
+      query,
+    )}&lang=id-ID&token=${DRAMAWAVE_TOKEN}`;
+
+    const response = await fetch(upstreamUrl, {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      },
+    });
 
     if (!response.ok) {
       return NextResponse.json(

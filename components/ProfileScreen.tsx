@@ -1,14 +1,37 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+
 type ProfileScreenProps = {
   favoriteCount: number;
   historyCount: number;
   mostWatchedLabel: string;
   membershipStatus: "free" | "vip";
-  telegramUserName?: string | null;
-  telegramUserId?: number | null;
+  telegramUserName: string | null;
+  telegramUserId: number | null;
+  telegramPhotoUrl?: string | null;
+  vipUntil?: string | null;
   onBack: () => void;
   onOpenHistory: () => void;
   onOpenFavorites: () => void;
   onOpenMembershipInfo: () => void;
+  hideVipPageLink?: boolean;
+  hideUpgradeLink?: boolean;
+  paymentSuccessNotice?: boolean;
+  onDismissPaymentSuccessNotice?: () => void;
+};
+
+type WebMeResponse = {
+  ok?: boolean;
+  user?: {
+    membership_status?: "free" | "vip";
+    vip_until?: string | null;
+    telegram_username?: string | null;
+    telegram_user_id?: number | null;
+    first_name?: string | null;
+    last_name?: string | null;
+  } | null;
 };
 
 export default function ProfileScreen({
@@ -18,182 +41,351 @@ export default function ProfileScreen({
   membershipStatus,
   telegramUserName,
   telegramUserId,
+  telegramPhotoUrl = null,
+  vipUntil = null,
   onBack,
   onOpenHistory,
   onOpenFavorites,
   onOpenMembershipInfo,
+  hideVipPageLink = false,
+  hideUpgradeLink = false,
+  paymentSuccessNotice = false,
+  onDismissPaymentSuccessNotice,
 }: ProfileScreenProps) {
-  const displayName = telegramUserName?.trim()
-    ? telegramUserName
-    : "Pengguna Telegram";
+  const [accountName, setAccountName] = useState<string | null>(null);
+  const [accountUsername, setAccountUsername] = useState<string | null>(null);
+  const [accountUserId, setAccountUserId] = useState<number | null>(null);
+  const [accountMembership, setAccountMembership] = useState<"free" | "vip" | null>(null);
+  const [accountVipUntil, setAccountVipUntil] = useState<string | null>(null);
+  const [serverPhotoUrl, setServerPhotoUrl] = useState<string | null>(null);
+  const [serverPhotoDebug, setServerPhotoDebug] = useState<string>("pending");
 
-  const initials = telegramUserName?.trim()
-    ? telegramUserName
-        .trim()
-        .split(/\s+/)
-        .slice(0, 2)
-        .map((part) => part.charAt(0).toUpperCase())
-        .join("")
-    : "TG";
+  useEffect(() => {
+    let cancelled = false;
 
-  const membershipLabel =
-    membershipStatus === "vip" ? "VIP Member" : "Free Member";
+    async function loadAccount() {
+      try {
+        const response = await fetch("/api/me", {
+          cache: "no-store",
+          credentials: "include",
+        });
 
-  const membershipDescription =
-    membershipStatus === "vip"
-      ? "Status VIP aktif dari bot Telegram. Semua episode dapat ditonton dengan pengalaman bebas iklan."
-      : "Status Free aktif dari bot Telegram. Semua episode tetap dapat ditonton, dengan beberapa iklan singkat di episode tertentu.";
+        if (!response.ok) return;
+
+        const data = (await response.json()) as WebMeResponse;
+        const user = data?.user ?? null;
+
+        if (cancelled || !user) return;
+
+        const fullName = [user.first_name, user.last_name]
+          .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+          .join(" ")
+          .trim();
+
+        const username =
+          typeof user.telegram_username === "string" && user.telegram_username.trim().length > 0
+            ? user.telegram_username.trim()
+            : null;
+
+        setAccountName(fullName || username || null);
+        setAccountUsername(username);
+        setAccountUserId(
+          typeof user.telegram_user_id === "number" ? user.telegram_user_id : null,
+        );
+        setAccountMembership(user.membership_status === "vip" ? "vip" : "free");
+        setAccountVipUntil(
+          typeof user.vip_until === "string" && user.vip_until.trim().length > 0
+            ? user.vip_until.trim()
+            : null,
+        );
+      } catch {
+        // keep fallback props
+      }
+    }
+
+    void loadAccount();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProfilePhoto() {
+      try {
+        const response = await fetch("/api/telegram-profile-photo", {
+          cache: "no-store",
+          credentials: "include",
+        });
+
+        if (!response.ok) {
+          setServerPhotoDebug(`http-${response.status}`);
+          return;
+        }
+
+        const data = (await response.json()) as { ok?: boolean; photoUrl?: string | null; error?: string };
+        const photoUrl =
+          typeof data?.photoUrl === "string" && data.photoUrl.trim().length > 0
+            ? data.photoUrl.trim()
+            : null;
+
+        if (!cancelled) {
+          setServerPhotoUrl(photoUrl);
+          setServerPhotoDebug(photoUrl ? "FOUND" : (data?.error || "NULL"));
+        }
+      } catch (error) {
+        setServerPhotoDebug(error instanceof Error ? error.message : "fetch-error");
+      }
+    }
+
+    void loadProfilePhoto();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const resolvedMembership = accountMembership ?? membershipStatus;
+  const isVip = resolvedMembership === "vip";
+  const resolvedVipUntil = accountVipUntil ?? vipUntil;
+
+  const vipUntilText = useMemo(() => {
+    if (!isVip || !resolvedVipUntil) return "";
+
+    const date = new Date(resolvedVipUntil);
+    if (Number.isNaN(date.getTime())) return resolvedVipUntil;
+
+    return date.toLocaleString("id-ID", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "Asia/Jakarta",
+      timeZoneName: "short",
+    });
+  }, [resolvedVipUntil, isVip]);
+
+  const resolvedName = useMemo(() => {
+    if (accountName && accountName.trim().length > 0) return accountName.trim();
+    if (telegramUserName && telegramUserName.trim().length > 0) {
+      return telegramUserName.replace(/^@/, "").trim();
+    }
+    return "User";
+  }, [accountName, telegramUserName]);
+
+  const resolvedUsername = useMemo(() => {
+    if (accountUsername && accountUsername.trim().length > 0) {
+      return `@${accountUsername.replace(/^@/, "").trim()}`;
+    }
+    if (telegramUserName && telegramUserName.trim().length > 0) {
+      return `@${telegramUserName.replace(/^@/, "").trim()}`;
+    }
+    return "-";
+  }, [accountUsername, telegramUserName]);
+
+  const resolvedUserId = useMemo(() => {
+    if (typeof accountUserId === "number") return String(accountUserId);
+    if (typeof telegramUserId === "number") return String(telegramUserId);
+    return "-";
+  }, [accountUserId, telegramUserId]);
+
+  const resolvedPhotoUrl =
+    serverPhotoUrl && serverPhotoUrl.trim().length > 0
+      ? serverPhotoUrl
+      : telegramPhotoUrl && telegramPhotoUrl.trim().length > 0
+        ? telegramPhotoUrl
+        : null;
+
+  const initial = resolvedName.trim().charAt(0).toUpperCase() || "A";
 
   return (
-    <main className="min-h-[100dvh] bg-[radial-gradient(circle_at_top,rgba(201,164,92,0.10),transparent_26%),#0B0B0F] text-white">
-      <div className="mx-auto w-full max-w-[430px] min-h-[100dvh] px-4 pb-28 pt-6">
-        <header className="mb-6 flex items-start justify-between gap-3">
+    <main className="min-h-[100dvh] overflow-x-hidden bg-[#050507] text-[#F5F1E8]">
+      <div className="pointer-events-none fixed inset-0">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(201,164,92,0.12),transparent_24%)]" />
+        <div className="absolute right-[10%] top-[10%] h-[220px] w-[220px] rounded-full bg-[#B76E79]/[0.08] blur-3xl" />
+        <div className="absolute left-[6%] top-[32%] h-[180px] w-[180px] rounded-full bg-[#C9A45C]/[0.06] blur-3xl" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,5,7,0.82)_0%,rgba(5,5,7,0.94)_34%,rgba(5,5,7,1)_100%)]" />
+      </div>
+
+      <div className="relative mx-auto w-full max-w-[980px] px-4 pb-32 pt-5 md:px-6">
+        <div className="mb-3 flex items-start justify-between gap-3">
           <div>
-            <h1 className="text-[28px] font-bold tracking-tight text-white">
-              Profil Saya
+            <div className="text-[12px] uppercase tracking-[0.22em] text-[#8F887C]">
+              Account
+            </div>
+            <h1 className="mt-2 text-[34px] font-bold tracking-tight text-white md:text-[36px]">
+              Akun
             </h1>
-            <p className="mt-1 text-sm leading-6 text-[#8F887C]">
-              Kelola akun, status membership, dan ringkasan aktivitas Anda.
-            </p>
           </div>
 
           <button
+            type="button"
             onClick={onBack}
-            className="rounded-[18px] border border-white/10 bg-[#14151C] px-4 py-2.5 text-sm font-medium text-[#E6D3A3] shadow-[0_6px_18px_rgba(0,0,0,0.22)] transition hover:border-[#C9A45C]/20 hover:bg-[#181A22]"
+            className="rounded-[14px] border border-white/10 bg-white/[0.03] px-3.5 py-2 text-sm font-semibold text-[#F5F1E8] transition hover:border-[#C9A45C]/16 hover:bg-white/[0.05] md:px-4 md:py-2.5"
           >
             Kembali
           </button>
-        </header>
+        </div>
 
-        <section className="overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,#14161D_0%,#101118_100%)] p-4 shadow-[0_20px_48px_rgba(0,0,0,0.30)] sm:p-5">
-          <div className="rounded-[26px] border border-white/8 bg-[linear-gradient(135deg,rgba(201,164,92,0.10),rgba(183,110,121,0.08))] p-[1px]">
-            <div className="rounded-[25px] bg-[#13151C] p-4 sm:p-5">
-              <div className="flex items-center gap-4">
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#D4AF37,#B76E79)] text-[22px] font-bold text-black shadow-[0_12px_28px_rgba(212,175,55,0.20)]">
-                  {initials}
+        {paymentSuccessNotice ? (
+          <div className="mb-4 rounded-[20px] border border-[#C9A45C]/20 bg-[linear-gradient(135deg,rgba(201,164,92,0.16),rgba(183,110,121,0.10))] p-4 text-[#F6E7C5] shadow-[0_14px_32px_rgba(0,0,0,0.18)]">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-[15px] font-extrabold">
+                  Pembayaran berhasil
                 </div>
-
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="truncate text-[24px] font-bold leading-none text-white">
-                      {displayName}
-                    </h2>
-                    <span className="rounded-full border border-[#C9A45C]/20 bg-[#1A1C24] px-2.5 py-1 text-[11px] font-semibold text-[#E6D3A3]">
-                      Telegram Sync
-                    </span>
-                  </div>
-
-                  <p className="mt-2 text-[14px] leading-6 text-[#9E978B]">
-                    Status akun mengikuti data dari bot Telegram
-                  </p>
-                  <p className="text-[13px] leading-5 text-[#7F786D]">
-                    Jika membership berubah di bot, buka ulang mini app untuk
-                    memuat status terbaru.
-                  </p>
+                <div className="mt-1 text-[13px] leading-relaxed text-[#D8C7A0]">
+                  Membership Anda sudah diperbarui. Status akun akan mengikuti data terbaru.
                 </div>
               </div>
+
+              {onDismissPaymentSuccessNotice ? (
+                <button
+                  type="button"
+                  onClick={onDismissPaymentSuccessNotice}
+                  className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[12px] font-bold text-[#F5F1E8]"
+                >
+                  Tutup
+                </button>
+              ) : null}
             </div>
           </div>
+        ) : null}
 
-          <div className="mt-5 rounded-[26px] border border-white/8 bg-[#14151D] p-4 shadow-[0_10px_30px_rgba(0,0,0,0.22)] sm:p-5">
-            <div className="flex items-center gap-4">
-              <div
-                className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-[28px] ${
-                  membershipStatus === "vip"
-                    ? "bg-[linear-gradient(135deg,rgba(212,175,55,0.24),rgba(243,210,122,0.10))]"
-                    : "bg-[linear-gradient(135deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))]"
-                }`}
-              >
-                {membershipStatus === "vip" ? "💎" : "✨"}
-              </div>
+        <section className="overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(18,19,26,0.98)_0%,rgba(12,13,19,0.98)_100%)] p-5 shadow-[0_24px_60px_rgba(0,0,0,0.22)]">
+          <div className="mb-5 flex flex-wrap items-center gap-4 md:gap-5">
+            <div className="flex h-[84px] w-[84px] items-center justify-center overflow-hidden rounded-full border border-[#C9A45C]/20 bg-[linear-gradient(135deg,rgba(201,164,92,0.18),rgba(183,110,121,0.15))] text-[32px] font-extrabold text-[#F6E7C5] shadow-[0_12px_30px_rgba(0,0,0,0.18)] md:h-[92px] md:w-[92px] md:text-[34px]">
+              {resolvedPhotoUrl ? (
+                <img
+                  src={resolvedPhotoUrl}
+                  alt={resolvedName}
+                  className="h-full w-full object-cover"
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                  }}
+                />
+              ) : (
+                initial
+              )}
+            </div>
 
-              <div className="min-w-0">
-                <p className="text-[14px] text-[#8F887C]">Status Akun</p>
-                <p
-                  className={`mt-1 text-[22px] font-bold leading-none ${
-                    membershipStatus === "vip" ? "text-[#F3D27A]" : "text-white"
+            <div className="min-w-[220px] flex-1">
+              <div className="mb-1 text-sm text-[#8F887C]">Nama</div>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="text-[clamp(26px,4vw,36px)] font-extrabold leading-tight text-white">
+                  {resolvedName}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={onOpenMembershipInfo}
+                  className={`inline-flex h-[40px] items-center rounded-full px-4 py-2 text-sm font-bold ${
+                    isVip
+                      ? "border border-[#C9A45C]/24 bg-[linear-gradient(135deg,rgba(201,164,92,0.16),rgba(183,110,121,0.14))] text-[#F5E3B6]"
+                      : "border border-white/10 bg-white/[0.03] text-[#F2EEE6]"
                   }`}
                 >
-                  {membershipLabel}
-                </p>
-                <p className="mt-3 text-[14px] leading-6 text-[#8F887C]">
-                  {membershipDescription}
-                </p>
+                  {isVip ? "VIP" : "FREE"}
+                </button>
               </div>
+
+              {vipUntilText ? (
+                <div className="mt-3 inline-flex rounded-full border border-[#C9A45C]/16 bg-[#C9A45C]/[0.08] px-3 py-2 text-[13px] font-semibold text-[#F5E3B6]">
+                  Berlaku sampai: {vipUntilText}
+                </div>
+              ) : null}
             </div>
           </div>
 
-          <button
-            onClick={onOpenMembershipInfo}
-            className={`mt-5 w-full rounded-[22px] px-4 py-4 text-[16px] font-semibold transition shadow-[0_12px_30px_rgba(0,0,0,0.18)] ${
-              membershipStatus === "vip"
-                ? "bg-gradient-to-r from-[#D4AF37] to-[#F3D27A] text-black hover:brightness-105"
-                : "bg-gradient-to-r from-[#B76E79] via-[#C79A57] to-[#D4AF37] text-white hover:brightness-105"
-            }`}
-          >
-            {membershipStatus === "vip"
-              ? "💎 Status VIP dari Bot Telegram"
-              : "✨ Status Free dari Bot Telegram"}
-          </button>
-
-          <div className="mt-5 grid grid-cols-3 gap-3 text-center">
-            <div className="rounded-[22px] border border-white/6 bg-[#171922] p-4 shadow-[0_8px_20px_rgba(0,0,0,0.14)]">
-              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[#8F887C]">
-                Riwayat
-              </p>
-              <p className="mt-2 text-[26px] font-bold text-white">
-                {historyCount}
-              </p>
-              <p className="mt-1 text-[12px] text-[#9E978B]">Drama dibuka</p>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div className="rounded-[18px] border border-white/10 bg-white/[0.02] p-4">
+              <div className="mb-2 text-[13px] text-[#8F887C]">Telegram Username</div>
+              <div className="text-[16px] font-bold text-white break-all">{resolvedUsername}</div>
             </div>
 
-            <div className="rounded-[22px] border border-white/6 bg-[#171922] p-4 shadow-[0_8px_20px_rgba(0,0,0,0.14)]">
-              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[#8F887C]">
-                Favorit
-              </p>
-              <p className="mt-2 text-[26px] font-bold text-white">
-                {favoriteCount}
-              </p>
-              <p className="mt-1 text-[12px] text-[#9E978B]">Tersimpan</p>
+            <div className="rounded-[18px] border border-white/10 bg-white/[0.02] p-4">
+              <div className="mb-2 text-[13px] text-[#8F887C]">Telegram User ID</div>
+              <div className="text-[16px] font-bold text-white break-all">{resolvedUserId}</div>
             </div>
 
-            <div className="rounded-[22px] border border-white/6 bg-[#171922] p-4 shadow-[0_8px_20px_rgba(0,0,0,0.14)]">
-              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[#8F887C]">
-                Top Source
-              </p>
-              <p className="mt-2 truncate text-[15px] font-bold text-white">
-                {mostWatchedLabel}
-              </p>
-              <p className="mt-1 text-[12px] text-[#9E978B]">Paling sering</p>
-            </div>
           </div>
         </section>
 
-        <nav className="fixed bottom-[max(12px,env(safe-area-inset-bottom))] left-1/2 w-[calc(100%-24px)] max-w-[430px] -translate-x-1/2 rounded-3xl border border-white/10 bg-[#14141b]/95 p-3 backdrop-blur">
-          <div className="grid grid-cols-4 gap-2 text-center text-sm">
-            <button
-              onClick={onBack}
-              className="rounded-2xl px-3 py-2 text-[#B8AA8A] transition hover:bg-[#C9A45C]/10 hover:text-[#E6D3A3]"
-            >
-              Beranda
-            </button>
-            <button
-              onClick={onOpenHistory}
-              className="rounded-2xl px-3 py-2 text-[#B8AA8A] transition hover:bg-[#C9A45C]/10 hover:text-[#E6D3A3]"
-            >
-              Riwayat
-            </button>
-            <button
-              onClick={onOpenFavorites}
-              className="rounded-2xl px-3 py-2 text-[#B8AA8A] transition hover:bg-[#C9A45C]/10 hover:text-[#E6D3A3]"
-            >
-              Favorit
-            </button>
-            <button className="rounded-2xl bg-[linear-gradient(135deg,rgba(201,164,92,0.22),rgba(185,138,132,0.12))] px-3 py-2 font-medium text-[#F2E6C9] shadow-[0_6px_18px_rgba(201,164,92,0.12)]">
-              Profil
-            </button>
+        <section className="mt-5 overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(18,19,26,0.98)_0%,rgba(12,13,19,0.98)_100%)] p-5">
+          <div className="mb-4 text-[13px] uppercase tracking-[0.18em] text-[#8F887C]">
+            Aksi Akun
           </div>
-        </nav>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            {!isVip ? (
+              hideUpgradeLink ? null : (
+                <Link
+                  href="/upgrade"
+                  className="inline-flex items-center justify-center rounded-[16px] border border-[#C9A45C]/20 bg-[linear-gradient(135deg,#E5C37A_0%,#C99859_100%)] px-4 py-3 text-center text-[16px] font-extrabold text-[#111318] shadow-[0_10px_24px_rgba(201,164,92,0.18)]"
+                >
+                  Upgrade VIP
+                </Link>
+              )
+            ) : hideVipPageLink ? null : (
+              <Link
+                href="/vip"
+                className="inline-flex items-center justify-center rounded-[16px] border border-[#C9A45C]/16 bg-white/[0.03] px-4 py-3 text-center text-[16px] font-bold text-[#F1E4BF]"
+              >
+                Halaman VIP
+              </Link>
+            )}
+
+            <Link
+              href="/terms"
+              className="inline-flex items-center justify-center rounded-[16px] border border-white/10 bg-white/[0.04] px-4 py-3 text-center text-[16px] font-bold text-[#F5F1E8]"
+            >
+              Syarat & Ketentuan
+            </Link>
+
+            <form action="/api/logout" method="post" className="m-0">
+              <button
+                type="submit"
+                className="inline-flex w-full items-center justify-center rounded-[16px] border border-white/10 bg-white/[0.03] px-4 py-3 text-[16px] font-bold text-[#F5F1E8]"
+              >
+                Logout
+              </button>
+            </form>
+          </div>
+        </section>
+
+        <section className="mt-5 grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={onOpenHistory}
+            className="rounded-[20px] border border-white/10 bg-[linear-gradient(180deg,rgba(18,19,26,0.98)_0%,rgba(12,13,19,0.98)_100%)] p-4 text-center"
+          >
+            <div className="text-[12px] uppercase tracking-[0.22em] text-[#BFAE87]">
+              Riwayat
+            </div>
+            <div className="mt-3 text-[38px] font-extrabold leading-none text-white">
+              {historyCount}
+            </div>
+            <div className="mt-3 text-[14px] text-[#BFB7AA]">Drama dibuka</div>
+          </button>
+
+          <button
+            type="button"
+            onClick={onOpenFavorites}
+            className="rounded-[20px] border border-white/10 bg-[linear-gradient(180deg,rgba(18,19,26,0.98)_0%,rgba(12,13,19,0.98)_100%)] p-4 text-center"
+          >
+            <div className="text-[12px] uppercase tracking-[0.22em] text-[#BFAE87]">
+              Favorit
+            </div>
+            <div className="mt-3 text-[38px] font-extrabold leading-none text-white">
+              {favoriteCount}
+            </div>
+            <div className="mt-3 text-[14px] text-[#BFB7AA]">Tersimpan</div>
+          </button>
+        </section>
       </div>
     </main>
   );

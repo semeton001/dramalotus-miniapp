@@ -1,12 +1,10 @@
 import type { Drama } from "@/types/drama";
 import type { Episode } from "@/types/episode";
 
-const API_BASE =
-  process.env.FREEREELS_API_BASE?.trim() ||
-  "https://drakula.dramabos.my.id/api/freereels";
-
-const DEFAULT_LANG = process.env.FREEREELS_LANG?.trim() || "id";
-const DEFAULT_CODE = process.env.FREEREELS_CODE?.trim() || "";
+const API_BASE = "https://streamapi.web.id/p/freereels/api/v1";
+const DEFAULT_LANG = "id-ID";
+const DEFAULT_TOKEN =
+  "KFKiMIbY3Np8kbimDo7lJDNSVslwF3Fn64cI0TOtqpOP373n58ca6BKzbDsLb7qB";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -73,9 +71,15 @@ function flattenDramaCandidates(data: unknown): unknown[] {
       continue;
     }
 
-    // home: ada module card, dramanya ada di module_card.items
+    // home lama: ada module card, dramanya ada di module_card.items
     if (isRecord(raw.module_card) && Array.isArray(raw.module_card.items)) {
       result.push(...raw.module_card.items);
+      continue;
+    }
+
+    // upstream baru: module membungkus drama di field items
+    if (Array.isArray(raw.items)) {
+      result.push(...raw.items);
       continue;
     }
 
@@ -95,14 +99,14 @@ export function getFreeReelsLang(): string {
 }
 
 export function getFreeReelsCode(): string {
-  return DEFAULT_CODE;
+  return DEFAULT_TOKEN;
 }
 
 export function ensureFreeReelsCode(code?: string | null): string {
   const resolved =
     typeof code === "string" && code.trim() ? code.trim() : getFreeReelsCode();
   if (!resolved) {
-    throw new Error("FREEREELS_CODE belum di-set di environment.");
+    throw new Error("Token FreeReels belum tersedia.");
   }
   return resolved;
 }
@@ -113,7 +117,7 @@ export function buildApiUrl(
 ): string {
   const url = new URL(`${getFreeReelsApiBase()}${path}`);
   url.searchParams.set("lang", getFreeReelsLang());
-  url.searchParams.set("code", ensureFreeReelsCode());
+  url.searchParams.set("token", ensureFreeReelsCode());
 
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
@@ -407,7 +411,7 @@ export function toEpisode(
       ) || "Indonesia"
     : "Indonesia";
 
-  const streamResolver = `/api/freereels/stream?dramaId=${encodeURIComponent(dramaId)}&episodeId=${encodeURIComponent(String(epNumber))}&code=${encodeURIComponent(code || "")}`;
+  const streamResolver = `/api/freereels/stream?dramaId=${encodeURIComponent(dramaId)}&episodeId=${encodeURIComponent(String(epNumber))}`;
   const subtitleProxy = subtitleVtt
     ? `/api/freereels/subtitle?url=${encodeURIComponent(subtitleVtt)}`
     : "";
@@ -460,10 +464,7 @@ export async function resolvePlayData(
   code?: string,
 ): Promise<JsonRecord> {
   const playUrl = buildApiUrl(
-    `/drama/${encodeURIComponent(dramaId)}/play/${encodeURIComponent(String(episodeId))}`,
-    {
-      code: code || getFreeReelsCode(),
-    },
+    `/dramas/${encodeURIComponent(dramaId)}/play/${encodeURIComponent(String(episodeId))}`,
   );
 
   const json = await fetchFreeReelsJson<FreeReelsPlayResponse>(playUrl);

@@ -12,7 +12,10 @@ export type DramawaveFeedKind =
   | "foryou"
   | "anime"
   | "random"
-  | "search";
+  | "search"
+  | "latest"
+  | "dubbing"
+  | "vip";
 
 export type DramawavePaginatedResponse<T> = {
   items: T[];

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireApiVip } from "@/lib/auth/requireApiVip";
 import {
   IDRAMA_DEFAULT_CODE,
   buildProxyBaseUrl,
@@ -140,6 +141,18 @@ async function fetchMediaResponse(targetUrl: string) {
   });
 }
 
+function normalizeIdramaProxyPlaylistUrls(
+  playlistText: string,
+  request: NextRequest,
+): string {
+  const origin = request.nextUrl.origin.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  return playlistText
+    .replace(new RegExp(`${origin}/api/idrama/stream\\?url=`, "g"), "/api/idrama/stream?url=")
+    .replace(/http:\/\/localhost:\d+\/api\/idrama\/stream\?url=/g, "/api/idrama/stream?url=")
+    .replace(/https?:\/\/127\.0\.0\.1:\d+\/api\/idrama\/stream\?url=/g, "/api/idrama/stream?url=");
+}
+
 async function proxyMedia(request: NextRequest, targetUrl: string) {
   const response = await fetchMediaResponse(targetUrl);
 
@@ -166,7 +179,8 @@ async function proxyMedia(request: NextRequest, targetUrl: string) {
       activeTargetUrl,
     );
     headers.delete("content-length");
-    return new NextResponse(rewritten, { status: 200, headers });
+    const normalized = normalizeIdramaProxyPlaylistUrls(rewritten, request);
+    return new NextResponse(normalized, { status: 200, headers });
   }
 
   const body = await response.arrayBuffer();
@@ -174,32 +188,43 @@ async function proxyMedia(request: NextRequest, targetUrl: string) {
 }
 
 export async function GET(request: NextRequest) {
+  const vipError = await requireApiVip();
+  if (vipError) return vipError;
+
   try {
-    const directUrl = getSearchParam(request, "url");
+    const directUrl =
+      request.nextUrl.searchParams.get("u")?.trim() ||
+      request.nextUrl.searchParams.get("url")?.trim() ||
+      "";
+    const dramaId = getSearchParam(request, "dramaId");
+    const ep = getSearchParam(request, "ep");
+    const code = getSearchParam(request, "code", IDRAMA_DEFAULT_CODE);
 
     if (directUrl) {
       return proxyMedia(request, directUrl);
     }
 
-    const dramaId = getSearchParam(request, "dramaId");
-    const ep = getSearchParam(request, "ep");
-    const code = getSearchParam(request, "code", IDRAMA_DEFAULT_CODE);
+    let rawPlayUrl = directUrl;
+    let payloadShape: string[] = [];
 
-    if (!dramaId || !ep) {
-      return NextResponse.json(
-        { error: "Missing dramaId or ep." },
-        { status: 400 },
-      );
+    if (!rawPlayUrl) {
+      if (!dramaId || !ep) {
+        return NextResponse.json(
+          { error: "Missing iDrama stream url or dramaId/ep." },
+          { status: 400 },
+        );
+      }
+
+      const payload = await fetchIdramaJson(`/unlock/${dramaId}/${ep}`, { code });
+      payloadShape = Object.keys((payload as JsonRecord) || {});
+      rawPlayUrl = extractPlayableUrl(payload);
     }
-
-    const payload = await fetchIdramaJson(`/unlock/${dramaId}/${ep}`, { code });
-    const rawPlayUrl = extractPlayableUrl(payload);
 
     if (!rawPlayUrl) {
       return NextResponse.json(
         {
           error: "No playable stream found.",
-          payloadShape: Object.keys((payload as JsonRecord) || {}),
+          payloadShape,
         },
         { status: 404 },
       );
@@ -240,7 +265,8 @@ export async function GET(request: NextRequest) {
         activeTargetUrl,
       );
       headers.delete("content-length");
-      return new NextResponse(rewritten, { status: 200, headers });
+      const normalized = normalizeIdramaProxyPlaylistUrls(rewritten, request);
+    return new NextResponse(normalized, { status: 200, headers });
     }
 
     const body = await response.arrayBuffer();

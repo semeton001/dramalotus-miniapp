@@ -2,14 +2,32 @@ import { NextResponse } from "next/server";
 import type { Drama } from "@/types/drama";
 import { normalizeFlickreelsFeed } from "@/lib/adapters/drama/flickreels";
 
-export const FLICKREELS_BASE_URL = "https://flickreels.dramabos.my.id";
+export const FLICKREELS_BASE_URL = "https://streamapi.web.id/p/flickreels/api/v1";
 export const FLICKREELS_SOURCE_ID = "6";
-export const FLICKREELS_LANG = "6";
-export const FLICKREELS_BATCH_CODE =
-  process.env.FLICKREELS_BATCH_CODE || "4D96F22760EA30FB0FFBA9AA87A979A6";
+export const FLICKREELS_LANG = "id";
+export const FLICKREELS_TOKEN =
+  "KFKiMIbY3Np8kbimDo7lJDNSVslwF3Fn64cI0TOtqpOP373n58ca6BKzbDsLb7qB";
+
+export function buildFlickreelsApiUrl(
+  path: string,
+  params?: Record<string, string | number | undefined | null>,
+): string {
+  const url = new URL(`${FLICKREELS_BASE_URL}${path}`);
+  url.searchParams.set("lang", FLICKREELS_LANG);
+  url.searchParams.set("token", FLICKREELS_TOKEN);
+
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === "") return;
+      url.searchParams.set(key, String(value));
+    });
+  }
+
+  return url.toString();
+}
 
 export async function fetchFlickreelsJson(path: string) {
-  const url = `${FLICKREELS_BASE_URL}${path}`;
+  const url = path.startsWith("http") ? path : `${FLICKREELS_BASE_URL}${path}`;
   const response = await fetch(url, {
     headers: {
       Accept: "application/json, text/plain, */*",

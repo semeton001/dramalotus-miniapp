@@ -1,6 +1,14 @@
 import type { Drama } from "@/types/drama";
 
-type DramawaveMode = "home" | "foryou" | "anime" | "random" | "search";
+type DramawaveMode =
+  | "home"
+  | "foryou"
+  | "anime"
+  | "random"
+  | "search"
+  | "latest"
+  | "dubbing"
+  | "vip";
 
 type DramawaveDramaMeta = {
   dramawaveRawId?: string;
@@ -78,13 +86,22 @@ function resolveBadge(mode: DramawaveMode): string {
       return "Anime";
     case "random":
       return "Acak";
+    case "latest":
+      return "Terbaru";
+    case "dubbing":
+      return "Dubbing";
+    case "vip":
+      return "VIP";
     default:
       return "Dramawave";
   }
 }
 
 function resolveCategory(mode: DramawaveMode): string {
-  return mode === "anime" ? "Anime" : "Drama";
+  if (mode === "anime") return "Anime";
+  if (mode === "dubbing") return "Dubbing";
+  if (mode === "vip") return "VIP";
+  return "Drama";
 }
 
 export function buildDramawaveDrama(
@@ -98,6 +115,7 @@ export function buildDramawaveDrama(
   const rawId =
     pickString(
       raw,
+      "key",
       "playlet_id",
       "playletId",
       "id",
@@ -106,6 +124,8 @@ export function buildDramawaveDrama(
       "drama_id",
       "dramaId",
     ) || "";
+
+  const episodeInfoForCover = asRecord(raw.episode_info);
 
   const cover =
     pickString(
@@ -118,10 +138,16 @@ export function buildDramawaveDrama(
       "image_url",
       "thumbnail",
       "thumb",
-    ) || "";
+    ) ||
+    pickString(episodeInfoForCover, "cover", "poster", "thumbnail") ||
+    "";
+
+  const episodeInfo = asRecord(raw.episode_info);
 
   const title =
-    pickString(raw, "name", "title", "book_name", "bookName") || "Tanpa Judul";
+    pickString(raw, "name", "title", "book_name", "bookName") ||
+    pickString(episodeInfo, "name", "title") ||
+    "Tanpa Judul";
 
   const desc =
     pickString(raw, "desc", "description", "intro", "summary", "abstract") || "";
@@ -136,11 +162,17 @@ export function buildDramawaveDrama(
 
   const tags = Array.from(
     new Set([
+      ...normalizeStringArray(raw.tag),
       ...normalizeStringArray(raw.series_tag),
+      ...normalizeStringArray(raw.content_tags),
+      ...normalizeStringArray(raw.content_detail_tags),
       ...normalizeStringArray(raw.tags),
       ...normalizeStringArray(raw.category),
       ...normalizeStringArray(raw.genre),
       ...(mode === "anime" ? ["Anime"] : []),
+      ...(mode === "latest" ? ["Terbaru"] : []),
+      ...(mode === "dubbing" ? ["Dubbing"] : []),
+      ...(mode === "vip" ? ["VIP"] : []),
       "Drama",
     ]),
   ).slice(0, 8);
@@ -167,8 +199,11 @@ export function buildDramawaveDrama(
     category: resolveCategory(mode),
     language: "in",
     country: undefined,
-    isNew: mode === "home",
-    isDubbed: title.toLowerCase().includes("dub"),
+    isNew: mode === "home" || mode === "latest",
+    isDubbed:
+      mode === "dubbing" ||
+      title.toLowerCase().includes("dub") ||
+      title.toLowerCase().includes("sulih suara"),
     isTrending: false,
     sortOrder: index,
     rating: undefined,
@@ -189,6 +224,26 @@ export function extractDramawaveFeedItems(payload: unknown): unknown[] {
       : [];
 
   if (directItems.length > 0) {
+    const nestedItems = directItems.flatMap((item) => {
+      const record = asRecord(item);
+      const type = pickString(record, "type").toLowerCase();
+      const moduleName = pickString(record, "module_name").toLowerCase();
+
+      if (
+        type === "coming_soon" ||
+        moduleName.includes("segera hadir") ||
+        moduleName.includes("coming soon")
+      ) {
+        return [];
+      }
+
+      return Array.isArray(record.items) ? record.items : [];
+    });
+
+    if (nestedItems.length > 0) {
+      return nestedItems;
+    }
+
     return directItems;
   }
 
@@ -211,7 +266,17 @@ export function normalizeDramawaveFeed(
 ): Drama[] {
   const items = extractDramawaveFeedItems(payload);
 
-  return items.map((item, index) =>
-    buildDramawaveDrama(item, index, mode, sourceId),
-  );
+  return items
+    .map((item, index) => buildDramawaveDrama(item, index, mode, sourceId))
+    .filter((item): item is Drama => {
+      if (!item) return false;
+
+      const title = item.title.trim().toLowerCase();
+
+      if (item.episodes <= 0) return false;
+      if (title === "top") return false;
+      if (title === "tanpa judul") return false;
+
+      return true;
+    });
 }

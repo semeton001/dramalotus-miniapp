@@ -1,28 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  IDRAMA_POPULAR_SECTION_ID,
   adaptIdramaDramaList,
+  dedupeIdramaDramas,
+  extractIdramaItemsDeep,
   fetchIdramaJson,
-  getSearchParam,
 } from "../_shared";
 
 export async function GET(request: NextRequest) {
   try {
-    const page = getSearchParam(request, "page", "1");
-    const payload = await fetchIdramaJson(`/section/${IDRAMA_POPULAR_SECTION_ID}`, {
+    const page = Number(request.nextUrl.searchParams.get("page") || "1") || 1;
+
+    const payload = await fetchIdramaJson("/popular", {
       page,
+      limit: 50,
     });
 
-    const list =
-      Array.isArray((payload as { short_plays?: unknown[] })?.short_plays)
-        ? (payload as { short_plays: unknown[] }).short_plays
-        : [];
+    const items = dedupeIdramaDramas(
+      adaptIdramaDramaList(extractIdramaItemsDeep(payload), "Populer"),
+    );
 
-    return NextResponse.json(adaptIdramaDramaList(list, "Populer"));
+    return NextResponse.json(
+      {
+        items,
+        hasNextPage: false,
+        page,
+      },
+      { headers: { "Cache-Control": "no-store" } },
+    );
   } catch (error) {
     console.error("iDrama popular route error:", error);
     return NextResponse.json(
-      { error: "Failed to load iDrama popular." },
+      {
+        error: "Failed to load iDrama popular.",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 },
     );
   }

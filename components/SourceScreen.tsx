@@ -5,17 +5,20 @@ import type { Source } from "@/types/source";
 
 type SourceTab =
   | "Beranda"
-  | "Terbaru"
-  | "Dubbing"
-  | "Acak"
-  | "Populer"
-  | "For You"
-  | "Trending"
-  | "Romance"
+  | "Ranking"
   | "ForYou"
+  | "For You"
+  | "Acak"
+  | "Terbaru"
+  | "Trending"
+  | "Hot"
+  | "Pewaris"
+  | "Populer"
+  | "Romance"
+  | "Fantasi"
   | "Anime"
-  | "Teater"
-  | "Hot";
+  | "Dubbing"
+  | "VIP";
 
 type SourceScreenProps = {
   selectedSource: Source;
@@ -61,9 +64,22 @@ type SourceScreenProps = {
   onReelifePrevPage?: () => void;
   onReelifeNextPage?: () => void;
 
+  stardusttvPage?: number;
+  stardusttvHasNextPage?: boolean;
+  showStardusttvPagination?: boolean;
+  onStardusttvPrevPage?: () => void;
+  onStardusttvNextPage?: () => void;
+
+  bilitvPage?: number;
+  bilitvHasNextPage?: boolean;
+  showBilitvPagination?: boolean;
+  onBilitvPrevPage?: () => void;
+  onBilitvNextPage?: () => void;
+
   onBack: () => void;
   onSearchChange: (value: string) => void;
   onSubmitSearch: () => void;
+  onClearSearch?: () => void;
   onTabChange: (tab: SourceTab) => void;
   onSelectDrama: (drama: Drama) => void;
   onToggleFavorite: (dramaId: number) => void;
@@ -71,8 +87,8 @@ type SourceScreenProps = {
 
 const dramaBoxTabs: Array<{ label: string; value: SourceTab }> = [
   { label: "🏠 Beranda", value: "Beranda" },
-  { label: "🆕 Terbaru", value: "Terbaru" },
-  { label: "🎙️ Dubbing", value: "Dubbing" },
+  { label: "🏆 Ranking", value: "Ranking" },
+  { label: "✨ ForYou", value: "ForYou" },
   { label: "🎲 Acak", value: "Acak" },
 ];
 
@@ -85,29 +101,29 @@ const reelShortTabs: Array<{ label: string; value: SourceTab }> = [
 
 const meloloTabs: Array<{ label: string; value: SourceTab }> = [
   { label: "🏠 Beranda", value: "Beranda" },
-  { label: "🆕 Terbaru", value: "Terbaru" },
+  { label: "💕 Romance", value: "Romance" },
   { label: "✨ ForYou", value: "ForYou" },
-  { label: "🔥 Trending", value: "Trending" },
+  { label: "👑 Pewaris", value: "Pewaris" },
 ];
 
 const dramawaveTabs: Array<{ label: string; value: SourceTab }> = [
-  { label: "🏠 Beranda", value: "Beranda" },
+  { label: "🆕 Terbaru", value: "Terbaru" },
   { label: "✨ ForYou", value: "ForYou" },
-  { label: "🎌 Anime", value: "Anime" },
-  { label: "🎲 Acak", value: "Acak" },
+  { label: "🎙️ Dubbing", value: "Dubbing" },
+  { label: "💎 VIP", value: "VIP" },
 ];
 
 const netshortTabs: Array<{ label: string; value: SourceTab }> = [
   { label: "🏠 Beranda", value: "Beranda" },
   { label: "✨ ForYou", value: "ForYou" },
-  { label: "🎭 Teater", value: "Teater" },
-  { label: "🎲 Acak", value: "Acak" },
+  { label: "🆕 Terbaru", value: "Terbaru" },
+  { label: "👑 VIP", value: "VIP" },
 ];
 
 const flickreelsTabs: Array<{ label: string; value: SourceTab }> = [
   { label: "🏠 Beranda", value: "Beranda" },
+  { label: "🆕 Terbaru", value: "Terbaru" },
   { label: "✨ ForYou", value: "ForYou" },
-  { label: "🔥 Trending", value: "Trending" },
   { label: "🎲 Acak", value: "Acak" },
 ];
 
@@ -115,21 +131,69 @@ const shortmaxTabs: Array<{ label: string; value: SourceTab }> = [
   { label: "🏠 Beranda", value: "Beranda" },
   { label: "🆕 Terbaru", value: "Terbaru" },
   { label: "🔥 Trending", value: "Trending" },
-  { label: "♨️ Hot", value: "Hot" },
+  { label: "✨ ForYou", value: "ForYou" },
 ];
 
 const goodshortTabs: Array<{ label: string; value: SourceTab }> = [
   { label: "🏠 Beranda", value: "Beranda" },
-  { label: "⭐ Populer", value: "Populer" },
-  { label: "🔥 Trending", value: "Trending" },
-  { label: "🎲 Acak", value: "Acak" },
+];
+
+const bilitvTabs: Array<{ label: string; value: SourceTab }> = [
+  { label: "🏠 Beranda", value: "Beranda" },
+  { label: "✨ ForYou", value: "ForYou" },
+  { label: "💎 VIP", value: "VIP" },
+];
+
+const dramanovaTabs: Array<{ label: string; value: SourceTab }> = [
+  { label: "🏠 Beranda", value: "Beranda" },
+  { label: "🆕 Terbaru", value: "Terbaru" },
+  { label: "✨ ForYou", value: "ForYou" },
+  { label: "💎 VIP", value: "VIP" },
+];
+
+const dramapopsTabs: Array<{ label: string; value: SourceTab }> = [
+  { label: "🏠 Beranda", value: "Beranda" },
+  { label: "🔥 Populer", value: "Populer" },
+  { label: "📈 Trending", value: "Trending" },
+];
+
+const microdramaTabs: Array<{ label: string; value: SourceTab }> = [
+  { label: "🏠 Beranda", value: "Beranda" },
+];
+
+const fundramaTabs: Array<{ label: string; value: SourceTab }> = [
+  { label: "🏠 Beranda", value: "Beranda" },
+  { label: "✨ ForYou", value: "ForYou" },
+  { label: "🔥 Hot", value: "Hot" },
+  { label: "💎 VIP", value: "VIP" },
+];
+
+const stardusttvTabs: Array<{ label: string; value: SourceTab }> = [
+  { label: "🏠 Beranda", value: "Beranda" },
+  { label: "🪄 Fantasi", value: "Fantasi" },
+  { label: "💕 Romance", value: "Romance" },
+  { label: "💎 VIP", value: "VIP" },
+];
+
+const flextvTabs: Array<{ label: string; value: SourceTab }> = [
+  { label: "🏠 Beranda", value: "Beranda" },
+  { label: "🔥 Populer", value: "Populer" },
+  { label: "🆕 Terbaru", value: "Terbaru" },
+  { label: "💎 VIP", value: "VIP" },
+];
+
+const dramabiteTabs: Array<{ label: string; value: SourceTab }> = [
+  { label: "🏠 Beranda", value: "Beranda" },
+  { label: "✨ ForYou", value: "ForYou" },
+  { label: "🏆 Ranking", value: "Ranking" },
+  { label: "💎 VIP", value: "VIP" },
 ];
 
 const reelifeTabs: Array<{ label: string; value: SourceTab }> = [
   { label: "🏠 Beranda", value: "Beranda" },
   { label: "🔥 Trending", value: "Trending" },
-  { label: "♨️ Hot", value: "Hot" },
-  { label: "🎲 Acak", value: "Acak" },
+  { label: "👑 Pewaris", value: "Pewaris" },
+  { label: "✨ ForYou", value: "ForYou" },
 ];
 
 const freeReelsTabs: Array<{ label: string; value: SourceTab }> = [
@@ -141,9 +205,9 @@ const freeReelsTabs: Array<{ label: string; value: SourceTab }> = [
 
 const idramaTabs: Array<{ label: string; value: SourceTab }> = [
   { label: "🏠 Beranda", value: "Beranda" },
-  { label: "⭐ Populer", value: "Populer" },
-  { label: "♨️ Hot", value: "Hot" },
-  { label: "🎲 Acak", value: "Acak" },
+  { label: "🔥 Populer", value: "Populer" },
+  { label: "📈 Trending", value: "Trending" },
+  { label: "🆕 Terbaru", value: "Terbaru" },
 ];
 
 function isDramaBoxSource(source: Source): boolean {
@@ -199,6 +263,62 @@ function isGoodshortSource(source: Source): boolean {
   );
 }
 
+function isBilitvSource(source: Source): boolean {
+  return (
+    source.slug?.toLowerCase() === "bilitv" ||
+    source.name?.toLowerCase() === "bilitv"
+  );
+}
+
+function isDramanovaSource(source: Source): boolean {
+  return (
+    source.slug?.toLowerCase() === "dramanova" ||
+    source.name?.toLowerCase() === "dramanova"
+  );
+}
+
+function isDramapopsSource(source: Source): boolean {
+  return (
+    source.slug?.toLowerCase() === "dramapops" ||
+    source.name?.toLowerCase() === "dramapops"
+  );
+}
+
+function isMicrodramaSource(source: Source): boolean {
+  return (
+    source.slug?.toLowerCase() === "microdrama" ||
+    source.name?.toLowerCase() === "microdrama"
+  );
+}
+
+function isFundramaSource(source: Source): boolean {
+  return (
+    source.slug?.toLowerCase() === "fundrama" ||
+    source.name?.toLowerCase() === "fundrama"
+  );
+}
+
+function isStardusttvSource(source: Source): boolean {
+  return (
+    source.slug?.toLowerCase() === "stardusttv" ||
+    source.name?.toLowerCase() === "stardusttv"
+  );
+}
+
+function isFlextvSource(source: Source): boolean {
+  return (
+    source.slug?.toLowerCase() === "flextv" ||
+    source.name?.toLowerCase() === "flextv"
+  );
+}
+
+function isDramabiteSource(source: Source): boolean {
+  return (
+    source.slug?.toLowerCase() === "dramabite" ||
+    source.name?.toLowerCase() === "dramabite"
+  );
+}
+
 function isReelifeSource(source: Source): boolean {
   return (
     source.slug?.toLowerCase() === "reelife" ||
@@ -221,46 +341,24 @@ function isIdramaSource(source: Source): boolean {
 }
 
 function getSourceTabs(selectedSource: Source) {
-  if (isReelShortSource(selectedSource)) {
-    return reelShortTabs;
-  }
-
-  if (isMeloloSource(selectedSource)) {
-    return meloloTabs;
-  }
-
-  if (isDramawaveSource(selectedSource)) {
-    return dramawaveTabs;
-  }
-
-  if (isNetshortSource(selectedSource)) {
-    return netshortTabs;
-  }
-
-  if (isFlickreelsSource(selectedSource)) {
-    return flickreelsTabs;
-  }
-
-  if (isShortmaxSource(selectedSource)) {
-    return shortmaxTabs;
-  }
-
-  if (isGoodshortSource(selectedSource)) {
-    return goodshortTabs;
-  }
-
-  if (isReelifeSource(selectedSource)) {
-    return reelifeTabs;
-  }
-
-  if (isFreeReelsSource(selectedSource)) {
-    return freeReelsTabs;
-  }
-
-  if (isIdramaSource(selectedSource)) {
-    return idramaTabs;
-  }
-
+  if (isReelShortSource(selectedSource)) return reelShortTabs;
+  if (isMeloloSource(selectedSource)) return meloloTabs;
+  if (isDramawaveSource(selectedSource)) return dramawaveTabs;
+  if (isNetshortSource(selectedSource)) return netshortTabs;
+  if (isFlickreelsSource(selectedSource)) return flickreelsTabs;
+  if (isShortmaxSource(selectedSource)) return shortmaxTabs;
+  if (isGoodshortSource(selectedSource)) return goodshortTabs;
+  if (isBilitvSource(selectedSource)) return bilitvTabs;
+  if (isDramanovaSource(selectedSource)) return dramanovaTabs;
+  if (isDramapopsSource(selectedSource)) return dramapopsTabs;
+  if (isMicrodramaSource(selectedSource)) return microdramaTabs;
+  if (isFundramaSource(selectedSource)) return fundramaTabs;
+  if (isReelifeSource(selectedSource)) return reelifeTabs;
+  if (isDramabiteSource(selectedSource)) return dramabiteTabs;
+  if (isFlextvSource(selectedSource)) return flextvTabs;
+  if (isStardusttvSource(selectedSource)) return stardusttvTabs;
+  if (isFreeReelsSource(selectedSource)) return freeReelsTabs;
+  if (isIdramaSource(selectedSource)) return idramaTabs;
   return dramaBoxTabs;
 }
 
@@ -276,8 +374,9 @@ function resolveBadge(
   if (sourceTab === "ForYou") return "ForYou";
   if (sourceTab === "Trending") return "Trending";
   if (sourceTab === "Romance") return "Romance";
+  if (sourceTab === "Fantasi") return "Fantasi";
   if (sourceTab === "Anime") return "Anime";
-  if (sourceTab === "Teater") return "Teater";
+  if (sourceTab === "VIP") return "VIP";
   if (sourceTab === "Hot") return "Hot";
   if (sourceTab === "Populer") return "Populer";
 
@@ -285,49 +384,25 @@ function resolveBadge(
     return drama.badge.trim();
   }
 
-  if (isDramaBoxSource(selectedSource)) {
-    return "DramaBox";
-  }
-
-  if (isReelShortSource(selectedSource)) {
-    return "ReelShort";
-  }
-
-  if (isMeloloSource(selectedSource)) {
-    return "Melolo";
-  }
-
-  if (isDramawaveSource(selectedSource)) {
-    return "Dramawave";
-  }
-
-  if (isNetshortSource(selectedSource)) {
-    return "Netshort";
-  }
-
-  if (isFlickreelsSource(selectedSource)) {
-    return "Flickreels";
-  }
-
-  if (isShortmaxSource(selectedSource)) {
-    return "Shortmax";
-  }
-
-  if (isGoodshortSource(selectedSource)) {
-    return "GoodShort";
-  }
-
-  if (isReelifeSource(selectedSource)) {
-    return "Reelife";
-  }
-
-  if (isFreeReelsSource(selectedSource)) {
-    return "FreeReels";
-  }
-
-  if (isIdramaSource(selectedSource)) {
-    return "iDrama";
-  }
+  if (isDramaBoxSource(selectedSource)) return "DramaBox";
+  if (isReelShortSource(selectedSource)) return "ReelShort";
+  if (isMeloloSource(selectedSource)) return "Melolo";
+  if (isDramawaveSource(selectedSource)) return "Dramawave";
+  if (isNetshortSource(selectedSource)) return "Netshort";
+  if (isFlickreelsSource(selectedSource)) return "Flickreels";
+  if (isShortmaxSource(selectedSource)) return "Shortmax";
+  if (isGoodshortSource(selectedSource)) return "GoodShort";
+  if (isBilitvSource(selectedSource)) return "BiliTV";
+  if (isDramanovaSource(selectedSource)) return "DramaNova";
+  if (isDramapopsSource(selectedSource)) return "Dramapops";
+  if (isMicrodramaSource(selectedSource)) return "MicroDrama";
+  if (isFundramaSource(selectedSource)) return "FunDrama";
+  if (isReelifeSource(selectedSource)) return "Reelife";
+  if (isDramabiteSource(selectedSource)) return "DramaBite";
+  if (isFlextvSource(selectedSource)) return "FlexTV";
+  if (isStardusttvSource(selectedSource)) return "StardustTV";
+  if (isFreeReelsSource(selectedSource)) return "FreeReels";
+  if (isIdramaSource(selectedSource)) return "iDrama";
 
   return "Drama";
 }
@@ -361,8 +436,8 @@ function resolveBadgeClass(sourceTab: SourceTab, selectedSource: Source) {
     return "bg-[linear-gradient(135deg,#06B6D4,#3B82F6)] text-white";
   }
 
-  if (sourceTab === "Teater") {
-    return "bg-[linear-gradient(135deg,#2563EB,#7C3AED)] text-white";
+  if (sourceTab === "VIP") {
+    return "bg-[linear-gradient(135deg,#F59E0B,#EAB308)] text-white";
   }
 
   if (sourceTab === "Hot") {
@@ -401,8 +476,36 @@ function resolveBadgeClass(sourceTab: SourceTab, selectedSource: Source) {
     return "bg-[linear-gradient(135deg,#14B8A6,#06B6D4)] text-white";
   }
 
+  if (isBilitvSource(selectedSource)) {
+    return "bg-[linear-gradient(135deg,#00A3FF,#6D5DFB)] text-white";
+  }
+
+  if (isDramanovaSource(selectedSource)) {
+    return "bg-[linear-gradient(135deg,#6366F1,#EC4899)] text-white";
+  }
+
+  if (isDramapopsSource(selectedSource)) {
+    return "bg-[linear-gradient(135deg,#A855F7,#EC4899)] text-white";
+  }
+
+  if (isMicrodramaSource(selectedSource)) {
+    return "bg-[linear-gradient(135deg,#06B6D4,#2563EB)] text-white";
+  }
+
+  if (isFundramaSource(selectedSource)) {
+    return "bg-[linear-gradient(135deg,#F43F5E,#F97316)] text-white";
+  }
+
   if (isReelifeSource(selectedSource)) {
     return "bg-[linear-gradient(135deg,#F97316,#EF4444)] text-white";
+  }
+
+  if (isFlextvSource(selectedSource)) {
+    return "bg-[linear-gradient(135deg,#22C55E,#14B8A6)] text-white";
+  }
+
+  if (isStardusttvSource(selectedSource)) {
+    return "bg-[linear-gradient(135deg,#8B5CF6,#EC4899)] text-white";
   }
 
   if (isFreeReelsSource(selectedSource)) {
@@ -414,6 +517,27 @@ function resolveBadgeClass(sourceTab: SourceTab, selectedSource: Source) {
   }
 
   return "bg-[linear-gradient(135deg,#B76E79,#C98B57)] text-white";
+}
+
+function PaginationButton({
+  disabled,
+  onClick,
+  children,
+}: {
+  disabled?: boolean;
+  onClick?: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="rounded-full border border-white/10 bg-[#12131A] px-3 py-1.5 text-[11px] font-medium text-white transition hover:bg-[#181B24] disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      {children}
+    </button>
+  );
 }
 
 export default function SourceScreen({
@@ -458,9 +582,22 @@ export default function SourceScreen({
   onReelifePrevPage,
   onReelifeNextPage,
 
+  stardusttvPage = 1,
+  stardusttvHasNextPage = false,
+  showStardusttvPagination = false,
+  onStardusttvPrevPage,
+  onStardusttvNextPage,
+
+  bilitvPage = 1,
+  bilitvHasNextPage = false,
+  showBilitvPagination = false,
+  onBilitvPrevPage,
+  onBilitvNextPage,
+
   onBack,
   onSearchChange,
   onSubmitSearch,
+  onClearSearch,
   onTabChange,
   onSelectDrama,
   onToggleFavorite,
@@ -468,119 +605,148 @@ export default function SourceScreen({
   const sourceTabs = getSourceTabs(selectedSource);
 
   return (
-    <main className="min-h-[100dvh] w-full bg-[#06070B] text-white">
-      <div className="min-h-[100dvh] w-full pb-28">
-        <header className="sticky top-0 z-30 border-b border-white/10 bg-[#0C0F18]/95 px-3 pb-3 pt-3 backdrop-blur md:px-4 lg:px-6">
-          <div className="relative mb-4 flex items-center justify-between gap-2">
-            <button
-              onClick={onBack}
-              className="relative z-10 rounded-[18px] bg-gradient-to-r from-[#EF476F] to-[#9C6B74] px-4 py-2.5 text-[14px] font-semibold text-white shadow-[0_8px_24px_rgba(239,71,111,0.25)]"
-            >
-              ✕ Tutup
-            </button>
+    <main className="min-h-[100dvh] w-full overflow-x-hidden bg-[#050507] text-white">
+      <div className="pointer-events-none fixed inset-0">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(201,164,92,0.12),transparent_24%)]" />
+        <div className="absolute right-[8%] top-[10%] h-[220px] w-[220px] rounded-full bg-[#B76E79]/[0.08] blur-3xl" />
+        <div className="absolute left-[8%] top-[30%] h-[180px] w-[180px] rounded-full bg-[#C9A45C]/[0.06] blur-3xl" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,5,7,0.78)_0%,rgba(5,5,7,0.94)_34%,rgba(5,5,7,1)_100%)]" />
+      </div>
 
-            <div className="pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 items-center justify-center px-[96px]">
-              <div className="flex min-w-0 items-center justify-center gap-2">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-xl">
-                  <img
-                    src={selectedSource.logo ?? "/dramalotus-logo.png"}
-                    alt={selectedSource.name}
-                    className="h-full w-full object-contain"
-                  />
+      <div className="relative min-h-[100dvh] w-full pb-28">
+        <header className="fixed left-0 right-0 top-0 z-40 border-b border-white/10 bg-[#0C0F18]/92 px-3 pb-2 pt-2 backdrop-blur-xl md:px-4 lg:px-6">
+          <div className="mx-auto w-full max-w-[1600px]">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <button
+                onClick={onBack}
+                className="rounded-[16px] border border-[#C9A45C]/20 bg-[linear-gradient(135deg,rgba(183,110,121,0.92),rgba(201,139,87,0.92))] px-3 py-2 text-[13px] font-semibold text-white shadow-[0_8px_18px_rgba(183,110,121,0.22)] transition hover:-translate-y-0.5"
+              >
+                ✕ Tutup
+              </button>
+
+              <div className="mx-auto min-w-0 flex-1 px-2">
+                <div className="flex items-center justify-center gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[14px] border border-white/10 bg-white/[0.03] shadow-[0_8px_18px_rgba(0,0,0,0.2)]">
+                    <img
+                      src={selectedSource.logo ?? "/dramalotus-logo.png"}
+                      alt={selectedSource.name}
+                      className="h-full w-full object-contain"
+                    />
+                  </div>
+
+                  <div className="min-w-0">
+                    <h1 className="truncate text-center text-[16px] font-semibold tracking-tight text-white md:text-[18px]">
+                      {selectedSource.name}
+                    </h1>
+                    <p className="mt-0.5 hidden text-center text-[10px] uppercase tracking-[0.16em] text-[#8F887C] sm:block">
+                      Source Explorer
+                    </p>
+                  </div>
                 </div>
-
-                <h1 className="truncate text-center text-[19px] font-semibold tracking-tight text-white">
-                  {selectedSource.name}
-                </h1>
               </div>
-            </div>
 
-            <div className="relative z-10 flex items-center gap-2">
-              <button
-                type="button"
-                className="rounded-[16px] border border-[#C9A45C]/20 bg-[#14151C] px-3 py-2.5 text-sm text-[#E6D3A3] shadow-sm"
-              >
-                ID
-              </button>
-              <button
-                type="button"
-                className="rounded-[16px] bg-[#1C1F29] px-3 py-2.5 text-sm text-[#F5F1E8]"
-              >
-                ˅
-              </button>
-              <button
-                type="button"
-                className="rounded-[16px] bg-[#1C1F29] px-3 py-2.5 text-sm text-[#F5F1E8]"
-              >
-                •••
-              </button>
-            </div>
-          </div>
-
-          {isSearchEnabled && (
-            <div className="rounded-[22px] border border-white/10 bg-[#12131A] px-4 py-2.5 shadow-[0_10px_24px_rgba(0,0,0,0.18)]">
-              <div className="flex items-center gap-2.5">
-                <span className="text-[18px] leading-none text-[#8F887C]">
-                  ⌕
-                </span>
-                <input
-                  type="text"
-                  placeholder="Cari drama..."
-                  value={searchQuery}
-                  onChange={(e) => onSearchChange(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      onSubmitSearch();
-                    }
-                  }}
-                  className="w-full bg-transparent text-[14px] text-[#F5F1E8] outline-none placeholder:text-[#8F887C]"
-                />
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={onSubmitSearch}
-                  className="shrink-0 rounded-[14px] border border-[#C9A45C]/20 bg-[#1A1C24] px-3 py-2 text-[12px] font-medium text-[#E6D3A3] transition hover:bg-[#20232D]"
+                  className="rounded-[14px] border border-[#C9A45C]/20 bg-[#14151C] px-2.5 py-2 text-[12px] text-[#E6D3A3] shadow-sm"
                 >
-                  Cari
+                  ID
+                </button>
+                <button
+                  type="button"
+                  className="rounded-[14px] bg-[#1C1F29] px-2.5 py-2 text-[12px] text-[#F5F1E8]"
+                >
+                  ˅
+                </button>
+                <button
+                  type="button"
+                  className="rounded-[16px] bg-[#1C1F29] px-3 py-2.5 text-sm text-[#F5F1E8]"
+                >
+                  •••
                 </button>
               </div>
             </div>
-          )}
 
-          <div
-            className={`grid grid-cols-4 items-center border-b border-[#181B25] pb-0 text-center ${isSearchEnabled ? "mt-4" : "mt-2"}`}
-          >
-            {sourceTabs.map((tab) => {
-              const active = sourceTab === tab.value;
+            {isSearchEnabled ? (
+              <div className="overflow-hidden rounded-[20px] border border-white/10 bg-[linear-gradient(180deg,rgba(18,19,26,0.98)_0%,rgba(12,13,19,0.98)_100%)] px-3 py-2.5 shadow-[0_12px_24px_rgba(0,0,0,0.22)]">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-[18px] leading-none text-[#8F887C]">
+                    ⌕
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="Cari drama..."
+                    value={searchQuery}
+                    onChange={(e) => onSearchChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        onSubmitSearch();
+                      }
+                    }}
+                    className="w-full bg-transparent text-[13px] text-[#F5F1E8] outline-none placeholder:text-[#8F887C]"
+                  />
+                  {searchQuery.trim().length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={onClearSearch}
+                      aria-label="Batalkan pencarian"
+                      className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[12px] font-bold leading-none text-[#A6A0B3] transition hover:border-[#C9A45C]/20 hover:bg-[#20232D] hover:text-[#F5F1E8]"
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={onSubmitSearch}
+                    className="shrink-0 rounded-[12px] border border-[#C9A45C]/20 bg-[linear-gradient(135deg,rgba(201,164,92,0.16),rgba(183,110,121,0.1))] px-3 py-1.5 text-[12px] font-medium text-[#E6D3A3] transition hover:bg-[#20232D]"
+                  >
+                    Cari
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
-              return (
-                <button
-                  key={tab.value}
-                  type="button"
-                  onClick={() => onTabChange(tab.value)}
-                  className={`relative whitespace-nowrap pb-3 text-[12px] font-semibold transition ${
-                    active ? "text-[#E6D3A3]" : "text-[#8F887C]"
-                  }`}
-                >
-                  {tab.label}
-                  {active && (
-                    <span className="absolute bottom-0 left-1/2 h-[2px] w-[58px] -translate-x-1/2 rounded-full bg-[linear-gradient(90deg,#B76E79,#C9A45C,#E6D3A3)]" />
-                  )}
-                </button>
-              );
-            })}
+            <div
+              className={`mt-2 flex items-center gap-1 overflow-x-auto rounded-[18px] border border-white/6 bg-white/[0.02] p-1.5 ${isSearchEnabled ? "" : "mt-1"}`}
+            >
+              {sourceTabs.map((tab) => {
+                const active = sourceTab === tab.value;
+
+                return (
+                  <button
+                    key={tab.value}
+                    type="button"
+                    onClick={() => onTabChange(tab.value)}
+                    className={`relative shrink-0 whitespace-nowrap rounded-[14px] px-3 py-2 text-[11px] font-semibold transition ${
+                      active
+                        ? "bg-[linear-gradient(135deg,rgba(201,164,92,0.18),rgba(183,110,121,0.16))] text-[#F0E1BF] shadow-[0_8px_18px_rgba(201,164,92,0.08)]"
+                        : "text-[#8F887C] hover:bg-white/[0.04] hover:text-[#DCC38A]"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </header>
 
-        <section className="px-3 pt-4 md:px-4 lg:px-6">
+        <section className="px-3 pt-[188px] md:px-4 md:pt-[200px] lg:px-6">
           {filteredDramas.length === 0 ? (
-            <div className="rounded-[24px] border border-white/10 bg-[#12131A] px-5 py-10 text-center shadow-[0_12px_30px_rgba(0,0,0,0.2)]">
-              <p className="text-base font-semibold text-[#F5F1E8]">
-                Server sedang menyiapkan daftar drama
+            <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(18,19,26,0.98)_0%,rgba(12,13,19,0.98)_100%)] px-5 py-10 text-center shadow-[0_18px_42px_rgba(0,0,0,0.22)]">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[22px] border border-[#C9A45C]/15 bg-[linear-gradient(135deg,rgba(201,164,92,0.12),rgba(183,110,121,0.08))] text-2xl">
+                ✦
+              </div>
+              <p className="mt-4 text-base font-semibold text-[#F5F1E8]">
+                {isNetshortSource(selectedSource)
+                  ? "Sedang memuat server"
+                  : "Server sedang menyiapkan daftar drama"}
               </p>
-              <p className="mt-2 text-sm text-[#8F887C]">
-                Mohon tunggu sebentar, kami sedang memuat konten terbaik
-                untukmu.
+              <p className="mt-2 text-sm leading-6 text-[#8F887C]">
+                {isNetshortSource(selectedSource)
+                  ? "Mohon tunggu sebentar, data Netshort sedang dimuat."
+                  : "Mohon tunggu sebentar, kami sedang memuat konten terbaik untukmu."}
               </p>
             </div>
           ) : (
@@ -613,10 +779,15 @@ export default function SourceScreen({
                       : "";
                   const safeEpisodes =
                     typeof drama.episodes === "number" ? drama.episodes : 0;
+                  const bilitvNoIndonesianSubtitle = Boolean(
+                    (drama as Drama & {
+                      bilitvNoIndonesianSubtitle?: boolean;
+                    }).bilitvNoIndonesianSubtitle,
+                  );
 
                   return (
                     <div
-                      key={`${selectedSource.slug || selectedSource.name}-${drama.id}-${drama.slug || drama.title}`}
+                      key={`${selectedSource.slug || selectedSource.name}-${sourceTab}-${drama.id}-${drama.slug || drama.title}`}
                       role="button"
                       tabIndex={0}
                       onClick={(e) => {
@@ -630,15 +801,19 @@ export default function SourceScreen({
                           onSelectDrama(drama);
                         }
                       }}
-                      className="h-full text-left"
+                      className={`h-full text-left ${
+                        isNetshortSource(selectedSource)
+                          ? "mx-auto w-full max-w-[180px] sm:max-w-[190px] md:max-w-none"
+                          : ""
+                      }`}
                     >
-                      <div className="flex h-full flex-col overflow-hidden rounded-[22px] border border-[#B76E79]/35 bg-[#12131A] shadow-[0_16px_32px_rgba(0,0,0,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_42px_rgba(0,0,0,0.28)]">
+                      <div className="group flex h-full flex-col overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(18,19,26,0.98)_0%,rgba(12,13,19,0.98)_100%)] shadow-[0_18px_40px_rgba(0,0,0,0.22)] transition hover:-translate-y-0.5 hover:border-[#C9A45C]/22 hover:shadow-[0_24px_48px_rgba(0,0,0,0.3)]">
                         <div className="relative aspect-[0.72] w-full overflow-hidden bg-[#0D0F15]">
                           {hasPosterImage ? (
                             <img
                               src={posterSrc}
                               alt={drama.title}
-                              className="absolute inset-0 h-full w-full object-cover"
+                              className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
                               loading="lazy"
                               referrerPolicy="no-referrer"
                               onError={(e) => {
@@ -655,12 +830,13 @@ export default function SourceScreen({
                             } ${hasPosterImage ? "opacity-0" : "opacity-100"}`}
                           />
 
-                          <div className="absolute inset-0 bg-black/18" />
-                          <div className="absolute inset-0 bg-gradient-to-t from-[#090B12]/92 via-transparent to-transparent" />
+                          <div className="absolute inset-0 bg-black/16" />
+                          <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/30 to-transparent" />
+                          <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-[#090B12]/96 via-[#090B12]/18 to-transparent" />
 
                           <div className="absolute left-2 top-2 flex items-center gap-1">
                             <span
-                              className={`rounded-full px-2 py-1 text-[9px] font-bold leading-none ${badgeClass}`}
+                              className={`rounded-full px-2 py-1 text-[9px] font-bold leading-none shadow-[0_6px_16px_rgba(0,0,0,0.18)] ${badgeClass}`}
                             >
                               {badgeLabel}
                             </span>
@@ -689,10 +865,10 @@ export default function SourceScreen({
                                 ? "Hapus dari favorit"
                                 : "Tambah ke favorit"
                             }
-                            className={`absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full border text-[12px] shadow-[0_3px_8px_rgba(0,0,0,0.18)] backdrop-blur-sm transition ${
+                            className={`absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full border text-[12px] shadow-[0_6px_16px_rgba(0,0,0,0.22)] backdrop-blur-sm transition ${
                               isFavorite
                                 ? "border-[#C9A45C]/35 bg-[linear-gradient(135deg,rgba(201,164,92,0.22),rgba(183,110,121,0.18))] text-[#F5E6C5]"
-                                : "border-white/8 bg-[#11131B]/88 text-white/90"
+                                : "border-white/10 bg-[#11131B]/88 text-white/90"
                             } ${
                               !isTelegramReady
                                 ? "cursor-not-allowed opacity-50"
@@ -704,27 +880,38 @@ export default function SourceScreen({
                             </span>
                           </button>
 
-                          {safeEpisodes > 0 && (
-                            <div className="absolute bottom-2 right-2 rounded-full border border-white/8 bg-[#11131B]/90 px-2 py-1 text-[10px] font-bold text-[#F5F1E8]">
+                          {safeEpisodes > 0 ? (
+                            <div className="absolute bottom-2 right-2 rounded-full border border-white/10 bg-[#11131B]/92 px-2 py-1 text-[10px] font-bold text-[#F5F1E8] backdrop-blur-sm">
                               {safeEpisodes} Eps
                             </div>
-                          )}
+                          ) : null}
                         </div>
 
-                        <div className="flex min-h-[84px] flex-col border-t border-white/6 px-3 pb-2 pt-2">
-                          <p className="line-clamp-2 min-h-[32px] text-[12px] font-semibold leading-[1.25] text-[#F5F1E8]">
+                        <div className="flex min-h-[92px] flex-col border-t border-white/6 px-3 pb-3 pt-2.5">
+                          <p className="line-clamp-2 min-h-[34px] text-[12px] font-semibold leading-[1.32] text-[#F5F1E8]">
                             {drama.title}
                           </p>
 
+                          {isBilitvSource(selectedSource) &&
+                          bilitvNoIndonesianSubtitle ? (
+                            <div className="mt-1.5 inline-flex w-fit items-center rounded-full border border-red-400/20 bg-red-500/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-red-200">
+                              No Subtitle
+                            </div>
+                          ) : null}
+
                           {safeDescription ? (
-                            <p className="mt-1 line-clamp-2 text-[11px] leading-[1.35] text-[#A6A0B3]">
+                            <p className="mt-1.5 line-clamp-2 text-[11px] leading-[1.42] text-[#A6A0B3]">
                               {safeDescription}
                             </p>
                           ) : safeTags.length > 0 ? (
-                            <p className="mt-1 line-clamp-2 text-[11px] leading-[1.35] text-[#A6A0B3]">
+                            <p className="mt-1.5 line-clamp-2 text-[11px] leading-[1.42] text-[#A6A0B3]">
                               {safeTags.slice(0, 3).join(" • ")}
                             </p>
-                          ) : null}
+                          ) : (
+                            <p className="mt-1.5 text-[11px] text-[#6F6A61]">
+                              Tap untuk buka detail
+                            </p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -732,104 +919,154 @@ export default function SourceScreen({
                 })}
               </div>
 
-              {showMeloloPagination ? (
-                <div className="mt-5 flex items-center justify-center gap-3">
-                  <button
-                    type="button"
-                    onClick={onMeloloPrevPage}
-                    disabled={meloloOffset <= 0}
-                    className="rounded-[16px] border border-white/10 bg-[#12131A] px-4 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-40"
+              {showDramaBoxPagination ? (
+                <div className="mt-4 flex items-center justify-center gap-2">
+                  <PaginationButton
+                    onClick={onDramaBoxPrevPage}
+                    disabled={dramaBoxPage <= 1}
                   >
                     ← Prev
-                  </button>
-
-                  <span className="text-sm text-[#8F887C]">
-                    Page {meloloOffset + 1}
+                  </PaginationButton>
+                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-[#8F887C]">
+                    Page {dramaBoxPage}
                   </span>
-
-                  <button
-                    type="button"
-                    onClick={onMeloloNextPage}
-                    className="rounded-[16px] border border-white/10 bg-[#12131A] px-4 py-2 text-sm text-white"
+                  <PaginationButton
+                    onClick={onDramaBoxNextPage}
+                    disabled={!dramaBoxHasNextPage}
                   >
                     Next →
-                  </button>
+                  </PaginationButton>
+                </div>
+              ) : null}
+
+              {showMeloloPagination ? (
+                <div className="mt-4 flex items-center justify-center gap-2">
+                  <PaginationButton
+                    onClick={onMeloloPrevPage}
+                    disabled={meloloOffset <= 0}
+                  >
+                    ← Prev
+                  </PaginationButton>
+                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-[#8F887C]">
+                    Page {meloloOffset + 1}
+                  </span>
+                  <PaginationButton onClick={onMeloloNextPage}>
+                    Next →
+                  </PaginationButton>
                 </div>
               ) : null}
 
               {showFlickreelsPagination ? (
-                <div className="mt-5 flex items-center justify-center gap-3">
-                  <button
-                    type="button"
+                <div className="mt-4 flex items-center justify-center gap-2">
+                  <PaginationButton
                     onClick={onFlickreelsPrevPage}
                     disabled={flickreelsPage <= 1}
-                    className="rounded-[16px] border border-white/10 bg-[#12131A] px-4 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     ← Prev
-                  </button>
-
-                  <span className="text-sm text-[#8F887C]">
+                  </PaginationButton>
+                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-[#8F887C]">
                     Page {flickreelsPage}
                   </span>
-
-                  <button
-                    type="button"
-                    onClick={onFlickreelsNextPage}
-                    className="rounded-[16px] border border-white/10 bg-[#12131A] px-4 py-2 text-sm text-white"
-                  >
+                  <PaginationButton onClick={onFlickreelsNextPage}>
                     Next →
-                  </button>
+                  </PaginationButton>
                 </div>
               ) : null}
 
               {showShortmaxPagination ? (
-                <div className="mt-5 flex items-center justify-center gap-3">
-                  <button
-                    type="button"
+                <div className="mt-4 flex items-center justify-center gap-2">
+                  <PaginationButton
                     onClick={onShortmaxPrevPage}
                     disabled={shortmaxPage <= 1}
-                    className="rounded-[16px] border border-white/10 bg-[#12131A] px-4 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     ← Prev
-                  </button>
-
-                  <span className="text-sm text-[#8F887C]">
+                  </PaginationButton>
+                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-[#8F887C]">
                     Page {shortmaxPage}
                   </span>
-
-                  <button
-                    type="button"
-                    onClick={onShortmaxNextPage}
-                    className="rounded-[16px] border border-white/10 bg-[#12131A] px-4 py-2 text-sm text-white"
-                  >
+                  <PaginationButton onClick={onShortmaxNextPage}>
                     Next →
-                  </button>
+                  </PaginationButton>
                 </div>
               ) : null}
 
               {showGoodshortPagination && sourceTab !== "Trending" ? (
-                <div className="mt-5 flex items-center justify-center gap-3">
-                  <button
-                    type="button"
+                <div className="mt-4 flex items-center justify-center gap-2">
+                  <PaginationButton
                     onClick={onGoodshortPrevPage}
                     disabled={goodshortPage <= 1}
-                    className="rounded-[16px] border border-white/10 bg-[#12131A] px-4 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     ← Prev
-                  </button>
-
-                  <span className="text-sm text-[#8F887C]">
+                  </PaginationButton>
+                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-[#8F887C]">
                     Page {goodshortPage}
                   </span>
-
-                  <button
-                    type="button"
+                  <PaginationButton
                     onClick={onGoodshortNextPage}
                     disabled={!goodshortHasNextPage}
-                    className="rounded-[16px] border border-white/10 bg-[#12131A] px-4 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Next →
-                  </button>
+                  </PaginationButton>
+                </div>
+              ) : null}
+
+              {showReelifePagination ? (
+                <div className="mt-4 flex items-center justify-center gap-2">
+                  <PaginationButton
+                    onClick={onReelifePrevPage}
+                    disabled={reelifePage <= 1}
+                  >
+                    ← Prev
+                  </PaginationButton>
+                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-[#8F887C]">
+                    Page {reelifePage}
+                  </span>
+                  <PaginationButton
+                    onClick={onReelifeNextPage}
+                    disabled={!reelifeHasNextPage}
+                  >
+                    Next →
+                  </PaginationButton>
+                </div>
+              ) : null}
+
+              {showStardusttvPagination ? (
+                <div className="mt-4 flex items-center justify-center gap-2">
+                  <PaginationButton
+                    onClick={onStardusttvPrevPage}
+                    disabled={stardusttvPage <= 1}
+                  >
+                    ← Prev
+                  </PaginationButton>
+                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-[#8F887C]">
+                    Page {stardusttvPage}
+                  </span>
+                  <PaginationButton
+                    onClick={onStardusttvNextPage}
+                    disabled={!stardusttvHasNextPage || stardusttvPage >= 5}
+                  >
+                    Next →
+                  </PaginationButton>
+                </div>
+              ) : null}
+
+              {showBilitvPagination ? (
+                <div className="mt-4 flex items-center justify-center gap-2">
+                  <PaginationButton
+                    onClick={onBilitvPrevPage}
+                    disabled={bilitvPage <= 1}
+                  >
+                    ← Prev
+                  </PaginationButton>
+                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-[#8F887C]">
+                    Page {bilitvPage}
+                  </span>
+                  <PaginationButton
+                    onClick={onBilitvNextPage}
+                    disabled={!bilitvHasNextPage}
+                  >
+                    Next →
+                  </PaginationButton>
                 </div>
               ) : null}
             </>

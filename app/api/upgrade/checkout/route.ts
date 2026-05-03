@@ -34,6 +34,17 @@ export async function POST(request: Request) {
       );
     }
 
+    if (user.role === "reviewer_demo" || user.is_demo_verification === true) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "REVIEWER_DEMO_DISABLED",
+          message: "Mode reviewer iPaymu sudah dinonaktifkan.",
+        },
+        { status: 403 }
+      );
+    }
+
     if (user.membership_status === "vip") {
       return NextResponse.json(
         {
@@ -87,13 +98,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const telegramUserIdRaw =
-      user.telegram_user_id ??
-      user.telegram_id ??
-      user.telegramId ??
-      null;
-
-    const telegramUserId = Number(telegramUserIdRaw || 0);
+    const telegramUserId = Number(user.telegram_user_id || 0);
 
     if (!telegramUserId || Number.isNaN(telegramUserId) || telegramUserId <= 0) {
       return NextResponse.json(
@@ -107,14 +112,14 @@ export async function POST(request: Request) {
     }
 
     const appBaseUrl = getBaseUrl();
-    const returnUrl = `${appBaseUrl}/upgrade?status=success`;
+    const returnUrl = `${appBaseUrl}/?tab=profile&payment=success`;
     const cancelUrl = `${appBaseUrl}/upgrade?status=cancelled`;
 
     const upstreamResponse = await fetch(`${vipServerBaseUrl}/web/checkout`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": webCheckoutToken,
+        "x-web-token": webCheckoutToken,
       },
       body: JSON.stringify({
         telegram_id: telegramUserId,
@@ -152,10 +157,10 @@ export async function POST(request: Request) {
 
     const checkoutUrl =
       (data && typeof data === "object" && (
-        (data as any).checkout_url ||
-        (data as any).payment_url ||
-        (data as any).invoice_url ||
-        (data as any).pay_url
+        data.checkout_url ||
+        data.payment_url ||
+        data.invoice_url ||
+        data.pay_url
       )) ||
       null;
 
@@ -176,8 +181,14 @@ export async function POST(request: Request) {
       package_code: packageCode,
       package: PACKAGE_CONFIG[packageCode],
       checkout_url: checkoutUrl,
+      payment_url:
+        (data && typeof data === "object" && (data.payment_url || data.checkout_url || data.invoice_url || data.pay_url)) || null,
+      qr_image:
+        (data && typeof data === "object" && (data.qr_image || (data.payment && data.payment.qr_image))) || null,
+      expired_at:
+        (data && typeof data === "object" && (data.expired_at || (data.payment && data.payment.expired_at))) || null,
       invoice_id:
-        (data && typeof data === "object" && ((data as any).invoice_id || (data as any).invoice_no)) || null,
+        (data && typeof data === "object" && (data.invoice_id || data.invoice_no)) || null,
       upstream: data,
     });
   } catch (error) {

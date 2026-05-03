@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  GOODSHORT_CODE,
-  GOODSHORT_LANG,
-  GOODSHORT_SEARCH_SIZE,
   fetchGoodshortJson,
   normalizeGoodshortFeed,
   readPositiveInt,
@@ -10,22 +7,42 @@ import {
 
 export async function GET(request: NextRequest) {
   try {
-    const query = request.nextUrl.searchParams.get("query")?.trim() ?? "";
+    const query =
+      request.nextUrl.searchParams.get("query")?.trim() ||
+      request.nextUrl.searchParams.get("q")?.trim() ||
+      "";
     const page = readPositiveInt(request, "page", 1);
 
     if (!query) {
-      return NextResponse.json([]);
+      return NextResponse.json(
+        {
+          items: [],
+          hasNextPage: false,
+          page,
+        },
+        { status: 200 },
+      );
     }
 
     const payload = await fetchGoodshortJson("/search", {
-      lang: GOODSHORT_LANG,
       q: query,
       page,
-      size: GOODSHORT_SEARCH_SIZE,
-      code: GOODSHORT_CODE,
     });
 
-    return NextResponse.json(normalizeGoodshortFeed(payload, "Search"));
+    const items = normalizeGoodshortFeed(payload, "Search");
+
+    return NextResponse.json(
+      {
+        items,
+        hasNextPage: false,
+        page,
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      },
+    );
   } catch (error) {
     return NextResponse.json(
       {

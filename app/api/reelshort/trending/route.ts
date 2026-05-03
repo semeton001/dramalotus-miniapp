@@ -1,11 +1,19 @@
-import { respondDramaFeed } from "../_shared";
+import { respondCombinedDramaFeed } from "../_shared";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export const dynamic = "auto";
+export const revalidate = 30;
+
+function getReelShortCode() {
+  return process.env.REELSHORT_DEFAULT_CODE?.trim() || "";
+}
 
 export async function GET() {
-  return respondDramaFeed(
-    "https://reelshort.dramabos.my.id/trending?lang=in",
+  const code = getReelShortCode();
+
+  return respondCombinedDramaFeed(
+    [
+      `https://streamapi.web.id/p/reelshort/api/v1/completed?lang=in&token=${encodeURIComponent(code)}`,
+    ],
     1,
   );
 }

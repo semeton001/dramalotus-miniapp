@@ -18,11 +18,20 @@ type MeloloHomeBook = {
 
 type MeloloSearchItem = {
   id?: string | number;
+  book_id?: string | number;
   name?: string;
+  title?: string;
+  book_name?: string;
   intro?: string;
+  abstract?: string;
   cover?: string;
+  thumb_url?: string;
   episodes?: string | number;
+  serial_count?: string | number;
   author?: string;
+  source?: string;
+  status?: string;
+  language?: string;
   [key: string]: unknown;
 };
 
@@ -76,6 +85,15 @@ function firstNonEmptyString(...values: unknown[]): string {
   return "";
 }
 
+function proxyMeloloImageUrl(url: string): string {
+  const trimmed = url.trim();
+  if (!trimmed) return "";
+
+  if (trimmed.startsWith("/api/melolo/image?")) return trimmed;
+
+  return `/api/melolo/image?url=${encodeURIComponent(trimmed)}`;
+}
+
 function createStableNumericId(seed: string, fallback = 0): number {
   if (!seed.trim()) return fallback;
 
@@ -127,7 +145,7 @@ function adaptMeloloHomeBook(book: MeloloHomeBook, index: number): Drama {
   const meloloDramaId = firstNonEmptyString(book.book_id);
   const title = firstNonEmptyString(book.book_name, "Tanpa Judul");
   const description = firstNonEmptyString(book.abstract);
-  const posterImage = firstNonEmptyString(book.thumb_url);
+  const posterImage = proxyMeloloImageUrl(firstNonEmptyString(book.thumb_url, book.first_chapter_cover));
   const episodeCount = asNumber(book.serial_count, 0);
   const stableId = createStableNumericId(
     meloloDramaId || title,
@@ -164,18 +182,23 @@ function adaptMeloloHomeBook(book: MeloloHomeBook, index: number): Drama {
 }
 
 function adaptMeloloSearchItem(item: MeloloSearchItem, index: number): Drama {
-  const meloloDramaId = firstNonEmptyString(item.id);
-  const title = firstNonEmptyString(item.name, "Tanpa Judul");
-  const description = firstNonEmptyString(item.intro);
-  const posterImage = firstNonEmptyString(item.cover);
-  const episodeCount = asNumber(item.episodes, 0);
+  const meloloDramaId = firstNonEmptyString(item.id, item.book_id);
+  const title = firstNonEmptyString(item.name, item.title, item.book_name, "Tanpa Judul");
+  const description = firstNonEmptyString(item.intro, item.abstract);
+  const posterImage = proxyMeloloImageUrl(firstNonEmptyString(item.cover, item.thumb_url));
+  const episodeCount = asNumber(item.episodes, asNumber(item.serial_count, 0));
   const stableId = createStableNumericId(
     meloloDramaId || title,
     episodeCount || index + 1,
   );
 
   const tags = Array.from(
-    new Set([firstNonEmptyString(item.author), "Drama"].filter(Boolean)),
+    new Set([
+      firstNonEmptyString(item.author),
+      firstNonEmptyString(item.source),
+      firstNonEmptyString(item.status),
+      "Drama",
+    ].filter(Boolean)),
   ).slice(0, 8);
 
   return {
@@ -212,22 +235,47 @@ function extractHomeBooks(payload: unknown): MeloloHomeBook[] {
   if (!payload || typeof payload !== "object") return [];
 
   const root = payload as Record<string, unknown>;
-  const data = root.data as Record<string, unknown> | undefined;
-  const cell = data?.cell as Record<string, unknown> | undefined;
-  const cellData = Array.isArray(cell?.cell_data) ? cell.cell_data : [];
-
   const books: MeloloHomeBook[] = [];
 
-  for (const item of cellData) {
-    if (!item || typeof item !== "object") continue;
+  const pushBooksFromCellData = (cellData: unknown) => {
+    if (!Array.isArray(cellData)) return;
 
-    const typedItem = item as Record<string, unknown>;
-    const itemBooks = Array.isArray(typedItem.books) ? typedItem.books : [];
+    for (const item of cellData) {
+      if (!item || typeof item !== "object") continue;
 
-    for (const book of itemBooks) {
-      if (book && typeof book === "object") {
-        books.push(book as MeloloHomeBook);
+      const typedItem = item as Record<string, unknown>;
+      const itemBooks = Array.isArray(typedItem.books) ? typedItem.books : [];
+
+      for (const book of itemBooks) {
+        if (book && typeof book === "object") {
+          books.push(book as MeloloHomeBook);
+        }
       }
+    }
+  };
+
+  const data = root.data as Record<string, unknown> | undefined;
+  const rootCell = root.cell as Record<string, unknown> | undefined;
+  const dataCell = data?.cell as Record<string, unknown> | undefined;
+
+  pushBooksFromCellData(rootCell?.cell_data);
+  pushBooksFromCellData(dataCell?.cell_data);
+
+  const bookTabInfos = Array.isArray(root.book_tab_infos)
+    ? root.book_tab_infos
+    : Array.isArray(data?.book_tab_infos)
+      ? data?.book_tab_infos
+      : [];
+
+  for (const tabInfo of bookTabInfos) {
+    if (!tabInfo || typeof tabInfo !== "object") continue;
+
+    const cells = (tabInfo as Record<string, unknown>).cells;
+    if (!Array.isArray(cells)) continue;
+
+    for (const cell of cells) {
+      if (!cell || typeof cell !== "object") continue;
+      pushBooksFromCellData((cell as Record<string, unknown>).cell_data);
     }
   }
 
@@ -239,8 +287,11 @@ function extractSearchItems(payload: unknown): MeloloSearchItem[] {
 
   const root = payload as Record<string, unknown>;
   const data = Array.isArray(root.data) ? root.data : [];
+  const items = Array.isArray(root.items) ? root.items : [];
 
-  return data.filter(
+  const list = items.length > 0 ? items : data;
+
+  return list.filter(
     (item): item is MeloloSearchItem => !!item && typeof item === "object",
   );
 }

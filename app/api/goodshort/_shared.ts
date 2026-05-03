@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import type { Drama } from "@/types/drama";
 import type { Episode } from "@/types/episode";
 
-export const GOODSHORT_BASE_URL = "https://goodshort.dramabos.my.id";
-export const GOODSHORT_LANG = "in";
+export const GOODSHORT_BASE_URL = "https://streamapi.web.id/p/goodshort/api/v1";
+export const GOODSHORT_LANG = "id";
+export const GOODSHORT_TOKEN =
+  "KFKiMIbY3Np8kbimDo7lJDNSVslwF3Fn64cI0TOtqpOP373n58ca6BKzbDsLb7qB";
 export const GOODSHORT_CODE = "4D96F22760EA30FB0FFBA9AA87A979A6";
 export const GOODSHORT_HOME_SIZE = 20;
 export const GOODSHORT_SEARCH_SIZE = 15;
@@ -66,12 +68,24 @@ export async function fetchGoodshortJson(
   path: string,
   searchParams?: Record<string, string | number | undefined>,
 ): Promise<unknown> {
-  const url = new URL(path, GOODSHORT_BASE_URL);
+  const normalizedPath = path.startsWith("/")
+    ? path.slice(1)
+    : path;
+
+  const baseUrl = GOODSHORT_BASE_URL.endsWith("/")
+    ? GOODSHORT_BASE_URL
+    : `${GOODSHORT_BASE_URL}/`;
+
+  const url = new URL(normalizedPath, baseUrl);
 
   Object.entries(searchParams ?? {}).forEach(([key, value]) => {
     if (value === undefined || value === null || value === "") return;
     url.searchParams.set(key, String(value));
   });
+
+  if (!url.searchParams.has("token")) {
+    url.searchParams.set("token", GOODSHORT_TOKEN);
+  }
 
   const response = await fetch(url.toString(), {
     method: "GET",
@@ -97,21 +111,34 @@ export function extractListPayload(payload: unknown): unknown[] {
   if (Array.isArray(payload)) return payload;
   if (!isRecord(payload)) return [];
 
-  if (Array.isArray(payload.data)) return payload.data;
-  if (Array.isArray(payload.list)) return payload.list;
-  if (Array.isArray(payload.items)) return payload.items;
+  const flattenWrappers = (items: unknown[]): unknown[] => {
+    const nested = items.flatMap((entry) => {
+      if (!isRecord(entry)) return [];
+      if (Array.isArray(entry.items)) return entry.items;
+      if (Array.isArray(entry.list)) return entry.list;
+      if (Array.isArray(entry.records)) return entry.records;
+      return [];
+    });
+
+    return nested.length > 0 ? nested : items;
+  };
+
+  if (Array.isArray(payload.data)) return flattenWrappers(payload.data);
+  if (Array.isArray(payload.list)) return flattenWrappers(payload.list);
+  if (Array.isArray(payload.items)) return flattenWrappers(payload.items);
 
   const dataNode = isRecord(payload.data) ? payload.data : null;
   if (!dataNode) return [];
 
-  if (Array.isArray(dataNode.list)) return dataNode.list;
-  if (Array.isArray(dataNode.items)) return dataNode.items;
-  if (Array.isArray(dataNode.data)) return dataNode.data;
+  if (Array.isArray(dataNode.list)) return flattenWrappers(dataNode.list);
+  if (Array.isArray(dataNode.items)) return flattenWrappers(dataNode.items);
+  if (Array.isArray(dataNode.data)) return flattenWrappers(dataNode.data);
 
   if (Array.isArray(dataNode.records)) {
     const flattened = dataNode.records.flatMap((entry) => {
       if (!isRecord(entry)) return [];
       if (Array.isArray(entry.items)) return entry.items;
+      if (Array.isArray(entry.list)) return entry.list;
       return [entry];
     });
     if (flattened.length > 0) return flattened;
@@ -125,6 +152,17 @@ export function extractListPayload(payload: unknown): unknown[] {
   }
 
   return [];
+}
+
+export function normalizeGoodshortImageUrl(value: string): string {
+  const trimmed = value.trim();
+
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+
+  const normalized = trimmed.startsWith("/") ? trimmed.slice(1) : trimmed;
+
+  return `https://acfs1.goodreels.com/${normalized}`;
 }
 
 function normalizeStringArray(value: unknown): string[] {
@@ -175,27 +213,39 @@ export function buildGoodshortDrama(
       "tags",
     ) || "Tanpa Judul";
 
-  const coverImage = pickString(
+  const rawCoverImage = pickString(
     item,
     "cover",
+    "coverUrl",
+    "cover_url",
+    "image",
+    "imageUrl",
+    "image_url",
     "bookDetailCover",
     "coverImage",
     "poster",
     "posterImage",
-    "image",
     "thumbnail",
   );
 
-  const posterImage =
+  const rawPosterImage =
     pickString(
       item,
-      "bookDetailCover",
       "cover",
+      "coverUrl",
+      "cover_url",
+      "image",
+      "imageUrl",
+      "image_url",
       "posterImage",
       "poster",
-      "image",
+      "coverImage",
       "thumbnail",
-    ) || coverImage;
+      "bookDetailCover",
+    ) || rawCoverImage;
+
+  const coverImage = normalizeGoodshortImageUrl(rawCoverImage);
+  const posterImage = normalizeGoodshortImageUrl(rawPosterImage);
 
   const tags = Array.from(
     new Set([
@@ -300,11 +350,15 @@ export async function hydrateDramaWithBookDetail(
 
   const title = pickString(detail, "bookName", "title", "name") || drama.title;
   const coverImage =
-    pickString(detail, "cover", "bookDetailCover", "coverImage") ||
+    normalizeGoodshortImageUrl(
+      pickString(detail, "cover", "coverImage", "bookDetailCover"),
+    ) ||
     drama.coverImage ||
     "";
   const posterImage =
-    pickString(detail, "bookDetailCover", "cover", "posterImage") ||
+    normalizeGoodshortImageUrl(
+      pickString(detail, "cover", "posterImage", "coverImage", "bookDetailCover"),
+    ) ||
     drama.posterImage ||
     coverImage;
   const description =

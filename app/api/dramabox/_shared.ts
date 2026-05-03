@@ -3,8 +3,10 @@ import type { Drama } from "@/types/drama";
 import type { Episode } from "@/types/episode";
 import type { DramaBoxDramaResponse } from "@/lib/adapters/drama/dramabox";
 
-export const DRAMABOX_BASE_URL = "https://dramabox.dramabos.my.id/api/v1";
+export const DRAMABOX_BASE_URL = "https://streamapi.web.id/p/dramaboxv2/api";
 export const DRAMABOX_LANG = "in";
+export const DRAMABOX_TOKEN =
+  "KFKiMIbY3Np8kbimDo7lJDNSVslwF3Fn64cI0TOtqpOP373n58ca6BKzbDsLb7qB";
 export const DRAMABOX_EPISODE_CODE =
   process.env.DRAMABOX_EPISODE_CODE?.trim() ||
   "4D96F22760EA30FB0FFBA9AA87A979A6";
@@ -12,10 +14,35 @@ export const DRAMABOX_EPISODE_CODE =
 export type DramaBoxEpisodeItem = {
   chapterId?: string | number;
   chapterIndex?: string | number;
-  isCharge?: boolean;
+  chapterName?: string;
+  episode?: string | number;
+  cover?: string;
+  isCharge?: boolean | number;
+  isPay?: boolean | number;
   videoUrl?: string;
+  url?: string;
   ["1080p"]?: string;
+  ["720p"]?: string;
 };
+
+
+export function buildDramaBoxApiUrl(
+  path: string,
+  params?: Record<string, string | number | undefined | null>,
+): string {
+  const url = new URL(`${DRAMABOX_BASE_URL}${path}`);
+  url.searchParams.set("lang", DRAMABOX_LANG);
+  url.searchParams.set("token", DRAMABOX_TOKEN);
+
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === "") return;
+      url.searchParams.set(key, String(value));
+    });
+  }
+
+  return url.toString();
+}
 
 export function getLang(req?: NextRequest) {
   return req?.nextUrl.searchParams.get("lang") || DRAMABOX_LANG;
@@ -134,22 +161,51 @@ export function mergeUniqueDramaBoxItems(
 
 export async function fetchDramaBoxHomePage(page: number, lang = DRAMABOX_LANG) {
   return fetchJson(
-    `${DRAMABOX_BASE_URL}/homepage?page=${page}&lang=${lang}`,
+    buildDramaBoxApiUrl("/home", {
+      page,
+      size: 50,
+      lang,
+    }),
+  );
+}
+
+export async function fetchDramaBoxRanking(lang = DRAMABOX_LANG) {
+  return fetchJson(buildDramaBoxApiUrl("/rank", { lang }));
+}
+
+export async function fetchDramaBoxForYou(lang = DRAMABOX_LANG) {
+  return fetchJson(
+    buildDramaBoxApiUrl("/theater", {
+      channelId: 205,
+      lang,
+    }),
+  );
+}
+
+export async function fetchDramaBoxSearch(
+  keyword: string,
+  page = 1,
+  lang = DRAMABOX_LANG,
+) {
+  return fetchJson(
+    buildDramaBoxApiUrl("/search", {
+      keyword,
+      page,
+      lang,
+    }),
   );
 }
 
 export async function fetchDramaBoxLatest(lang = DRAMABOX_LANG) {
-  return fetchJson(`${DRAMABOX_BASE_URL}/latest?lang=${lang}`);
+  return fetchDramaBoxRanking(lang);
 }
 
 export async function fetchDramaBoxDubbed(page: number, lang = DRAMABOX_LANG) {
-  return fetchJson(
-    `${DRAMABOX_BASE_URL}/dubbed?classify=terpopuler&page=${page}&lang=${lang}`,
-  );
+  return fetchDramaBoxForYou(lang);
 }
 
 export async function fetchDramaBoxPopular(lang = DRAMABOX_LANG) {
-  return fetchJson(`${DRAMABOX_BASE_URL}/populersearch?lang=${lang}`);
+  return fetchDramaBoxRanking(lang);
 }
 
 export async function fetchDramaBoxEpisodeList(
@@ -158,7 +214,10 @@ export async function fetchDramaBoxEpisodeList(
   code = DRAMABOX_EPISODE_CODE,
 ) {
   const response = await fetch(
-    `${DRAMABOX_BASE_URL}/allepisode?bookId=${encodeURIComponent(bookId)}&lang=${lang}&code=${encodeURIComponent(code)}`,
+    buildDramaBoxApiUrl(`/drama/${encodeURIComponent(bookId)}/episodes`, {
+      quality: 720,
+      lang,
+    }),
     {
       method: "GET",
       headers: {
@@ -172,7 +231,7 @@ export async function fetchDramaBoxEpisodeList(
 
   if (!response.ok) {
     throw new Error(
-      `DramaBox allepisode request failed with status ${response.status}`,
+      `DramaBox episodes request failed with status ${response.status}`,
     );
   }
 
@@ -214,14 +273,24 @@ export function adaptDramaBoxEpisode(
   bookId: string,
   index = 0,
 ): Episode {
-  const chapterIndex = getNumber(item.chapterIndex, index + 1);
-  const chapterId = getString(item.chapterId) || `${bookId}-${chapterIndex}`;
+  const episodeNumber =
+    getNumber(item.episode) ||
+    getNumber(item.chapterIndex, index) + 1 ||
+    index + 1;
+
+  const chapterId = getString(item.chapterId) || `${bookId}-${episodeNumber}`;
   const upstreamVideoUrl =
-    getString(item.videoUrl) || getString(item["1080p"]);
+    getString(item.url) ||
+    getString(item.videoUrl) ||
+    getString(item["720p"]) ||
+    getString(item["1080p"]);
 
   const proxiedVideoUrl = upstreamVideoUrl
     ? `/api/dramabox/stream?u=${encodeUrlToken(upstreamVideoUrl)}`
     : "";
+
+  const title = getString(item.chapterName) || `Episode ${episodeNumber}`;
+  const isPaid = Boolean(item.isCharge) || Boolean(item.isPay);
 
   return {
     id:
@@ -229,16 +298,16 @@ export function adaptDramaBoxEpisode(
       Number(chapterId.replace(/\D/g, "")) ||
       createStableNumericId(`${bookId}:${chapterId}`, index + 1),
     dramaId: Number(bookId),
-    episodeNumber: chapterIndex,
-    title: `Episode ${chapterIndex}`,
+    episodeNumber,
+    title,
     duration: "",
     description: "",
-    thumbnail: undefined,
+    thumbnail: getString(item.cover) || undefined,
     videoUrl: proxiedVideoUrl,
     originalVideoUrl: upstreamVideoUrl || undefined,
-    isLocked: Boolean(item.isCharge),
-    isVipOnly: Boolean(item.isCharge),
-    sortOrder: chapterIndex,
+    isLocked: isPaid,
+    isVipOnly: isPaid,
+    sortOrder: episodeNumber,
     dramaboxChapterId: chapterId || undefined,
     dramaboxBookId: bookId || undefined,
   };
@@ -248,7 +317,30 @@ export function mapDramaBoxEpisodes(
   rawItems: unknown,
   bookId: string,
 ): Episode[] {
-  const items: DramaBoxEpisodeItem[] = Array.isArray(rawItems) ? rawItems : [];
+  const root =
+    rawItems && typeof rawItems === "object"
+      ? (rawItems as Record<string, unknown>)
+      : {};
+
+  const nestedData =
+    root.data && typeof root.data === "object"
+      ? (root.data as Record<string, unknown>)
+      : {};
+
+  const nestedDataData =
+    nestedData.data && typeof nestedData.data === "object"
+      ? (nestedData.data as Record<string, unknown>)
+      : {};
+
+  const items: DramaBoxEpisodeItem[] = Array.isArray(rawItems)
+    ? rawItems
+    : Array.isArray(nestedData.episodes)
+      ? (nestedData.episodes as DramaBoxEpisodeItem[])
+      : Array.isArray(nestedDataData.episodes)
+        ? (nestedDataData.episodes as DramaBoxEpisodeItem[])
+        : Array.isArray(nestedDataData.list)
+          ? (nestedDataData.list as DramaBoxEpisodeItem[])
+          : [];
 
   return items
     .map((item, index) => adaptDramaBoxEpisode(item, bookId, index))

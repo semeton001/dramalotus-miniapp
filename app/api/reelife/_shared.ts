@@ -400,7 +400,7 @@ export function toFeedPayload(
 ): ReelifeFeedPayload {
   return {
     items,
-    hasNextPage,
+    hasNextPage: false,
     page,
   };
 }
@@ -411,4 +411,13 @@ export function jsonFeed(
   hasNextPage: boolean,
 ): NextResponse {
   return NextResponse.json(toFeedPayload(items, page, hasNextPage));
+}
+
+
+export function buildReelifeFeedResponse(items: Drama[], page = 1) {
+  return {
+    items,
+    hasNextPage: false,
+    page,
+  };
 }

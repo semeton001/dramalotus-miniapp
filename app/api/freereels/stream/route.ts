@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/auth/getCurrentUser";
+import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
+import { createStreamToken, verifyStreamToken } from "@/lib/stream/token";
+import { checkStreamRateLimit } from "@/lib/rate-limit/stream";
 import {
   getFreeReelsCode,
   resolvePlayData,
@@ -17,16 +21,42 @@ function toAbsoluteUrl(baseUrl: string, value: string): string {
   }
 }
 
-function rewriteUriAttribute(line: string, manifestUrl: string): string {
+function hasSameOrigin(left: string, right: string): boolean {
+  try {
+    return new URL(left).origin === new URL(right).origin;
+  } catch {
+    return false;
+  }
+}
+
+function buildSignedProxyUrl(_url: string, token: string): string {
+  return `/api/freereels/stream?token=${encodeURIComponent(token)}`;
+}
+
+type VerifiedStreamToken = NonNullable<ReturnType<typeof verifyStreamToken>>;
+
+function buildChildSignedProxyUrl(url: string, parentPayload: VerifiedStreamToken): string {
+  const childToken = createStreamToken({
+    provider: parentPayload.provider,
+    userId: parentPayload.userId,
+    episodeKey: parentPayload.episodeKey,
+    url,
+  });
+
+  return buildSignedProxyUrl(url, childToken);
+}
+
+function rewriteUriAttribute(line: string, manifestUrl: string, tokenPayload: VerifiedStreamToken): string {
   return line.replace(/URI="([^"]+)"/g, (_match, uri) => {
     const absolute = toAbsoluteUrl(manifestUrl, uri);
-    return `URI="/api/freereels/stream?url=${encodeURIComponent(absolute)}"`;
+    return `URI="${buildChildSignedProxyUrl(absolute, tokenPayload)}"`;
   });
 }
 
 function rewriteM3u8Manifest(
   manifestText: string,
   manifestUrl: string,
+  tokenPayload: VerifiedStreamToken,
 ): string {
   const lines = manifestText.split(/\r?\n/);
 
@@ -37,15 +67,15 @@ function rewriteM3u8Manifest(
       if (!trimmed) return line;
 
       if (trimmed.startsWith("#EXT-X-KEY:")) {
-        return rewriteUriAttribute(line, manifestUrl);
+        return rewriteUriAttribute(line, manifestUrl, tokenPayload);
       }
 
       if (trimmed.startsWith("#EXT-X-MAP:")) {
-        return rewriteUriAttribute(line, manifestUrl);
+        return rewriteUriAttribute(line, manifestUrl, tokenPayload);
       }
 
       if (trimmed.startsWith("#EXT-X-MEDIA:")) {
-        return rewriteUriAttribute(line, manifestUrl);
+        return rewriteUriAttribute(line, manifestUrl, tokenPayload);
       }
 
       if (trimmed.startsWith("#")) {
@@ -56,7 +86,7 @@ function rewriteM3u8Manifest(
         ? trimmed
         : toAbsoluteUrl(manifestUrl, trimmed);
 
-      return `/api/freereels/stream?url=${encodeURIComponent(absolute)}`;
+      return buildChildSignedProxyUrl(absolute, tokenPayload);
     })
     .join("\n");
 }
@@ -179,11 +209,35 @@ function extractSubtitleUrlFromPlayPayload(payload: unknown): string {
 }
 
 export async function GET(request: NextRequest) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return NextResponse.json(
+      { ok: false, error: "Unauthorized" },
+      { status: 401 },
+    );
+  }
+
   try {
     const passthroughUrl = request.nextUrl.searchParams.get("url") || "";
+    const token = request.nextUrl.searchParams.get("token") || "";
+    const tokenPayload = token ? verifyStreamToken(token) : null;
+    const tokenTargetUrl = tokenPayload?.url || "";
+    const targetUrl = passthroughUrl.trim() || tokenTargetUrl;
 
-    if (passthroughUrl.trim()) {
-      const targetUrl = passthroughUrl.trim();
+    if (targetUrl.trim()) {
+      if (
+        !tokenPayload ||
+        tokenPayload.provider !== "freereels" ||
+        tokenPayload.userId !== user.id ||
+        !hasSameOrigin(tokenPayload.url, targetUrl)
+      ) {
+        return NextResponse.json(
+          { ok: false, error: "Invalid or expired stream token" },
+          { status: 403 },
+        );
+      }
+
       const upstream = await fetch(targetUrl, {
         cache: "no-store",
         headers: buildPassthroughHeaders(request),
@@ -211,7 +265,7 @@ export async function GET(request: NextRequest) {
 
       if (isManifest) {
         const manifestText = await upstream.text();
-        const rewrittenManifest = rewriteM3u8Manifest(manifestText, targetUrl);
+        const rewrittenManifest = rewriteM3u8Manifest(manifestText, targetUrl, tokenPayload);
 
         return new NextResponse(rewrittenManifest, {
           status: 200,
@@ -247,13 +301,46 @@ export async function GET(request: NextRequest) {
       request.nextUrl.searchParams.get("episodeId") ||
       request.nextUrl.searchParams.get("ep") ||
       "";
-    const code = request.nextUrl.searchParams.get("code") || getFreeReelsCode();
+    const code = getFreeReelsCode();
 
     if (!dramaId.trim() || !episodeId.trim()) {
       return NextResponse.json(
         { error: "Parameter dramaId dan episodeId wajib diisi." },
         { status: 400 },
       );
+    }
+
+    const episodeNumber = Number(episodeId.trim());
+
+    if (!Number.isInteger(episodeNumber) || episodeNumber < 1) {
+      return NextResponse.json(
+        { error: "episodeId tidak valid." },
+        { status: 400 },
+      );
+    }
+
+    const isFreeEpisode = episodeNumber <= FREE_EPISODE_LIMIT;
+
+    if (!isFreeEpisode && user.membership_status !== "vip") {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "VIP_REQUIRED",
+          message: "Episode ini hanya untuk VIP.",
+        },
+        { status: 403 },
+      );
+    }
+
+    if (user.membership_status === "vip" && user.vip_until) {
+      const expiresAt = new Date(user.vip_until).getTime();
+
+      if (!Number.isNaN(expiresAt) && expiresAt <= Date.now()) {
+        return NextResponse.json(
+          { ok: false, error: "VIP_EXPIRED" },
+          { status: 403 },
+        );
+      }
     }
 
     const payload = await resolvePlayData(
@@ -270,8 +357,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const streamToken = createStreamToken({
+      provider: "freereels",
+      userId: user.id,
+      episodeKey: `${dramaId.trim()}:${episodeId.trim()}`,
+      url: playableUrl,
+    });
+
     return NextResponse.json({
-      url: `/api/freereels/stream?url=${encodeURIComponent(playableUrl)}`,
+      url: buildSignedProxyUrl(playableUrl, streamToken),
       subtitleUrl: extractSubtitleUrlFromPlayPayload(payload),
     });
   } catch (error) {

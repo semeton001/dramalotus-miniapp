@@ -48,6 +48,33 @@ function stripSubtitleTags(value: string): string {
   return value.replace(/<[^>]+>/g, "").trim();
 }
 
+function formatOverlaySubtitleText(value: string, maxCharsPerLine = 30): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+
+  if (!normalized) return "";
+  if (normalized.length <= maxCharsPerLine) return normalized;
+
+  const words = normalized.split(" ");
+  const targetLength = Math.ceil(normalized.length / 2);
+  let firstLine = "";
+  let secondLine = "";
+
+  for (const word of words) {
+    const nextFirstLine = firstLine ? `${firstLine} ${word}` : word;
+
+    if (
+      firstLine.length < targetLength &&
+      nextFirstLine.length <= maxCharsPerLine + 8
+    ) {
+      firstLine = nextFirstLine;
+    } else {
+      secondLine = secondLine ? `${secondLine} ${word}` : word;
+    }
+  }
+
+  return secondLine ? `${firstLine}\n${secondLine}` : firstLine;
+}
+
 function parseTimestamp(value: string): number {
   const cleaned = value.trim().replace(",", ".");
   const [hours, minutes, seconds] = cleaned.split(":");
@@ -255,7 +282,24 @@ export default function PlayerScreen({
   onCompleteAd,
   onClickAdCta,
 }: PlayerScreenProps) {
+  useEffect(() => {
+    const header = document.querySelector("body > header") as HTMLElement | null;
+
+    if (!header) return;
+
+    const previousDisplay = header.style.display;
+    header.style.display = "none";
+
+    return () => {
+      header.style.display = previousDisplay;
+    };
+  }, []);
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [dramawaveSubtitleCues, setDramawaveSubtitleCues] = useState<
+    SubtitleCue[]
+  >([]);
+  const [activeDramawaveSubtitle, setActiveDramawaveSubtitle] = useState("");
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
   const pendingAutoplayRef = useRef(false);
@@ -269,6 +313,8 @@ export default function PlayerScreen({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [videoError, setVideoError] = useState<string | null>(null);
+  const [isPreparingVideoPlayback, setIsPreparingVideoPlayback] =
+    useState(false);
   const [shouldAutoplayNext, setShouldAutoplayNext] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showFullscreenControls, setShowFullscreenControls] = useState(true);
@@ -278,6 +324,8 @@ export default function PlayerScreen({
 
   const [resolvedReelifeUrl, setResolvedReelifeUrl] = useState("");
   const [isResolvingReelife, setIsResolvingReelife] = useState(false);
+  const [resolvedReelShortUrl, setResolvedReelShortUrl] = useState("");
+  const [isResolvingReelShort, setIsResolvingReelShort] = useState(false);
   const [resolvedFreeReelsUrl, setResolvedFreeReelsUrl] = useState("");
   const [resolvedFreeReelsSubtitleUrl, setResolvedFreeReelsSubtitleUrl] =
     useState("");
@@ -292,6 +340,21 @@ export default function PlayerScreen({
     SubtitleCue[]
   >([]);
   const [activeFreeReelsSubtitle, setActiveFreeReelsSubtitle] = useState("");
+
+  const [dramapopsSubtitleCues, setDramapopsSubtitleCues] = useState<
+    SubtitleCue[]
+  >([]);
+  const [activeDramapopsSubtitle, setActiveDramapopsSubtitle] = useState("");
+
+  const [dramanovaSubtitleCues, setDramanovaSubtitleCues] = useState<
+    SubtitleCue[]
+  >([]);
+  const [activeDramanovaSubtitle, setActiveDramanovaSubtitle] = useState("");
+
+  const [bilitvSubtitleCues, setBilitvSubtitleCues] = useState<
+    SubtitleCue[]
+  >([]);
+  const [activeBilitvSubtitle, setActiveBilitvSubtitle] = useState("");
 
   const isNetshortDrama = useMemo(() => {
     return (
@@ -342,6 +405,27 @@ export default function PlayerScreen({
     );
   }, [selectedDrama]);
 
+  const isDramapopsDrama = useMemo(() => {
+    return (
+      selectedDrama.sourceName === "Dramapops" ||
+      selectedDrama.source?.toLowerCase() === "dramapops"
+    );
+  }, [selectedDrama]);
+
+  const isDramanovaDrama = useMemo(() => {
+    return (
+      selectedDrama.sourceName === "DramaNova" ||
+      selectedDrama.source?.toLowerCase() === "dramanova"
+    );
+  }, [selectedDrama]);
+
+  const isBilitvDrama = useMemo(() => {
+    return (
+      selectedDrama.sourceName === "BiliTV" ||
+      selectedDrama.source?.toLowerCase() === "bilitv"
+    );
+  }, [selectedDrama]);
+
   const isVip = membershipStatus === "vip";
   const shouldPrepareAds = shouldShowAds && !isVip;
 
@@ -389,7 +473,10 @@ export default function PlayerScreen({
     isIdramaDrama ||
     isReelifeDrama ||
     isFreeReelsDrama ||
-    isReelShortDrama;
+    isReelShortDrama ||
+    isDramapopsDrama ||
+    isDramanovaDrama ||
+    isBilitvDrama;
 
   const rawVideoSrc = useMemo(
     () => selectedEpisode?.videoUrl?.trim() ?? "",
@@ -401,6 +488,10 @@ export default function PlayerScreen({
       return resolvedReelifeUrl;
     }
 
+    if (isReelShortDrama) {
+      return resolvedReelShortUrl;
+    }
+
     if (isFreeReelsDrama) {
       return resolvedFreeReelsUrl;
     }
@@ -408,11 +499,18 @@ export default function PlayerScreen({
     return rawVideoSrc;
   }, [
     isReelifeDrama,
+    isReelShortDrama,
     isFreeReelsDrama,
     rawVideoSrc,
     resolvedReelifeUrl,
+    resolvedReelShortUrl,
     resolvedFreeReelsUrl,
   ]);
+
+  const isResolvingVideo =
+    (isReelifeDrama && isResolvingReelife) ||
+    (isReelShortDrama && isResolvingReelShort) ||
+    (isFreeReelsDrama && isResolvingFreeReels);
 
   const subtitleSrc = useMemo(() => {
     if (isFreeReelsDrama) {
@@ -444,6 +542,14 @@ export default function PlayerScreen({
     () => buildEpisodeIdentity(selectedEpisode),
     [selectedEpisode],
   );
+
+  useEffect(() => {
+    if (videoSrc) {
+      setIsPreparingVideoPlayback(true);
+    } else {
+      setIsPreparingVideoPlayback(false);
+    }
+  }, [videoSrc, selectedEpisodeIdentity]);
 
   const currentEpisodeIndex = useMemo(() => {
     if (!selectedEpisode) return -1;
@@ -640,6 +746,85 @@ export default function PlayerScreen({
   useEffect(() => {
     let cancelled = false;
 
+    async function resolveReelShortStream() {
+      if (!isReelShortDrama) {
+        setResolvedReelShortUrl("");
+        setIsResolvingReelShort(false);
+        return;
+      }
+
+      const reelShortId =
+        (selectedDrama.reelShortRawId?.trim?.() || "") ||
+        (selectedDrama.reelShortSlug?.replace(/^reelshort-/, "").trim?.() || "") ||
+        (selectedDrama.slug?.replace(/^reelshort-/, "").trim?.() || "");
+
+      const episodeId =
+        (selectedEpisode?.reelShortEpisodeId?.trim?.() || "") ||
+        (selectedEpisode?.reelShortVideoId?.trim?.() || "");
+
+      const episodeNumber =
+        typeof selectedEpisode?.episodeNumber === "number"
+          ? selectedEpisode.episodeNumber
+          : Number(selectedEpisode?.episodeNumber || 0);
+
+      if (!reelShortId || !episodeId) {
+        setResolvedReelShortUrl("");
+        setIsResolvingReelShort(false);
+        return;
+      }
+
+      setIsResolvingReelShort(true);
+      setResolvedReelShortUrl("");
+      setVideoError(null);
+
+      try {
+        const response = await fetch(
+          `/api/reelshort/stream?id=${encodeURIComponent(reelShortId)}&episodeId=${encodeURIComponent(episodeId)}&episodeNumber=${encodeURIComponent(String(episodeNumber))}`,
+          { cache: "no-store" },
+        );
+
+        const json = await response.json();
+
+        if (cancelled) return;
+
+        if (!response.ok || !json?.url) {
+          throw new Error(json?.error || "Gagal resolve stream ReelShort");
+        }
+
+        setResolvedReelShortUrl(json.url);
+      } catch (error) {
+        if (cancelled) return;
+
+        setResolvedReelShortUrl("");
+        setVideoError(
+          error instanceof Error
+            ? error.message
+            : "Gagal resolve stream ReelShort",
+        );
+      } finally {
+        if (!cancelled) {
+          setIsResolvingReelShort(false);
+        }
+      }
+    }
+
+    void resolveReelShortStream();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isReelShortDrama,
+    selectedDrama.reelShortRawId,
+    selectedDrama.reelShortSlug,
+    selectedDrama.slug,
+    selectedEpisode?.reelShortEpisodeId,
+    selectedEpisode?.reelShortVideoId,
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+
     async function resolveFreeReelsStream() {
       if (!isFreeReelsDrama) {
         setResolvedFreeReelsUrl("");
@@ -734,9 +919,6 @@ export default function PlayerScreen({
           ? String(selectedEpisode.episodeNumber)
           : "");
 
-      const code =
-        selectedEpisode?.freereelsCode || selectedDrama.freereelsCode || "";
-
       if (!dramaId || !episodeId) {
         setResolvedFreeReelsSubtitleUrl(fallbackSubtitle);
         return;
@@ -744,7 +926,7 @@ export default function PlayerScreen({
 
       try {
         const response = await fetch(
-          `/api/freereels/stream?dramaId=${encodeURIComponent(dramaId)}&episodeId=${encodeURIComponent(episodeId)}&code=${encodeURIComponent(code)}`,
+          `/api/freereels/stream?dramaId=${encodeURIComponent(dramaId)}&episodeId=${encodeURIComponent(episodeId)}`,
           { cache: "no-store" },
         );
 
@@ -832,6 +1014,21 @@ export default function PlayerScreen({
       setActiveFreeReelsSubtitle("");
     }
 
+    if (isDramapopsDrama) {
+      setDramapopsSubtitleCues([]);
+      setActiveDramapopsSubtitle("");
+    }
+
+    if (isDramanovaDrama) {
+      setDramanovaSubtitleCues([]);
+      setActiveDramanovaSubtitle("");
+    }
+
+    if (isBilitvDrama) {
+      setBilitvSubtitleCues([]);
+      setActiveBilitvSubtitle("");
+    }
+
     if (videoSrc) {
       pendingAutoplayRef.current = true;
       setShouldAutoplayNext(true);
@@ -916,7 +1113,10 @@ export default function PlayerScreen({
 
     const isHlsStream =
       videoSrc.includes(".m3u8") ||
-      videoSrc.includes("application/vnd.apple.mpegurl");
+      videoSrc.includes("application/vnd.apple.mpegurl") ||
+      videoSrc.includes("/api/dramawave/stream") ||
+      videoSrc.includes("/api/freereels/stream") ||
+      videoSrc.includes("/api/reelshort/stream");
 
     if (!isHlsStream) {
       video.src = videoSrc;
@@ -961,6 +1161,16 @@ export default function PlayerScreen({
     hlsRef.current = hls;
 
     const handleManifestParsed = async () => {
+      const preferredLevelIndex = hls.levels.findIndex((level) => {
+        return level.height === 720;
+      });
+
+      if (preferredLevelIndex >= 0) {
+        hls.currentLevel = preferredLevelIndex;
+        hls.loadLevel = preferredLevelIndex;
+        hls.nextLevel = preferredLevelIndex;
+      }
+
       if (shouldAutoplayNext && videoSrc) {
         await tryAutoplay();
       }
@@ -988,17 +1198,21 @@ export default function PlayerScreen({
 
       switch (data.type) {
         case Hls.ErrorTypes.NETWORK_ERROR:
-          setVideoError("Jaringan bermasalah saat memuat video.");
+          setVideoError(
+            `HLS NETWORK_ERROR: ${errorInfo.details}${errorInfo.reason ? ` - ${errorInfo.reason}` : ""}`,
+          );
           hls.startLoad();
           break;
         case Hls.ErrorTypes.MEDIA_ERROR:
           setVideoError(
-            "Video berhasil dimuat, tetapi codec video tidak sepenuhnya didukung WebView ini.",
+            `HLS MEDIA_ERROR: ${errorInfo.details}${errorInfo.reason ? ` - ${errorInfo.reason}` : ""}`,
           );
           hls.recoverMediaError();
           break;
         default:
-          setVideoError("Video gagal diputar di browser ini.");
+          setVideoError(
+            `HLS ERROR: ${errorInfo.type}/${errorInfo.details}${errorInfo.reason ? ` - ${errorInfo.reason}` : ""}`,
+          );
           hls.destroy();
           hlsRef.current = null;
       }
@@ -1040,11 +1254,25 @@ export default function PlayerScreen({
   }, []);
 
   useEffect(() => {
-    if ((!isNetshortDrama && !isFreeReelsDrama) || !subtitleSrc) {
+    if (
+      !subtitleSrc ||
+      (!isNetshortDrama &&
+        !isFreeReelsDrama &&
+        !isDramapopsDrama &&
+        !isDramanovaDrama &&
+        !isBilitvDrama &&
+        !subtitleSrc.includes("/api/dramawave/subtitle"))
+    ) {
       setNetshortSubtitleCues([]);
       setActiveNetshortSubtitle("");
       setFreeReelsSubtitleCues([]);
       setActiveFreeReelsSubtitle("");
+      setDramapopsSubtitleCues([]);
+      setActiveDramapopsSubtitle("");
+      setDramanovaSubtitleCues([]);
+      setActiveDramanovaSubtitle("");
+      setBilitvSubtitleCues([]);
+      setActiveBilitvSubtitle("");
       return;
     }
 
@@ -1080,6 +1308,39 @@ export default function PlayerScreen({
           );
           setActiveFreeReelsSubtitle("");
         }
+
+        if (isDramapopsDrama) {
+          setDramapopsSubtitleCues(
+            mergeFastSubtitleCues(cues, {
+              maxGap: 0.28,
+              maxDuration: 4.8,
+              maxCharsPerLine: 24,
+            }),
+          );
+          setActiveDramapopsSubtitle("");
+        }
+
+        if (isDramanovaDrama) {
+          setDramanovaSubtitleCues(
+            mergeFastSubtitleCues(cues, {
+              maxGap: 0.28,
+              maxDuration: 4.8,
+              maxCharsPerLine: 24,
+            }),
+          );
+          setActiveDramanovaSubtitle("");
+        }
+
+        if (subtitleSrc.includes("/api/dramawave/subtitle")) {
+          setDramawaveSubtitleCues(
+            mergeFastSubtitleCues(cues, {
+              maxGap: 0.18,
+              maxDuration: 4.2,
+              maxCharsPerLine: 30,
+            }),
+          );
+          setActiveDramawaveSubtitle("");
+        }
       } catch (error) {
         console.error("Gagal memuat subtitle overlay:", error);
         if (!cancelled) {
@@ -1092,6 +1353,26 @@ export default function PlayerScreen({
             setFreeReelsSubtitleCues([]);
             setActiveFreeReelsSubtitle("");
           }
+
+          if (isDramapopsDrama) {
+            setDramapopsSubtitleCues([]);
+            setActiveDramapopsSubtitle("");
+          }
+
+          if (isDramanovaDrama) {
+            setDramanovaSubtitleCues([]);
+            setActiveDramanovaSubtitle("");
+          }
+
+          if (isBilitvDrama) {
+            setBilitvSubtitleCues([]);
+            setActiveBilitvSubtitle("");
+          }
+
+          if (subtitleSrc.includes("/api/dramawave/subtitle")) {
+            setDramawaveSubtitleCues([]);
+            setActiveDramawaveSubtitle("");
+          }
         }
       }
     };
@@ -1101,7 +1382,56 @@ export default function PlayerScreen({
     return () => {
       cancelled = true;
     };
-  }, [isNetshortDrama, isFreeReelsDrama, subtitleSrc]);
+  }, [isNetshortDrama, isFreeReelsDrama, isDramapopsDrama, isDramanovaDrama, isBilitvDrama, subtitleSrc]);
+
+  useEffect(() => {
+    if (!isBilitvDrama || !subtitleSrc) {
+      setBilitvSubtitleCues([]);
+      setActiveBilitvSubtitle("");
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadBilitvSubtitle = async () => {
+      try {
+        const response = await fetch(subtitleSrc, {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error(`BiliTV subtitle fetch failed: ${response.status}`);
+        }
+
+        const text = await response.text();
+        if (cancelled) return;
+
+        const cues = parseSubtitleText(text);
+
+        setBilitvSubtitleCues(
+          mergeFastSubtitleCues(cues, {
+            maxGap: 0.28,
+            maxDuration: 4.8,
+            maxCharsPerLine: 24,
+          }),
+        );
+        setActiveBilitvSubtitle("");
+      } catch (error) {
+        console.error("Gagal memuat subtitle BiliTV overlay:", error);
+
+        if (!cancelled) {
+          setBilitvSubtitleCues([]);
+          setActiveBilitvSubtitle("");
+        }
+      }
+    };
+
+    void loadBilitvSubtitle();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isBilitvDrama, subtitleSrc]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -1153,19 +1483,158 @@ export default function PlayerScreen({
     };
   }, [isFreeReelsDrama, freeReelsSubtitleCues]);
 
+  useEffect(() => {
+    const video = videoRef.current;
+
+    if (!video || !isDramapopsDrama || dramapopsSubtitleCues.length === 0) {
+      setActiveDramapopsSubtitle("");
+      return;
+    }
+
+    const updateSubtitle = () => {
+      const current = video.currentTime;
+      const activeCue = dramapopsSubtitleCues.find(
+        (cue) => current >= cue.start && current <= cue.end,
+      );
+
+      setActiveDramapopsSubtitle(
+        activeCue?.text ? formatOverlaySubtitleText(activeCue.text, 24) : "",
+      );
+    };
+
+    video.addEventListener("timeupdate", updateSubtitle);
+    video.addEventListener("seeked", updateSubtitle);
+    updateSubtitle();
+
+    return () => {
+      video.removeEventListener("timeupdate", updateSubtitle);
+      video.removeEventListener("seeked", updateSubtitle);
+    };
+  }, [isDramapopsDrama, dramapopsSubtitleCues]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+
+    if (!video || !isDramanovaDrama || dramanovaSubtitleCues.length === 0) {
+      setActiveDramanovaSubtitle("");
+      return;
+    }
+
+    const updateSubtitle = () => {
+      const current = video.currentTime;
+      const activeCue = dramanovaSubtitleCues.find(
+        (cue) => current >= cue.start && current <= cue.end,
+      );
+
+      setActiveDramanovaSubtitle(
+        activeCue?.text ? formatOverlaySubtitleText(activeCue.text, 24) : "",
+      );
+    };
+
+    video.addEventListener("timeupdate", updateSubtitle);
+    video.addEventListener("seeked", updateSubtitle);
+    updateSubtitle();
+
+    return () => {
+      video.removeEventListener("timeupdate", updateSubtitle);
+      video.removeEventListener("seeked", updateSubtitle);
+    };
+  }, [isDramanovaDrama, dramanovaSubtitleCues]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+
+    if (!video || !isBilitvDrama || bilitvSubtitleCues.length === 0) {
+      setActiveBilitvSubtitle("");
+      return;
+    }
+
+    const updateSubtitle = () => {
+      const current = video.currentTime;
+      const activeCue = bilitvSubtitleCues.find(
+        (cue) => current >= cue.start && current <= cue.end,
+      );
+
+      setActiveBilitvSubtitle(
+        activeCue?.text ? formatOverlaySubtitleText(activeCue.text, 24) : "",
+      );
+    };
+
+    video.addEventListener("timeupdate", updateSubtitle);
+    video.addEventListener("seeked", updateSubtitle);
+    video.addEventListener("playing", updateSubtitle);
+
+    const intervalId = window.setInterval(updateSubtitle, 250);
+    updateSubtitle();
+
+    return () => {
+      video.removeEventListener("timeupdate", updateSubtitle);
+      video.removeEventListener("seeked", updateSubtitle);
+      video.removeEventListener("playing", updateSubtitle);
+      window.clearInterval(intervalId);
+    };
+  }, [isBilitvDrama, bilitvSubtitleCues]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    const isDramawaveSubtitle =
+      subtitleSrc?.includes("/api/dramawave/subtitle") ?? false;
+
+    if (!video || !isDramawaveSubtitle || dramawaveSubtitleCues.length === 0) {
+      setActiveDramawaveSubtitle("");
+      return;
+    }
+
+    const updateSubtitle = () => {
+      const current = video.currentTime;
+      const activeCue = dramawaveSubtitleCues.find(
+        (cue) => current >= cue.start && current <= cue.end,
+      );
+
+      setActiveDramawaveSubtitle(
+        activeCue?.text ? formatOverlaySubtitleText(activeCue.text, 30) : "",
+      );
+    };
+
+    video.addEventListener("timeupdate", updateSubtitle);
+    video.addEventListener("seeked", updateSubtitle);
+    updateSubtitle();
+
+    return () => {
+      video.removeEventListener("timeupdate", updateSubtitle);
+      video.removeEventListener("seeked", updateSubtitle);
+    };
+  }, [subtitleSrc, dramawaveSubtitleCues]);
+
   const handleLoadedMetadata = async () => {
     const video = videoRef.current;
     if (!video) return;
 
     setDuration(video.duration || 0);
 
-    if (
+    const disableNativeTextTracks = () => {
+      if (!video.textTracks || video.textTracks.length === 0) return;
+
+      for (let i = 0; i < video.textTracks.length; i += 1) {
+        video.textTracks[i].mode = "disabled";
+      }
+    };
+
+    if (isBilitvDrama) {
+      disableNativeTextTracks();
+
+      window.setTimeout(disableNativeTextTracks, 250);
+      window.setTimeout(disableNativeTextTracks, 1000);
+    } else if (
       !isNetshortDrama &&
       !isShortmaxDrama &&
       !isGoodshortDrama &&
       !isIdramaDrama &&
       !isReelifeDrama &&
       !isFreeReelsDrama &&
+      !isDramapopsDrama &&
+      !isDramanovaDrama &&
+      !subtitleSrc?.includes("/api/dramawave/subtitle") &&
       subtitleSrc &&
       video.textTracks &&
       video.textTracks.length > 0
@@ -1177,7 +1646,10 @@ export default function PlayerScreen({
 
     const isHlsStream =
       videoSrc.includes(".m3u8") ||
-      videoSrc.includes("application/vnd.apple.mpegurl");
+      videoSrc.includes("application/vnd.apple.mpegurl") ||
+      videoSrc.includes("/api/dramawave/stream") ||
+      videoSrc.includes("/api/freereels/stream") ||
+      videoSrc.includes("/api/reelshort/stream");
 
     if (!isHlsStream && pendingAutoplayRef.current && videoSrc) {
       await tryAutoplay();
@@ -1284,6 +1756,7 @@ export default function PlayerScreen({
 
   const handleVideoError = () => {
     pendingAutoplayRef.current = false;
+    setIsPreparingVideoPlayback(false);
     setVideoError("Gagal memuat video episode ini.");
     setIsPlaying(false);
     setShouldAutoplayNext(false);
@@ -1403,10 +1876,10 @@ export default function PlayerScreen({
         <div className="fixed inset-0 z-[140] bg-transparent" />
       ) : null}
       <div
-        className={`mx-auto min-h-screen w-full ${isFullscreen ? "max-w-none px-0 pb-0 pt-0" : "max-w-md px-4 pb-32 pt-20"}`}
+        className={`mx-auto min-h-screen w-full ${isFullscreen ? "max-w-none px-0 pb-0 pt-0" : "max-w-md px-4 pb-32 pt-3"}`}
       >
         <div
-          className={`fixed left-4 top-4 z-30 ${isFullscreen ? "hidden" : ""}`}
+          className={`mb-3 ${isFullscreen ? "hidden" : ""}`}
         >
           <button
             onClick={onBack}
@@ -1560,6 +2033,7 @@ export default function PlayerScreen({
                     </div>
                   </div>
                 ) : videoSrc ? (
+                  <>
                   <video
                     key={
                       isFreeReelsDrama
@@ -1579,17 +2053,58 @@ export default function PlayerScreen({
                     onTouchStart={revealFullscreenControls}
                     onMouseMove={revealFullscreenControls}
                     onLoadedMetadata={handleLoadedMetadata}
+                    onLoadedData={() => {
+                      // Tetap tampilkan spinner sampai video benar-benar playing.
+                    }}
+                    onCanPlay={() => {
+                      // Tetap tampilkan spinner sampai video benar-benar playing.
+                    }}
+                    onPlaying={() => {
+                      setIsPreparingVideoPlayback(false);
+                    }}
+                    onWaiting={() => {
+                      if (!videoError) {
+                        setIsPreparingVideoPlayback(true);
+                      }
+                    }}
+                    onStalled={() => {
+                      if (!videoError) {
+                        setIsPreparingVideoPlayback(true);
+                      }
+                    }}
+                    onSeeking={() => {
+                      const video = videoRef.current;
+                      if (!videoError && video && !video.paused && !video.ended) {
+                        setIsPreparingVideoPlayback(true);
+                      }
+                    }}
+                    onSeeked={() => {
+                      const video = videoRef.current;
+                      if (video && !video.paused && !video.ended) {
+                        setIsPreparingVideoPlayback(false);
+                      }
+                    }}
                     onTimeUpdate={handleTimeUpdate}
                     onPlay={() => {
                       setIsPlaying(true);
+                      if (!videoError) {
+                        setIsPreparingVideoPlayback(true);
+                      }
                       revealFullscreenControls();
                     }}
                     onPause={() => {
                       setIsPlaying(false);
                       setShowFullscreenControls(true);
+                      setIsPreparingVideoPlayback(false);
                     }}
-                    onEnded={handleVideoEnded}
-                    onError={handleVideoError}
+                    onEnded={() => {
+                      setIsPreparingVideoPlayback(false);
+                      handleVideoEnded();
+                    }}
+                    onError={() => {
+                      setIsPreparingVideoPlayback(false);
+                      handleVideoError();
+                    }}
                   >
                     {!isNetshortDrama &&
                     !isShortmaxDrama &&
@@ -1597,7 +2112,11 @@ export default function PlayerScreen({
                     !isIdramaDrama &&
                     !isReelifeDrama &&
                     !isFreeReelsDrama &&
-                    subtitleSrc ? (
+                    !isDramapopsDrama &&
+                    !isDramanovaDrama &&
+                    !isBilitvDrama &&
+                    subtitleSrc &&
+                    !subtitleSrc.includes("/api/dramawave/subtitle") ? (
                       <track
                         kind="subtitles"
                         src={subtitleSrc}
@@ -1607,6 +2126,42 @@ export default function PlayerScreen({
                       />
                     ) : null}
                   </video>
+                    {isPreparingVideoPlayback && !videoError ? (
+                      <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-black/60">
+                        <div className="flex flex-col items-center text-center">
+                          <div className="h-11 w-11 animate-spin rounded-full border-2 border-white/15 border-t-[#C9A45C]" />
+                          <p className="mt-3 text-sm font-medium text-white/75">
+                            Memuat video...
+                          </p>
+                          <p className="mt-1 text-xs text-white/40">
+                            Menyiapkan pemutaran
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+                    {activeDramawaveSubtitle ? (
+                      <div className="pointer-events-none absolute inset-x-0 bottom-[22%] z-30 flex justify-center px-5">
+                        <div className="max-w-[82%] whitespace-pre-line text-center text-[18px] font-semibold leading-tight text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.98),0_0_4px_rgba(0,0,0,0.9)]">
+                          {activeDramawaveSubtitle}
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
+
+                ) : isLoadingEpisodes || isResolvingVideo ? (
+                  <div className="flex h-full items-center justify-center px-6 text-center">
+                    <div>
+                      <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-white/20 border-t-white/70" />
+                      <p className="mt-3 text-sm text-white/65">
+                        {isLoadingEpisodes
+                          ? "Memuat data episode..."
+                          : "Menyiapkan video..."}
+                      </p>
+                      <p className="mt-1 text-xs text-white/40">
+                        Mohon tunggu sebentar
+                      </p>
+                    </div>
+                  </div>
                 ) : (
                   <div className="flex h-full items-center justify-center px-6 text-center">
                     <div>
@@ -1679,6 +2234,30 @@ export default function PlayerScreen({
                   </div>
                 ) : null}
 
+                {isDramapopsDrama && activeDramapopsSubtitle ? (
+                  <div className="pointer-events-none absolute left-1/2 top-[68%] z-30 w-[76%] -translate-x-1/2 -translate-y-1/2 text-center">
+                    <div className="mx-auto whitespace-pre-line break-words text-center text-[16px] font-semibold leading-6 text-white [text-shadow:0_2px_6px_rgba(0,0,0,0.98),0_0_4px_rgba(0,0,0,0.9)]">
+                      {activeDramapopsSubtitle}
+                    </div>
+                  </div>
+                ) : null}
+
+                {isDramanovaDrama && activeDramanovaSubtitle ? (
+                  <div className="pointer-events-none absolute left-1/2 top-[68%] z-30 w-[78%] -translate-x-1/2 -translate-y-1/2 text-center">
+                    <div className="mx-auto whitespace-pre-line break-words text-center text-[18px] font-semibold leading-6 text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.88),0_0_2px_rgba(0,0,0,0.72)]">
+                      {activeDramanovaSubtitle}
+                    </div>
+                  </div>
+                ) : null}
+
+                {isBilitvDrama && activeBilitvSubtitle ? (
+                  <div className="pointer-events-none absolute left-1/2 top-[58%] z-50 w-[86%] -translate-x-1/2 -translate-y-1/2 text-center">
+                    <div className="mx-auto whitespace-pre-line break-words text-center text-[18px] font-bold leading-6 text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.95),0_0_4px_rgba(0,0,0,0.9)]">
+                      {activeBilitvSubtitle}
+                    </div>
+                  </div>
+                ) : null}
+
                 {isFullscreen && videoSrc ? (
                   <div
                     className={`pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/85 via-black/35 to-transparent px-4 pb-8 pt-16 transition-opacity duration-300 ${
@@ -1727,7 +2306,7 @@ export default function PlayerScreen({
                   </div>
                 ) : null}
 
-                {videoSrc ? (
+                {videoSrc && !isPreparingVideoPlayback ? (
                   <div
                     className={`pointer-events-none absolute inset-0 z-20 transition-opacity duration-300 ${
                       showFullscreenControls ? "opacity-100" : "opacity-0"

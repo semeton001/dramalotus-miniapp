@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/auth/getCurrentUser";
+import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
+import { createStreamToken, verifyStreamToken } from "@/lib/stream/token";
+import { checkStreamRateLimit } from "@/lib/rate-limit/stream";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const ALLOWED_PROTOCOLS = new Set(["http:", "https:"]);
+const DRAMAWAVE_DRAMA_BASE_URL =
+  "https://streamapi.web.id/p/dramawave/api/v1/dramas";
+
+const DRAMAWAVE_TOKEN = process.env.DRAMAWAVE_TOKEN?.trim() || "";
+
 const HOP_BY_HOP_HEADERS = new Set([
   "connection",
   "keep-alive",
@@ -18,6 +27,8 @@ const HOP_BY_HOP_HEADERS = new Set([
   "host",
 ]);
 
+type VerifiedStreamToken = NonNullable<ReturnType<typeof verifyStreamToken>>;
+
 function buildCorsHeaders(contentType?: string | null) {
   return {
     "Access-Control-Allow-Origin": "*",
@@ -27,14 +38,6 @@ function buildCorsHeaders(contentType?: string | null) {
       "Content-Length, Content-Range, Accept-Ranges, Content-Type",
     ...(contentType ? { "Content-Type": contentType } : {}),
   };
-}
-
-function encodeUrlToken(value: string): string {
-  return Buffer.from(value, "utf8").toString("base64url");
-}
-
-function decodeUrlToken(value: string): string {
-  return Buffer.from(value, "base64url").toString("utf8");
 }
 
 function isLikelyPlaylist(contentType: string | null, url: URL): boolean {
@@ -59,16 +62,21 @@ function isValidDecodedUrl(value: string): boolean {
   }
 }
 
-function toProxyUrl(resolved: URL, request: NextRequest): string {
-  const proxyBase = new URL("/api/dramawave/stream", request.url);
-  proxyBase.searchParams.set("u", encodeUrlToken(resolved.toString()));
-  return proxyBase.toString();
+function toProxyUrl(resolved: URL, parentPayload: VerifiedStreamToken): string {
+  const childToken = createStreamToken({
+    provider: parentPayload.provider,
+    userId: parentPayload.userId,
+    episodeKey: parentPayload.episodeKey,
+    url: resolved.toString(),
+  });
+
+  return `/api/dramawave/stream?token=${encodeURIComponent(childToken)}`;
 }
 
 function rewriteDirectiveUris(
   line: string,
   upstreamUrl: URL,
-  request: NextRequest,
+  parentPayload: VerifiedStreamToken,
 ): string {
   return line.replace(/URI="([^"]+)"/g, (_match, uriValue: string) => {
     try {
@@ -78,7 +86,7 @@ function rewriteDirectiveUris(
         return `URI="${uriValue}"`;
       }
 
-      return `URI="${toProxyUrl(resolved, request)}"`;
+      return `URI="${toProxyUrl(resolved, parentPayload)}"`;
     } catch {
       return `URI="${uriValue}"`;
     }
@@ -88,19 +96,17 @@ function rewriteDirectiveUris(
 function rewritePlaylist(
   body: string,
   upstreamUrl: URL,
-  request: NextRequest,
+  parentPayload: VerifiedStreamToken,
 ): string {
   return body
     .split(/\r?\n/)
     .map((line) => {
       const trimmed = line.trim();
 
-      if (!trimmed) {
-        return line;
-      }
+      if (!trimmed) return line;
 
       if (trimmed.startsWith("#")) {
-        return rewriteDirectiveUris(line, upstreamUrl, request);
+        return rewriteDirectiveUris(line, upstreamUrl, parentPayload);
       }
 
       try {
@@ -110,7 +116,7 @@ function rewritePlaylist(
           return line;
         }
 
-        return toProxyUrl(resolved, request);
+        return toProxyUrl(resolved, parentPayload);
       } catch {
         return line;
       }
@@ -128,6 +134,7 @@ function copyUpstreamHeaders(
     const lower = key.toLowerCase();
 
     if (HOP_BY_HOP_HEADERS.has(lower)) return;
+    if (lower === "content-type" && contentType) return;
     if (lower === "access-control-allow-origin") return;
     if (lower === "access-control-allow-methods") return;
     if (lower === "access-control-allow-headers") return;
@@ -136,7 +143,11 @@ function copyUpstreamHeaders(
     headers.set(key, value);
   });
 
-  headers.set("Cache-Control", "public, max-age=15, s-maxage=30");
+  if (contentType) {
+    headers.set("Content-Type", contentType);
+  }
+
+  headers.set("Cache-Control", "no-store");
   headers.set("Access-Control-Allow-Origin", "*");
   headers.set("Access-Control-Allow-Methods", "GET,HEAD,OPTIONS");
   headers.set("Access-Control-Allow-Headers", "Content-Type, Range");
@@ -185,28 +196,194 @@ async function fetchUpstream(
   });
 }
 
-async function handleProxy(request: NextRequest) {
-  const rawToken = request.nextUrl.searchParams.get("u")?.trim();
-  const rawLegacyUrl = request.nextUrl.searchParams.get("url")?.trim();
+async function resolveDramawavePlayUrl(
+  dramaId: string,
+  episodeNo: string,
+): Promise<string> {
+  const upstreamUrl = `${DRAMAWAVE_DRAMA_BASE_URL}/${encodeURIComponent(
+    dramaId,
+  )}/play/${encodeURIComponent(episodeNo)}?lang=id-ID&token=${encodeURIComponent(
+    DRAMAWAVE_TOKEN,
+  )}`;
 
-  let rawUrl = "";
+  const response = await fetch(upstreamUrl, {
+    method: "GET",
+    cache: "no-store",
+    headers: {
+      Accept: "application/json, text/plain, */*",
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    },
+  });
 
-  if (rawToken) {
-    try {
-      rawUrl = decodeUrlToken(rawToken).trim();
-    } catch {
-      return NextResponse.json(
-        { error: "Invalid u token." },
-        { status: 400, headers: buildCorsHeaders("application/json") },
-      );
-    }
-  } else if (rawLegacyUrl) {
-    rawUrl = rawLegacyUrl;
+  if (!response.ok) {
+    throw new Error(`Dramawave play failed: ${response.status}`);
   }
 
-  if (!rawUrl) {
+  const payload = await response.json();
+  const data =
+    payload && typeof payload === "object" && "data" in payload
+      ? (payload as { data?: Record<string, unknown> }).data
+      : undefined;
+
+  const videoUrl =
+    data && typeof data.video_url === "string" && data.video_url.trim()
+      ? data.video_url.trim()
+      : data &&
+          typeof data.external_audio_h264_m3u8 === "string" &&
+          data.external_audio_h264_m3u8.trim()
+        ? data.external_audio_h264_m3u8.trim()
+        : data &&
+            typeof data.m3u8_url === "string" &&
+            data.m3u8_url.trim()
+          ? data.m3u8_url.trim()
+          : "";
+
+  if (!videoUrl) {
+    throw new Error("Dramawave play URL not found.");
+  }
+
+  return videoUrl;
+}
+
+async function requireDramawaveAccess(request: NextRequest) {
+  const user = await getCurrentUser();
+
+  if (!user) {
     return NextResponse.json(
-      { error: "Missing required query parameter: u or url" },
+      { ok: false, error: "Unauthorized" },
+      { status: 401, headers: buildCorsHeaders("application/json") },
+    );
+  }
+
+  const token = request.nextUrl.searchParams.get("token")?.trim() ?? "";
+  const proxyToken = request.nextUrl.searchParams.get("u")?.trim() ?? "";
+  const legacyUrl = request.nextUrl.searchParams.get("url")?.trim() ?? "";
+
+  if (token) return null;
+
+  if (proxyToken || legacyUrl) {
+    return NextResponse.json(
+      { ok: false, error: "Direct URL playback is disabled." },
+      { status: 403, headers: buildCorsHeaders("application/json") },
+    );
+  }
+
+  const episodeNo = request.nextUrl.searchParams.get("episodeNo")?.trim() || "";
+  const episodeNumber = Number(episodeNo);
+
+  if (!Number.isInteger(episodeNumber) || episodeNumber < 1) {
+    return NextResponse.json(
+      { ok: false, error: "episodeNo tidak valid." },
+      { status: 400, headers: buildCorsHeaders("application/json") },
+    );
+  }
+
+  const isFreeEpisode = episodeNumber <= FREE_EPISODE_LIMIT;
+
+  if (!isFreeEpisode && user.membership_status !== "vip") {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "VIP_REQUIRED",
+        message: "Episode ini hanya untuk VIP.",
+      },
+      { status: 403, headers: buildCorsHeaders("application/json") },
+    );
+  }
+
+  if (user.membership_status === "vip" && user.vip_until) {
+    const expiresAt = new Date(user.vip_until).getTime();
+
+    if (!Number.isNaN(expiresAt) && expiresAt <= Date.now()) {
+      return NextResponse.json(
+        { ok: false, error: "VIP_EXPIRED" },
+        { status: 403, headers: buildCorsHeaders("application/json") },
+      );
+    }
+  }
+
+  return null;
+}
+
+async function handleProxy(request: NextRequest) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return NextResponse.json(
+      { ok: false, error: "Unauthorized" },
+      { status: 401, headers: buildCorsHeaders("application/json") },
+    );
+  }
+
+  const streamToken = request.nextUrl.searchParams.get("token")?.trim() ?? "";
+  const rawToken = request.nextUrl.searchParams.get("u")?.trim();
+  const rawLegacyUrl = request.nextUrl.searchParams.get("url")?.trim();
+  const dramaId = request.nextUrl.searchParams.get("dramaId")?.trim() || "";
+  const episodeNo = request.nextUrl.searchParams.get("episodeNo")?.trim() || "";
+
+  let rawUrl = "";
+  let parentPayload: VerifiedStreamToken | null = null;
+
+  if (streamToken) {
+    const tokenPayload = verifyStreamToken(streamToken);
+
+    if (
+      !tokenPayload ||
+      tokenPayload.provider !== "dramawave" ||
+      tokenPayload.userId !== user.id
+    ) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid or expired stream token" },
+        { status: 403, headers: buildCorsHeaders("application/json") },
+      );
+    }
+
+    rawUrl = tokenPayload.url;
+    parentPayload = tokenPayload;
+  } else if (rawToken || rawLegacyUrl) {
+    return NextResponse.json(
+      { ok: false, error: "Direct URL playback is disabled." },
+      { status: 403, headers: buildCorsHeaders("application/json") },
+    );
+  } else if (dramaId && episodeNo) {
+    try {
+      rawUrl = await resolveDramawavePlayUrl(dramaId, episodeNo);
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to resolve Dramawave play URL.",
+        },
+        { status: 500, headers: buildCorsHeaders("application/json") },
+      );
+    }
+
+    const initialToken = createStreamToken({
+      provider: "dramawave",
+      userId: user.id,
+      episodeKey: `${dramaId}:${episodeNo}`,
+      url: rawUrl,
+    });
+
+    const tokenUrl = `/api/dramawave/stream?token=${encodeURIComponent(
+      initialToken,
+    )}`;
+
+    return new NextResponse(null, {
+      status: 307,
+      headers: {
+        Location: tokenUrl,
+        ...buildCorsHeaders(),
+      },
+    });
+  }
+
+  if (!rawUrl || !parentPayload) {
+    return NextResponse.json(
+      { error: "Missing required query parameter: token or dramaId+episodeNo" },
       { status: 400, headers: buildCorsHeaders("application/json") },
     );
   }
@@ -249,36 +426,59 @@ async function handleProxy(request: NextRequest) {
   }
 
   if (request.method === "HEAD") {
+    const responseHeaders = copyUpstreamHeaders(
+      upstreamResponse,
+      isLikelyPlaylist(contentType, upstreamUrl)
+        ? "application/vnd.apple.mpegurl; charset=utf-8"
+        : contentType,
+    );
+    responseHeaders.delete("Content-Disposition");
+    responseHeaders.delete("content-disposition");
+
     return new NextResponse(null, {
       status: upstreamResponse.status,
-      headers: copyUpstreamHeaders(upstreamResponse, contentType),
+      headers: responseHeaders,
     });
   }
 
   if (isLikelyPlaylist(contentType, upstreamUrl)) {
     const playlistText = await upstreamResponse.text();
-    const rewritten = rewritePlaylist(playlistText, upstreamUrl, request);
+    const rewritten = rewritePlaylist(playlistText, upstreamUrl, parentPayload);
+
+    const responseHeaders = copyUpstreamHeaders(
+      upstreamResponse,
+      "application/vnd.apple.mpegurl; charset=utf-8",
+    );
+    responseHeaders.delete("Content-Disposition");
+    responseHeaders.delete("content-disposition");
 
     return new NextResponse(rewritten, {
       status: upstreamResponse.status,
-      headers: copyUpstreamHeaders(
-        upstreamResponse,
-        "application/vnd.apple.mpegurl",
-      ),
+      headers: responseHeaders,
     });
   }
 
+  const responseHeaders = copyUpstreamHeaders(upstreamResponse, contentType);
+  responseHeaders.delete("Content-Disposition");
+  responseHeaders.delete("content-disposition");
+
   return new NextResponse(upstreamResponse.body, {
     status: upstreamResponse.status,
-    headers: copyUpstreamHeaders(upstreamResponse, contentType),
+    headers: responseHeaders,
   });
 }
 
 export async function GET(request: NextRequest) {
+  const accessError = await requireDramawaveAccess(request);
+  if (accessError) return accessError;
+
   return handleProxy(request);
 }
 
 export async function HEAD(request: NextRequest) {
+  const accessError = await requireDramawaveAccess(request);
+  if (accessError) return accessError;
+
   return handleProxy(request);
 }
 

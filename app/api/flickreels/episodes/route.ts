@@ -1,44 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
+import { buildFlickreelsApiUrl } from "../_shared";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const FLICKREELS_BATCH_CODE =
-  process.env.FLICKREELS_BATCH_CODE || "4D96F22760EA30FB0FFBA9AA87A979A6";
-
-type FlickreelsBatchItem = {
+type FlickreelsChapterItem = {
   chapter_num?: number | string;
   chapter_id?: number | string;
   chapter_title?: string;
   chapter_cover?: string;
   duration?: number | string;
   is_lock?: number | string;
+  is_need_pay?: number | string;
   is_vip_episode?: number | string;
-  play_url?: string;
-  origin_url?: string;
+  hls_url?: string;
 };
 
-type FlickreelsBatchResponse = {
+type FlickreelsChaptersResponse = {
   status_code?: number;
   msg?: string;
   data?: {
-    playlet_id?: string;
+    playlet_id?: string | number;
     title?: string;
     cover?: string;
-    total_eps?: number;
-    free_eps?: number;
-    locked_eps?: number;
-    unlocked?: number;
-    failed?: number;
-    elapsed_sec?: number;
-    cached?: boolean;
-    list?: FlickreelsBatchItem[];
+    list?: FlickreelsChapterItem[];
   };
 };
-
-function encodeUrlToken(value: string): string {
-  return Buffer.from(value, "utf8").toString("base64url");
-}
 
 function toStringValue(value: unknown): string {
   if (typeof value === "string") return value.trim();
@@ -78,16 +65,6 @@ function buildStableEpisodeId(
   );
 }
 
-function buildVideoUrlFromJson(item: FlickreelsBatchItem): string {
-  const playUrl = toStringValue(item.play_url);
-
-  if (!playUrl) {
-    return "";
-  }
-
-  return `/api/flickreels/stream?u=${encodeUrlToken(playUrl)}`;
-}
-
 export async function GET(request: NextRequest) {
   try {
     const dramaId = request.nextUrl.searchParams.get("dramaId")?.trim() || "";
@@ -99,43 +76,38 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Missing dramaId" }, { status: 400 });
     }
 
-    const upstreamUrl = new URL(
-      `https://flickreels.dramabos.my.id/batchload/${encodeURIComponent(dramaId)}`,
+    const upstreamUrl = buildFlickreelsApiUrl(
+      `/chapters/${encodeURIComponent(dramaId)}`,
     );
-    upstreamUrl.searchParams.set("lang", "6");
-    upstreamUrl.searchParams.set("code", FLICKREELS_BATCH_CODE);
 
-    const response = await fetch(upstreamUrl.toString(), {
+    const response = await fetch(upstreamUrl, {
       method: "GET",
       cache: "no-store",
       headers: {
         Accept: "application/json,text/plain,*/*",
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
       },
     });
 
     if (!response.ok) {
       throw new Error(
-        `Failed to fetch Flickreels episodes. status=${response.status}`,
+        `Failed to fetch FlickReels chapters. status=${response.status}`,
       );
     }
 
-    const payload = (await response.json()) as FlickreelsBatchResponse;
+    const payload = (await response.json()) as FlickreelsChaptersResponse;
     const rawList = Array.isArray(payload?.data?.list) ? payload.data.list : [];
 
     const episodes = rawList
       .map((item, index) => {
-        const episodeNumber =
-          toNumberValue(item.chapter_num) || index + 1;
-
+        const episodeNumber = toNumberValue(item.chapter_num) || index + 1;
         const chapterId =
           toStringValue(item.chapter_id) || `${dramaId}-${episodeNumber}`;
-
         const title =
           toStringValue(item.chapter_title) || `Episode ${episodeNumber}`;
 
-        const isLocked = toNumberValue(item.is_lock) === 1;
+        const isLocked =
+          toNumberValue(item.is_lock) === 1 ||
+          toNumberValue(item.is_need_pay) === 1;
         const isVipOnly = toNumberValue(item.is_vip_episode) === 1;
 
         return {
@@ -146,7 +118,9 @@ export async function GET(request: NextRequest) {
           duration: formatDuration(toNumberValue(item.duration)),
           description: "",
           thumbnail: toStringValue(item.chapter_cover) || undefined,
-          videoUrl: buildVideoUrlFromJson(item),
+          videoUrl: `/api/flickreels/stream?dramaId=${encodeURIComponent(
+            dramaId,
+          )}&chapterId=${encodeURIComponent(chapterId)}`,
           isLocked,
           isVipOnly,
           sortOrder: episodeNumber,
@@ -158,14 +132,14 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(episodes, { status: 200 });
   } catch (error) {
-    console.error("Flickreels episodes error:", error);
+    console.error("FlickReels episodes error:", error);
 
     return NextResponse.json(
       {
         error:
           error instanceof Error
             ? error.message
-            : "Failed to load Flickreels episodes.",
+            : "Failed to load FlickReels episodes.",
       },
       { status: 500 },
     );

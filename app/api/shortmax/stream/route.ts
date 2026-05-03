@@ -1,4 +1,6 @@
 import { NextRequest } from "next/server";
+import { requireApiVip } from "@/lib/auth/requireApiVip";
+import { buildShortmaxApiUrl, fetchShortmaxJson } from "../_shared";
 
 function withCors(headers: Headers) {
   headers.set("Access-Control-Allow-Origin", "*");
@@ -37,10 +39,8 @@ function absolutizeUrl(line: string, playlistUrl: string): string {
   return absolute.toString();
 }
 
-function proxifyUrl(url: string, request: NextRequest): string {
-  return `${request.nextUrl.origin}/api/shortmax/stream?u=${encodeURIComponent(
-    url,
-  )}`;
+function proxifyUrl(url: string, _request: NextRequest): string {
+  return `/api/shortmax/stream?u=${encodeURIComponent(url)}`;
 }
 
 function rewritePlaylist(
@@ -72,6 +72,36 @@ function rewritePlaylist(
     .join("\n");
 }
 
+
+type ShortmaxPlayResponse = {
+  data?: {
+    video?: {
+      video_720?: string;
+      video_1080?: string;
+      video_480?: string;
+    };
+  };
+};
+
+async function resolveShortmaxPlayUrl(
+  dramaId: string,
+  episode: string,
+): Promise<string> {
+  if (!dramaId.trim() || !episode.trim()) return "";
+
+  const payload = (await fetchShortmaxJson(
+    buildShortmaxApiUrl(`/play/${encodeURIComponent(dramaId)}`, {
+      ep: episode,
+    }),
+  )) as ShortmaxPlayResponse;
+
+  const video720 = payload?.data?.video?.video_720;
+
+  return typeof video720 === "string" && video720.trim()
+    ? video720.trim()
+    : "";
+}
+
 export async function OPTIONS() {
   return new Response(null, {
     status: 204,
@@ -80,11 +110,20 @@ export async function OPTIONS() {
 }
 
 export async function GET(request: NextRequest) {
+  const vipError = await requireApiVip();
+  if (vipError) return vipError;
+
   try {
-    const target = request.nextUrl.searchParams.get("u")?.trim() || "";
+    const dramaId = request.nextUrl.searchParams.get("dramaId")?.trim() || "";
+    const episode = request.nextUrl.searchParams.get("episode")?.trim() || "";
+    let target = request.nextUrl.searchParams.get("u")?.trim() || "";
+
+    if (!target && dramaId && episode) {
+      target = await resolveShortmaxPlayUrl(dramaId, episode);
+    }
 
     if (!target) {
-      return new Response("Missing u", {
+      return new Response("Missing u or dramaId/episode", {
         status: 400,
         headers: withCors(new Headers()),
       });

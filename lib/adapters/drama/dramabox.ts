@@ -4,9 +4,11 @@ export type DramaBoxDramaResponse = {
   bookId: string;
   bookName?: string;
   coverWap?: string;
+  cover?: string;
   chapterCount?: number;
   introduction?: string;
   tags?: string[];
+  tagNames?: string[];
 };
 
 export type DramaBoxDramaListResponse = {
@@ -17,18 +19,22 @@ export type DramaBoxSearchItemResponse = {
   bookId: string;
   bookName?: string;
   coverWap?: string;
+  cover?: string;
   chapterCount?: number;
   introduction?: string;
   tags?: string[];
+  tagNames?: string[];
 };
 
 export type DramaBoxDetailResponse = {
   bookId?: string;
   bookName?: string;
   coverWap?: string;
+  cover?: string;
   chapterCount?: number;
   introduction?: string;
   tags?: string[];
+  tagNames?: string[];
   tagV3s?: Array<{
     tagId?: number;
     tagName?: string;
@@ -38,10 +44,18 @@ export type DramaBoxDetailResponse = {
 
 function normalizeDramaBoxTags(raw: {
   tags?: string[];
+  tagNames?: string[];
   tagV3s?: Array<{ tagName?: string; tagEnName?: string }>;
 }): string[] {
   if (Array.isArray(raw.tags) && raw.tags.length > 0) {
     return raw.tags
+      .filter((tag): tag is string => typeof tag === "string")
+      .map((tag) => tag.trim())
+      .filter((tag) => tag.length > 0);
+  }
+
+  if (Array.isArray(raw.tagNames) && raw.tagNames.length > 0) {
+    return raw.tagNames
       .filter((tag): tag is string => typeof tag === "string")
       .map((tag) => tag.trim())
       .filter((tag) => tag.length > 0);
@@ -115,9 +129,11 @@ function createDramaBoxDrama(raw: {
   bookId?: string;
   bookName?: string;
   coverWap?: string;
+  cover?: string;
   chapterCount?: number;
   introduction?: string;
   tags?: string[];
+  tagNames?: string[];
   tagV3s?: Array<{ tagName?: string; tagEnName?: string }>;
 }): Drama {
   const normalizedTags = normalizeDramaBoxTags(raw);
@@ -143,7 +159,7 @@ function createDramaBoxDrama(raw: {
     isDubbed: false,
     isTrending: false,
     sortOrder: 9999,
-    posterImage: raw.coverWap,
+    posterImage: raw.coverWap || raw.cover,
   };
 }
 
@@ -186,7 +202,7 @@ export function adaptDramaBoxDetail(
         ? normalizedTags
         : buildDramaBoxFallbackTags(raw),
     description: buildDramaBoxFallbackDescription(raw),
-    posterImage: raw.coverWap,
+    posterImage: raw.coverWap || raw.cover,
     slug: raw.bookId ?? "",
   };
 }

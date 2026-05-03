@@ -70,21 +70,6 @@ export default function HistoryScreen({
         </header>
 
         <section className="overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,#14161D_0%,#101118_100%)] p-4 shadow-[0_20px_48px_rgba(0,0,0,0.30)] sm:p-5">
-          <div className="mb-5 flex items-center justify-between rounded-[24px] border border-white/8 bg-[#14151D] px-4 py-4 shadow-[0_10px_30px_rgba(0,0,0,0.20)]">
-            <div>
-              <p className="text-[13px] uppercase tracking-[0.18em] text-[#8F887C]">
-                Total Riwayat
-              </p>
-              <p className="mt-2 text-[28px] font-bold text-white">
-                {resolvedHistory.length}
-              </p>
-            </div>
-
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,rgba(201,164,92,0.18),rgba(183,110,121,0.12))] text-[24px] shadow-[0_10px_24px_rgba(201,164,92,0.10)]">
-              ↺
-            </div>
-          </div>
-
           <div className="space-y-3">
             {resolvedHistory.length === 0 ? (
               <div className="rounded-[26px] border border-white/8 bg-[#14151D] p-6 text-center shadow-[0_12px_30px_rgba(0,0,0,0.22)]">

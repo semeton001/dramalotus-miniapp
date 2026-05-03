@@ -75,7 +75,19 @@ function extractShortmaxFeedList(payload: unknown): Record<string, unknown>[] {
     typeof payload === "object" &&
     Array.isArray((payload as { data?: unknown[] }).data)
   ) {
-    return (payload as { data: unknown[] }).data as Record<string, unknown>[];
+    const data = (payload as { data: unknown[] }).data;
+
+    const nestedItems = data.flatMap((item) => {
+      if (!item || typeof item !== "object") return [];
+      const raw = item as Record<string, unknown>;
+      return Array.isArray(raw.items) ? raw.items : [];
+    });
+
+    if (nestedItems.length > 0) {
+      return nestedItems as Record<string, unknown>[];
+    }
+
+    return data as Record<string, unknown>[];
   }
 
   if (

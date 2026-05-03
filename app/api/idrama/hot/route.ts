@@ -1,18 +1,39 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import {
-  IDRAMA_HOT_TAB_ID,
+  adaptIdramaDramaList,
+  dedupeIdramaDramas,
+  extractIdramaItemsDeep,
   fetchIdramaJson,
-  flattenTabModulesToDramas,
 } from "../_shared";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const payload = await fetchIdramaJson(`/tab/${IDRAMA_HOT_TAB_ID}`);
-    return NextResponse.json(flattenTabModulesToDramas(payload, "Hot"));
-  } catch (error) {
-    console.error("iDrama hot route error:", error);
+    const page = Number(request.nextUrl.searchParams.get("page") || "1") || 1;
+
+    const payload = await fetchIdramaJson("/ranking/trending", {
+      page,
+      limit: 50,
+    });
+
+    const items = dedupeIdramaDramas(
+      adaptIdramaDramaList(extractIdramaItemsDeep(payload), "Trending"),
+    );
+
     return NextResponse.json(
-      { error: "Failed to load iDrama hot." },
+      {
+        items,
+        hasNextPage: false,
+        page,
+      },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  } catch (error) {
+    console.error("iDrama trending route error:", error);
+    return NextResponse.json(
+      {
+        error: "Failed to load iDrama trending.",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 },
     );
   }

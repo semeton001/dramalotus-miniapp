@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 type ReconcilePayload = {
   telegram_user_id?: number | string;
   membership_status?: "free" | "vip" | string;
+  vip_until?: string | null;
   source?: string | null;
 };
 
@@ -16,7 +17,7 @@ function getSecretFromRequest(request: Request) {
 }
 
 function getExpectedSecret() {
-  return process.env.SYNC_MEMBERSHIP_SECRET || process.env.DEBUG_ADMIN_SECRET || "";
+  return process.env.SYNC_MEMBERSHIP_SECRET || "";
 }
 
 function normalizeTelegramUserId(value: unknown): number | null {
@@ -32,6 +33,19 @@ function normalizeMembershipStatus(value: unknown): "free" | "vip" | null {
   if (typeof value !== "string") return null;
   const normalized = value.trim().toLowerCase();
   return normalized === "free" || normalized === "vip" ? normalized : null;
+}
+
+function normalizeOptionalDateString(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "string") return null;
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const date = new Date(trimmed);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return date.toISOString();
 }
 
 export async function POST(request: Request) {
@@ -64,17 +78,38 @@ export async function POST(request: Request) {
 
     const previousResult = await supabaseAdmin
       .from("users")
-      .select("id, telegram_user_id, membership_status")
+      .select("id, telegram_user_id, membership_status, vip_until")
       .eq("telegram_user_id", telegramUserId)
       .maybeSingle();
 
     if (previousResult.error) throw new Error(previousResult.error.message);
 
+    if (!previousResult.data) {
+      console.info(JSON.stringify({
+        scope: "membership-reconcile",
+        source,
+        telegram_user_id: telegramUserId,
+        skipped: true,
+        reason: "user_not_found",
+        target_membership: membershipStatus,
+      }));
+
+      return NextResponse.json({
+        ok: true,
+        source,
+        skipped: true,
+        reason: "user_not_found",
+        changed: false,
+        previous_membership: null,
+        user: null,
+      });
+    }
+
     const { data, error } = await supabaseAdmin
       .from("users")
       .update({ membership_status: membershipStatus })
       .eq("telegram_user_id", telegramUserId)
-      .select("id, telegram_user_id, membership_status")
+      .select("id, telegram_user_id, membership_status, vip_until")
       .single();
 
     if (error || !data) throw new Error(error?.message || "Failed to reconcile membership");
@@ -90,6 +125,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       source,
+      skipped: false,
       changed: previousResult.data?.membership_status !== data.membership_status,
       previous_membership: previousResult.data?.membership_status ?? null,
       user: data,

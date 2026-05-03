@@ -2,20 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { adaptMeloloDramaDetail, adaptMeloloDramaList, adaptMeloloSearchList } from "@/lib/adapters/drama/melolo";
 import { adaptMeloloEpisodeList } from "@/lib/adapters/episode/melolo";
 
-export const MELOLO_PAGE_SIZE = 20;
+export const MELOLO_PAGE_SIZE = 50;
 export const MELOLO_DEFAULT_VIDEO_CODE =
-  process.env.REELSHORT_DEFAULT_CODE?.trim() ||
-  process.env.MELOLO_VIDEO_CODE?.trim() ||
-  "4D96F22760EA30FB0FFBA9AA87A979A6";
+  "KFKiMIbY3Np8kbimDo7lJDNSVslwF3Fn64cI0TOtqpOP373n58ca6BKzbDsLb7qB";
 
-const MELOLO_HOME_BASE_URL = "https://melolo.dramabos.my.id/api/home";
-const MELOLO_DETAIL_BASE_URL = "https://melolo.dramabos.my.id/api/detail";
-const MELOLO_VIDEO_BASE_URL = "https://melolo.dramabos.my.id/api/video";
-const MELOLO_SEARCH_BASE_URL = "https://melolo.dramabos.my.id/api/search";
-const MELOLO_LATEST_URL = "https://api.sansekai.my.id/api/melolo/latest";
-const MELOLO_FORYOU_URL = "https://api.sansekai.my.id/api/melolo/foryou";
-const MELOLO_TRENDING_URL = "https://api.sansekai.my.id/api/melolo/trending";
-const MELOLO_HOME_AGGREGATE_OFFSETS = [0, MELOLO_PAGE_SIZE];
+const MELOLO_API_BASE_URL = "https://streamapi.web.id/p/melolo/api/v1";
+const MELOLO_LANG = "id";
+const MELOLO_TOKEN =
+  "KFKiMIbY3Np8kbimDo7lJDNSVslwF3Fn64cI0TOtqpOP373n58ca6BKzbDsLb7qB";
+const MELOLO_HOME_AGGREGATE_OFFSETS = [0];
 
 type StreamPayload = {
   url?: string;
@@ -33,7 +28,7 @@ type EpisodeWithMeloloMeta = {
   [key: string]: unknown;
 };
 
-type FeedMode = "home" | "latest" | "foryou" | "trending";
+type FeedMode = "home" | "romance" | "foryou" | "pewaris";
 type MeloloDramaItem = ReturnType<typeof adaptMeloloDramaList>[number];
 
 type FeedResult = {
@@ -141,23 +136,53 @@ function pickBestStreamUrl(payload: StreamPayload): string {
   return "";
 }
 
-function buildHomeUrl(offset: number): string {
-  return `${MELOLO_HOME_BASE_URL}?lang=id&offset=${encodeURIComponent(String(offset))}`;
+function buildMeloloApiUrl(
+  path: string,
+  params?: Record<string, string | number | undefined | null>,
+): string {
+  const url = new URL(`${MELOLO_API_BASE_URL}${path}`);
+  url.searchParams.set("lang", MELOLO_LANG);
+  url.searchParams.set("token", MELOLO_TOKEN);
+
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === "") return;
+      url.searchParams.set(key, String(value));
+    });
+  }
+
+  return url.toString();
+}
+
+function buildHomeUrl(_offset: number): string {
+  return buildMeloloApiUrl("/bookmall");
+}
+
+function buildHomeTabsUrl(): string {
+  return buildMeloloApiUrl("/bookmall/tabs", { gender: 0 });
 }
 
 function buildDetailUrl(id: string): string {
-  return `${MELOLO_DETAIL_BASE_URL}/${encodeURIComponent(id)}?lang=id`;
+  return buildMeloloApiUrl("/book", { id });
 }
 
-function buildSearchUrl(query: string): string {
-  return `${MELOLO_SEARCH_BASE_URL}?lang=id&q=${encodeURIComponent(query)}`;
+function buildMultiVideoUrl(id: string): string {
+  return buildMeloloApiUrl("/multi-video", { id });
+}
+
+function buildSearchUrl(query: string, offset = 0, limit = MELOLO_PAGE_SIZE): string {
+  return buildMeloloApiUrl("/search", {
+    q: query,
+    limit,
+    offset,
+  });
 }
 
 function buildVideoUrl(vid: string): string {
-  return `${MELOLO_VIDEO_BASE_URL}/${encodeURIComponent(vid)}?lang=id&code=${encodeURIComponent(MELOLO_DEFAULT_VIDEO_CODE)}`;
+  return buildMeloloApiUrl("/multi-video", { id: vid });
 }
 
-function normalizeFeedItems(payload: unknown, mode: Exclude<FeedMode, "home">): MeloloDramaItem[] {
+function normalizeFeedItems(payload: unknown, _mode: Exclude<FeedMode, "home">): MeloloDramaItem[] {
   if (payload == null) {
     return [];
   }
@@ -205,52 +230,22 @@ function paginateMeloloItems(items: MeloloDramaItem[], page: number): FeedResult
 }
 
 async function fetchHomeAggregateFeed(page: number): Promise<FeedResult> {
-  const homeRequests = MELOLO_HOME_AGGREGATE_OFFSETS.map((offset) =>
-    fetchJson(buildHomeUrl(offset)),
-  );
-
-  const [homeResults, latestResult, foryouResult, trendingResult] = await Promise.all([
-    Promise.all(homeRequests),
-    fetchJson(MELOLO_LATEST_URL),
-    fetchJson(`${MELOLO_FORYOU_URL}?offset=1`),
-    fetchJson(MELOLO_TRENDING_URL),
+  const [bookmallResult, tabsResult] = await Promise.all([
+    fetchJson(buildHomeUrl(0)),
+    fetchJson(buildHomeTabsUrl()),
   ]);
 
-  const homeLists = homeResults
-    .filter((result) => result.ok && result.payload != null)
-    .map((result) => adaptMeloloDramaList(result.payload) as MeloloDramaItem[]);
+  const lists: MeloloDramaItem[][] = [];
 
-  const latestItems = latestResult.ok && latestResult.payload != null
-    ? normalizeFeedItems(latestResult.payload, "latest")
-    : [];
-
-  const foryouItems = foryouResult.ok && foryouResult.payload != null
-    ? normalizeFeedItems(foryouResult.payload, "foryou")
-    : [];
-
-  const trendingItems = trendingResult.ok && trendingResult.payload != null
-    ? normalizeFeedItems(trendingResult.payload, "trending")
-    : [];
-
-  const mergedItems = mergeMeloloDramaLists([
-    ...homeLists,
-    latestItems,
-    foryouItems,
-    trendingItems,
-  ]);
-
-  if (mergedItems.length === 0) {
-    const fallback = await fetchJson(buildHomeUrl(0));
-
-    if (!fallback.ok || fallback.payload == null) {
-      throw new Error("Melolo home aggregate failed");
-    }
-
-    return paginateMeloloItems(
-      adaptMeloloDramaList(fallback.payload) as MeloloDramaItem[],
-      page,
-    );
+  if (bookmallResult.ok && bookmallResult.payload != null) {
+    lists.push(adaptMeloloDramaList(bookmallResult.payload) as MeloloDramaItem[]);
   }
+
+  if (tabsResult.ok && tabsResult.payload != null) {
+    lists.push(adaptMeloloDramaList(tabsResult.payload) as MeloloDramaItem[]);
+  }
+
+  const mergedItems = mergeMeloloDramaLists(lists);
 
   return paginateMeloloItems(mergedItems, page);
 }
@@ -260,17 +255,17 @@ async function resolveFeedItems(mode: FeedMode, page: number, offset: number): P
     return fetchHomeAggregateFeed(page);
   }
 
-  const primaryUrl =
-    mode === "latest"
-      ? MELOLO_LATEST_URL
+  const query =
+    mode === "romance"
+      ? "cinta"
       : mode === "foryou"
-        ? `${MELOLO_FORYOU_URL}?offset=${Math.max(1, offset + 1)}`
-        : MELOLO_TRENDING_URL;
+        ? "ceo"
+        : "pewaris";
 
-  const primary = await fetchJson(primaryUrl);
+  const primary = await fetchJson(buildSearchUrl(query, offset));
 
   if (primary.ok && primary.payload != null) {
-    const items = adaptMeloloSearchList(primary.payload) as MeloloDramaItem[];
+    const items = normalizeFeedItems(primary.payload, mode);
     return {
       items,
       hasNextPage: false,
@@ -279,21 +274,7 @@ async function resolveFeedItems(mode: FeedMode, page: number, offset: number): P
     };
   }
 
-  const fallback = await fetchJson(buildHomeUrl(offset));
-
-  if (!fallback.ok || fallback.payload == null) {
-    throw new Error(
-      `Melolo ${mode} failed. primary=${primary.status} fallback=${fallback.status}`,
-    );
-  }
-
-  const items = adaptMeloloDramaList(fallback.payload) as MeloloDramaItem[];
-  return {
-    items,
-    hasNextPage: false,
-    page: Math.floor(offset / MELOLO_PAGE_SIZE) + 1,
-    offset,
-  };
+  throw new Error(`Melolo ${mode} upstream failed`);
 }
 
 export async function respondFeed(
@@ -340,7 +321,7 @@ export async function respondSearch(request: NextRequest): Promise<NextResponse>
       );
     }
 
-    const { ok, status, payload } = await fetchJson(buildSearchUrl(query));
+    const { ok, status, payload } = await fetchJson(buildSearchUrl(query, 0, 100));
 
     if (!ok || payload == null) {
       return NextResponse.json(
@@ -405,31 +386,87 @@ export async function respondDetail(id: string): Promise<NextResponse> {
   }
 }
 
-export async function resolveMeloloStreamUrl(vid: string): Promise<string> {
-  if (!vid.trim()) return "";
+function pickEpisodeStreamUrl(payload: unknown, episodeNumber: number): string {
+  if (!payload || typeof payload !== "object") return "";
 
-  const { ok, payload } = await fetchJson<StreamPayload>(buildVideoUrl(vid));
+  const root = payload as Record<string, unknown>;
+  const episodes = Array.isArray(root.episodes) ? root.episodes : [];
+
+  const matched =
+    episodes.find((item) => {
+      if (!item || typeof item !== "object") return false;
+      const rawIndex = (item as Record<string, unknown>).index;
+      const index =
+        typeof rawIndex === "number"
+          ? rawIndex
+          : typeof rawIndex === "string"
+            ? Number(rawIndex)
+            : 0;
+      return index === episodeNumber;
+    }) || episodes[episodeNumber - 1];
+
+  if (!matched || typeof matched !== "object") return "";
+
+  const episode = matched as Record<string, unknown>;
+
+  const directUrl =
+    typeof episode.stream_url === "string" && episode.stream_url.trim()
+      ? episode.stream_url.trim()
+      : typeof episode.video_url === "string" && episode.video_url.trim()
+        ? episode.video_url.trim()
+        : typeof episode.play_url === "string" && episode.play_url.trim()
+          ? episode.play_url.trim()
+          : typeof episode.url === "string" && episode.url.trim()
+            ? episode.url.trim()
+            : "";
+
+  if (directUrl) return directUrl;
+
+  return pickBestStreamUrl({
+    url: typeof episode.url === "string" ? episode.url : undefined,
+    backup: typeof episode.backup === "string" ? episode.backup : undefined,
+  } as StreamPayload);
+}
+
+export async function resolveMeloloStreamUrl(
+  dramaId: string,
+  episodeNumber = 1,
+): Promise<string> {
+  if (!dramaId.trim()) return "";
+
+  const { ok, payload } = await fetchJson(buildMultiVideoUrl(dramaId));
 
   if (!ok || payload == null) {
     return "";
   }
 
-  return pickBestStreamUrl(payload);
+  return pickEpisodeStreamUrl(payload, episodeNumber);
 }
 
 export async function respondStream(request: NextRequest): Promise<NextResponse> {
   try {
     const { searchParams } = new URL(request.url);
-    const vid = searchParams.get("vid")?.trim() ?? "";
+    const dramaId =
+      searchParams.get("dramaId")?.trim() ||
+      searchParams.get("bookId")?.trim() ||
+      searchParams.get("id")?.trim() ||
+      "";
+    const episodeNumber =
+      Number(
+        searchParams.get("episodeNumber") ||
+          searchParams.get("episode") ||
+          searchParams.get("ep") ||
+          "1",
+      ) || 1;
 
-    if (!vid) {
+    if (!dramaId) {
       return NextResponse.json(
-        { error: "Missing Melolo vid" },
+        { error: "Missing Melolo dramaId" },
         { status: 400 },
       );
     }
 
-    const url = await resolveMeloloStreamUrl(vid);
+    const url = await resolveMeloloStreamUrl(dramaId, episodeNumber);
 
     if (!url) {
       return NextResponse.json(
@@ -441,7 +478,8 @@ export async function respondStream(request: NextRequest): Promise<NextResponse>
     return NextResponse.json(
       {
         url,
-        vid,
+        dramaId,
+        episodeNumber,
       },
       { status: 200 },
     );
@@ -467,47 +505,23 @@ export async function respondEpisodes(request: NextRequest): Promise<NextRespons
       );
     }
 
-    const detail = await fetchJson(buildDetailUrl(meloloDramaId));
+    const videos = await fetchJson(buildMultiVideoUrl(meloloDramaId));
 
-    if (!detail.ok || detail.payload == null) {
+    if (!videos.ok || videos.payload == null) {
       return NextResponse.json(
         {
-          error: `Melolo episodes upstream failed with status ${detail.status}`,
+          error: `Melolo episodes upstream failed with status ${videos.status}`,
         },
-        { status: detail.status },
+        { status: videos.status },
       );
     }
 
-    const adaptedEpisodes = adaptMeloloEpisodeList(detail.payload, {
+    const adaptedEpisodes = adaptMeloloEpisodeList(videos.payload, {
       dramaId: createStableNumericId(meloloDramaId, 1),
       meloloDramaId,
     });
 
-    const hydratedEpisodes = await Promise.all(
-      adaptedEpisodes.map(async (episode) => {
-        const typedEpisode = episode as EpisodeWithMeloloMeta;
-        const vid =
-          typeof typedEpisode.meloloVid === "string"
-            ? typedEpisode.meloloVid.trim()
-            : "";
-
-        if (!vid) {
-          return {
-            ...episode,
-            videoUrl: episode.videoUrl || "",
-          };
-        }
-
-        const resolvedUrl = await resolveMeloloStreamUrl(vid);
-
-        return {
-          ...episode,
-          videoUrl: resolvedUrl || episode.videoUrl || "",
-        };
-      }),
-    );
-
-    return NextResponse.json(hydratedEpisodes, { status: 200 });
+    return NextResponse.json(adaptedEpisodes, { status: 200 });
   } catch (error) {
     console.error("Melolo episodes route error:", error);
 

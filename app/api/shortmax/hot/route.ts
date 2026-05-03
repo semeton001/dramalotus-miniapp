@@ -7,25 +7,32 @@ import {
 
 export async function GET(request: NextRequest) {
   try {
-    const page = Math.max(
-      1,
-      Number(request.nextUrl.searchParams.get("page") || "1") || 1,
-    );
-    const type = request.nextUrl.searchParams.get("type") || "monthly";
-    const payload = await fetchShortmaxJson(
-      buildShortmaxFeedUrl("hot", page, type),
+    const [forYouPayload, epicPayload] = await Promise.all([
+      fetchShortmaxJson(buildShortmaxFeedUrl("foryou", 1)).catch(() => null),
+      fetchShortmaxJson(buildShortmaxFeedUrl("hot")).catch(() => null),
+    ]);
+
+    const merged = [
+      ...(forYouPayload ? normalizeShortmaxFeed(forYouPayload, "foryou", "7") : []),
+      ...(epicPayload ? normalizeShortmaxFeed(epicPayload, "foryou", "7") : []),
+    ];
+
+    const deduped = Array.from(
+      new Map(merged.map((item) => [item.shortmaxDramaId || item.slug || item.id, item])).values(),
     );
 
     return NextResponse.json(
-      normalizeShortmaxFeed(payload, "hot", "7"),
       {
-        headers: {
-          "Cache-Control": "no-store",
-        },
+        items: deduped,
+        hasNextPage: false,
+        page: 1,
+      },
+      {
+        headers: { "Cache-Control": "no-store" },
       },
     );
   } catch (error) {
-    console.error("Shortmax hot route error:", error);
+    console.error("Shortmax ForYou route error:", error);
 
     return NextResponse.json(
       {

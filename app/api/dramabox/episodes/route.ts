@@ -22,14 +22,12 @@ export async function GET(request: NextRequest) {
     const mappedEpisodes = mapDramaBoxEpisodes(rawItems, bookId);
 
     if (debug) {
-      const items = Array.isArray(rawItems) ? rawItems : [];
       return NextResponse.json(
         {
           ok: true,
           bookId,
-          rawCount: items.length,
+          rawCount: mappedEpisodes.length,
           mappedCount: mappedEpisodes.length,
-          firstRaw: items[0] ?? null,
           firstMapped: mappedEpisodes[0] ?? null,
           firstFiveMapped: mappedEpisodes.slice(0, 5),
         },

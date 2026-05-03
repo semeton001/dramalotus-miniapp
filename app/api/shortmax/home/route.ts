@@ -7,25 +7,24 @@ import {
 
 export async function GET(request: NextRequest) {
   try {
-    const page = Math.max(
-      1,
-      Number(request.nextUrl.searchParams.get("page") || "1") || 1,
-    );
-    const type = request.nextUrl.searchParams.get("type") || "monthly";
-    const payload = await fetchShortmaxJson(
-      buildShortmaxFeedUrl("home", page, type),
+    const page = Math.min(
+      5,
+      Math.max(1, Number(request.nextUrl.searchParams.get("page") || "1") || 1),
     );
 
-    const normalized = normalizeShortmaxFeed(payload, "home", "7");
-    const pageSize = 20;
-    const start = (page - 1) * pageSize;
-    const paginated = normalized.slice(start, start + pageSize);
+    const payload = await fetchShortmaxJson(buildShortmaxFeedUrl("home", page));
+    const items = normalizeShortmaxFeed(payload, "home", "7");
 
-    return NextResponse.json(paginated, {
-      headers: {
-        "Cache-Control": "no-store",
+    return NextResponse.json(
+      {
+        items,
+        hasNextPage: page < 5,
+        page,
       },
-    });
+      {
+        headers: { "Cache-Control": "no-store" },
+      },
+    );
   } catch (error) {
     console.error("Shortmax home route error:", error);
 

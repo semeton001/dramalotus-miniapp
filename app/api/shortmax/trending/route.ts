@@ -5,23 +5,19 @@ import {
   normalizeShortmaxFeed,
 } from "../_shared";
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
-    const page = Math.max(
-      1,
-      Number(request.nextUrl.searchParams.get("page") || "1") || 1,
-    );
-    const type = request.nextUrl.searchParams.get("type") || "monthly";
-    const payload = await fetchShortmaxJson(
-      buildShortmaxFeedUrl("trending", page, type),
-    );
+    const payload = await fetchShortmaxJson(buildShortmaxFeedUrl("trending"));
+    const items = normalizeShortmaxFeed(payload, "trending", "7");
 
     return NextResponse.json(
-      normalizeShortmaxFeed(payload, "trending", "7"),
       {
-        headers: {
-          "Cache-Control": "no-store",
-        },
+        items,
+        hasNextPage: false,
+        page: 1,
+      },
+      {
+        headers: { "Cache-Control": "no-store" },
       },
     );
   } catch (error) {

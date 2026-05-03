@@ -1,10 +1,19 @@
-import { NextRequest } from "next/server";
-import { respondDramaFeed } from "../_shared";
+import { respondCombinedDramaFeed } from "../_shared";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export const dynamic = "auto";
+export const revalidate = 30;
 
-export async function GET(request: NextRequest) {
-  const page = Math.max(1, Number(request.nextUrl.searchParams.get("page")?.trim() || "1") || 1);
-  return respondDramaFeed(`https://reelshort.dramabos.my.id/home?tab=for-you&lang=id&page=${page}`, page);
+function getReelShortCode() {
+  return process.env.REELSHORT_DEFAULT_CODE?.trim() || "";
+}
+
+export async function GET() {
+  const code = getReelShortCode();
+
+  return respondCombinedDramaFeed(
+    [
+      `https://streamapi.web.id/p/reelshort/api/v1/foryou?lang=in&token=${encodeURIComponent(code)}`,
+    ],
+    1,
+  );
 }

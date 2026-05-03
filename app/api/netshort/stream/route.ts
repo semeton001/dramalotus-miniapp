@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/auth/getCurrentUser";
+import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
+import { createStreamToken, verifyStreamToken } from "@/lib/stream/token";
 import { request as httpsRequest } from "node:https";
 import { request as httpRequest } from "node:http";
 import { Readable } from "node:stream";
+import { checkStreamRateLimit } from "@/lib/rate-limit/stream";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +24,29 @@ const HOP_BY_HOP_HEADERS = new Set([
   "content-length",
   "host",
 ]);
+
+const NETSHORT_EPISODE_BASE_URL =
+  "https://streamapi.web.id/p/netshort/api/v1/episode";
+
+const NETSHORT_TOKEN = process.env.NETSHORT_TOKEN?.trim() || "";
+
+type StreamapiNetshortEpisodeResponse = {
+  code?: number;
+  data?: {
+    episodeId?: string | number;
+    videos?: Array<{
+      quality?: string;
+      url?: string;
+    }>;
+    subtitles?: Array<{
+      url?: string;
+      language?: string;
+      label?: string;
+    }>;
+  };
+};
+
+type VerifiedStreamToken = NonNullable<ReturnType<typeof verifyStreamToken>>;
 
 function buildCorsHeaders(contentType?: string | null) {
   return {
@@ -80,9 +107,20 @@ function isTlsCertError(error: unknown): boolean {
   );
 }
 
-function toProxyUrl(resolved: URL, request: NextRequest): string {
+function toProxyUrl(
+  resolved: URL,
+  request: NextRequest,
+  parentPayload: VerifiedStreamToken,
+): string {
   const proxyBase = new URL("/api/netshort/stream", request.url);
-  proxyBase.searchParams.set("u", encodeUrlToken(resolved.toString()));
+  const childToken = createStreamToken({
+    provider: parentPayload.provider,
+    userId: parentPayload.userId,
+    episodeKey: parentPayload.episodeKey,
+    url: resolved.toString(),
+  });
+
+  proxyBase.searchParams.set("token", childToken);
   return proxyBase.toString();
 }
 
@@ -90,6 +128,7 @@ function rewriteDirectiveUris(
   line: string,
   upstreamUrl: URL,
   request: NextRequest,
+  parentPayload: VerifiedStreamToken,
 ): string {
   return line.replace(/URI="([^"]+)"/g, (_match, uriValue: string) => {
     try {
@@ -99,7 +138,7 @@ function rewriteDirectiveUris(
         return `URI="${uriValue}"`;
       }
 
-      return `URI="${toProxyUrl(resolved, request)}"`;
+      return `URI="${toProxyUrl(resolved, request, parentPayload)}"`;
     } catch {
       return `URI="${uriValue}"`;
     }
@@ -110,6 +149,7 @@ function rewritePlaylist(
   body: string,
   upstreamUrl: URL,
   request: NextRequest,
+  parentPayload: VerifiedStreamToken,
 ): string {
   return body
     .split(/\r?\n/)
@@ -119,7 +159,7 @@ function rewritePlaylist(
       if (!trimmed) return line;
 
       if (trimmed.startsWith("#")) {
-        return rewriteDirectiveUris(line, upstreamUrl, request);
+        return rewriteDirectiveUris(line, upstreamUrl, request, parentPayload);
       }
 
       try {
@@ -129,7 +169,7 @@ function rewritePlaylist(
           return line;
         }
 
-        return toProxyUrl(resolved, request);
+        return toProxyUrl(resolved, request, parentPayload);
       } catch {
         return line;
       }
@@ -296,26 +336,126 @@ async function fetchUpstreamWithInsecureTls(
   });
 }
 
-async function handleProxy(request: NextRequest) {
-  const rawToken = request.nextUrl.searchParams.get("u")?.trim();
-  const rawLegacyUrl = request.nextUrl.searchParams.get("url")?.trim();
+function pickBestNetshortVideoUrl(
+  payload: StreamapiNetshortEpisodeResponse,
+): string {
+  const videos = Array.isArray(payload.data?.videos) ? payload.data.videos : [];
 
-  let rawUrl = "";
+  const byQuality = (quality: string) =>
+    videos.find(
+      (video) =>
+        typeof video.quality === "string" &&
+        video.quality.toLowerCase() === quality &&
+        typeof video.url === "string" &&
+        video.url.trim().length > 0,
+    )?.url?.trim() || "";
 
-  if (rawToken) {
-    try {
-      rawUrl = decodeUrlToken(rawToken).trim();
-    } catch {
-      return NextResponse.json(
-        { error: "Invalid u token." },
-        { status: 400, headers: buildCorsHeaders("application/json") },
-      );
-    }
-  } else if (rawLegacyUrl) {
-    rawUrl = rawLegacyUrl;
+  return (
+    byQuality("1080p") ||
+    byQuality("720p") ||
+    byQuality("540p") ||
+    videos.find(
+      (video) =>
+        typeof video.url === "string" && video.url.trim().length > 0,
+    )?.url?.trim() ||
+    ""
+  );
+}
+
+async function resolveNetshortEpisodeVideoUrl(
+  dramaId: string,
+  episodeNo: string,
+): Promise<string> {
+  const upstreamUrl = `${NETSHORT_EPISODE_BASE_URL}/${encodeURIComponent(
+    dramaId,
+  )}/${encodeURIComponent(episodeNo)}?lang=id_ID&token=${NETSHORT_TOKEN}`;
+
+  const response = await fetch(upstreamUrl, {
+    method: "GET",
+    cache: "no-store",
+    headers: {
+      Accept: "application/json, text/plain, */*",
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Netshort episode failed: ${response.status}`);
   }
 
-  if (!rawUrl) {
+  const payload = (await response.json()) as StreamapiNetshortEpisodeResponse;
+  const videoUrl = pickBestNetshortVideoUrl(payload);
+
+  if (!videoUrl) {
+    throw new Error("Netshort episode video URL not found.");
+  }
+
+  return videoUrl;
+}
+
+async function handleProxy(request: NextRequest) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return NextResponse.json(
+      { ok: false, error: "Unauthorized" },
+      { status: 401, headers: buildCorsHeaders("application/json") },
+    );
+  }
+
+  const streamToken = request.nextUrl.searchParams.get("token")?.trim() ?? "";
+  const rawToken = request.nextUrl.searchParams.get("u")?.trim();
+  const rawLegacyUrl = request.nextUrl.searchParams.get("url")?.trim();
+  const dramaId = request.nextUrl.searchParams.get("dramaId")?.trim() || "";
+  const episodeNo = request.nextUrl.searchParams.get("episodeNo")?.trim() || "";
+
+  let rawUrl = "";
+  let parentPayload: VerifiedStreamToken | null = null;
+
+  if (streamToken) {
+    const tokenPayload = verifyStreamToken(streamToken);
+
+    if (
+      !tokenPayload ||
+      tokenPayload.provider !== "netshort" ||
+      tokenPayload.userId !== user.id
+    ) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid or expired stream token" },
+        { status: 403, headers: buildCorsHeaders("application/json") },
+      );
+    }
+
+    rawUrl = tokenPayload.url;
+    parentPayload = tokenPayload;
+  } else if (rawToken || rawLegacyUrl) {
+    return NextResponse.json(
+      { ok: false, error: "Direct URL playback is disabled." },
+      { status: 403, headers: buildCorsHeaders("application/json") },
+    );
+  } else if (dramaId && episodeNo) {
+    rawUrl = await resolveNetshortEpisodeVideoUrl(dramaId, episodeNo);
+
+    const initialToken = createStreamToken({
+      provider: "netshort",
+      userId: user.id,
+      episodeKey: `${dramaId}:${episodeNo}`,
+      url: rawUrl,
+    });
+
+    const tokenUrl = `/api/netshort/stream?token=${encodeURIComponent(initialToken)}`;
+
+    return new NextResponse(null, {
+      status: 307,
+      headers: {
+        Location: tokenUrl,
+        ...buildCorsHeaders(),
+      },
+    });
+  }
+
+  if (!rawUrl || !parentPayload) {
     return NextResponse.json(
       { error: "Missing required query parameter: u or url" },
       { status: 400, headers: buildCorsHeaders("application/json") },
@@ -375,7 +515,12 @@ async function handleProxy(request: NextRequest) {
 
     if (isLikelyPlaylist(contentType, upstreamUrl)) {
       const playlistText = await upstreamResponse.text();
-      const rewritten = rewritePlaylist(playlistText, upstreamUrl, request);
+      const rewritten = rewritePlaylist(
+        playlistText,
+        upstreamUrl,
+        request,
+        parentPayload,
+      );
 
       return new NextResponse(rewritten, {
         status: upstreamResponse.status,
@@ -419,7 +564,12 @@ async function handleProxy(request: NextRequest) {
       }
 
       const playlistText = Buffer.concat(chunks).toString("utf8");
-      const rewritten = rewritePlaylist(playlistText, upstreamUrl, request);
+      const rewritten = rewritePlaylist(
+        playlistText,
+        upstreamUrl,
+        request,
+        parentPayload,
+      );
 
       return new NextResponse(rewritten, {
         status: fallback.status,
@@ -457,7 +607,73 @@ async function handleProxy(request: NextRequest) {
   }
 }
 
+
+async function requireNetshortAccess(request: NextRequest) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return NextResponse.json(
+      { ok: false, error: "Unauthorized" },
+      { status: 401, headers: buildCorsHeaders("application/json") },
+    );
+  }
+
+  const token = request.nextUrl.searchParams.get("token")?.trim() ?? "";
+  const proxyToken = request.nextUrl.searchParams.get("u")?.trim() ?? "";
+  const legacyUrl = request.nextUrl.searchParams.get("url")?.trim() ?? "";
+
+  if (token) {
+    return null;
+  }
+
+  if (proxyToken || legacyUrl) {
+    return NextResponse.json(
+      { ok: false, error: "Direct URL playback is disabled." },
+      { status: 403, headers: buildCorsHeaders("application/json") },
+    );
+  }
+
+  const episodeNo = request.nextUrl.searchParams.get("episodeNo")?.trim() || "";
+  const episodeNumber = Number(episodeNo);
+
+  if (!Number.isInteger(episodeNumber) || episodeNumber < 1) {
+    return NextResponse.json(
+      { ok: false, error: "episodeNo tidak valid." },
+      { status: 400, headers: buildCorsHeaders("application/json") },
+    );
+  }
+
+  const isFreeEpisode = episodeNumber <= FREE_EPISODE_LIMIT;
+
+  if (!isFreeEpisode && user.membership_status !== "vip") {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "VIP_REQUIRED",
+        message: "Episode ini hanya untuk VIP.",
+      },
+      { status: 403, headers: buildCorsHeaders("application/json") },
+    );
+  }
+
+  if (user.membership_status === "vip" && user.vip_until) {
+    const expiresAt = new Date(user.vip_until).getTime();
+
+    if (!Number.isNaN(expiresAt) && expiresAt <= Date.now()) {
+      return NextResponse.json(
+        { ok: false, error: "VIP_EXPIRED" },
+        { status: 403, headers: buildCorsHeaders("application/json") },
+      );
+    }
+  }
+
+  return null;
+}
+
 export async function GET(request: NextRequest) {
+  const accessError = await requireNetshortAccess(request);
+  if (accessError) return accessError;
+
   try {
     return await handleProxy(request);
   } catch (error) {
@@ -472,6 +688,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function HEAD(request: NextRequest) {
+  const accessError = await requireNetshortAccess(request);
+  if (accessError) return accessError;
+
   try {
     return await handleProxy(request);
   } catch (error) {

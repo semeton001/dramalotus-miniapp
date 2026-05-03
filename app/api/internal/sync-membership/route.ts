@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 type SyncMembershipPayload = {
   telegram_user_id?: number | string;
   membership_status?: "free" | "vip" | string;
+  vip_until?: string | null;
   telegram_username?: string | null;
   first_name?: string | null;
   last_name?: string | null;
@@ -19,7 +20,7 @@ function getSyncSecretFromRequest(request: Request) {
 }
 
 function getExpectedSyncSecret() {
-  return process.env.SYNC_MEMBERSHIP_SECRET || process.env.DEBUG_ADMIN_SECRET || "";
+  return process.env.SYNC_MEMBERSHIP_SECRET || "";
 }
 
 function normalizeMembershipStatus(value: unknown): "free" | "vip" | null {
@@ -33,6 +34,16 @@ function normalizeOptionalString(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeOptionalDateString(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const date = new Date(trimmed);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
 }
 
 function normalizeTelegramUserId(value: unknown): number | null {
@@ -73,7 +84,7 @@ export async function POST(request: Request) {
 
     const previousResult = await supabaseAdmin
       .from("users")
-      .select("id, telegram_user_id, membership_status, telegram_username, first_name, last_name")
+      .select("id, telegram_user_id, membership_status, vip_until, telegram_username, first_name, last_name")
       .eq("telegram_user_id", telegramUserId)
       .maybeSingle();
 
@@ -82,6 +93,7 @@ export async function POST(request: Request) {
     const payload = {
       telegram_user_id: telegramUserId,
       membership_status: membershipStatus,
+      vip_until: normalizeOptionalDateString(body.vip_until),
       telegram_username: normalizeOptionalString(body.telegram_username),
       first_name: normalizeOptionalString(body.first_name),
       last_name: normalizeOptionalString(body.last_name),
@@ -90,7 +102,7 @@ export async function POST(request: Request) {
     const { data, error } = await supabaseAdmin
       .from("users")
       .upsert(payload, { onConflict: "telegram_user_id" })
-      .select("id, telegram_user_id, membership_status, telegram_username, first_name, last_name")
+      .select("id, telegram_user_id, membership_status, vip_until, telegram_username, first_name, last_name")
       .single();
 
     if (error || !data) throw new Error(error?.message || "Failed to sync membership");

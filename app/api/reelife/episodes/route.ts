@@ -1,90 +1,178 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  REELIFE_DEFAULT_PLAY_CODE,
-  adaptReelifeEpisode,
-  collectReelifeCode,
-  findPreviewEpisode,
-  getLang,
-  getNumber,
-  getString,
-  reelifeFetch,
-  toArray,
-} from "../_shared";
-import type {
-  ReelifeBookDetailResponse,
-  ReelifeChaptersResponse,
-  ReelifeChapterItem,
-} from "../_shared";
 
-export async function GET(req: NextRequest) {
-  try {
-    const dramaId = getString(req.nextUrl.searchParams.get("dramaId"));
-    const numericDramaId = getNumber(
-      req.nextUrl.searchParams.get("numericDramaId"),
-      0,
+type JsonRecord = Record<string, unknown>;
+
+const REELIFE_API_BASE_URL = "https://streamapi.web.id/p/reelife/api/v1";
+const REELIFE_API_TOKEN =
+  "KFKiMIbY3Np8kbimDo7lJDNSVslwF3Fn64cI0TOtqpOP373n58ca6BKzbDsLb7qB";
+
+async function fetchReelifeStreamApi(pathname: string): Promise<JsonRecord> {
+  const normalizedPath = pathname.startsWith("/") ? pathname.slice(1) : pathname;
+  const baseUrl = REELIFE_API_BASE_URL.endsWith("/")
+    ? REELIFE_API_BASE_URL
+    : `${REELIFE_API_BASE_URL}/`;
+
+  const url = new URL(normalizedPath, baseUrl);
+
+  if (!url.searchParams.has("token")) {
+    url.searchParams.set("token", REELIFE_API_TOKEN);
+  }
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(
+      `Reelife streamapi ${response.status} for ${url.toString()}: ${body.slice(0, 300)}`,
     );
-    const lang = getLang(req);
+  }
+
+  return (await response.json()) as JsonRecord;
+}
+
+type ReelifeVideoInfo = {
+  quality?: number | string;
+  videoPath?: string;
+};
+
+type ReelifeChapter = {
+  bookId?: string;
+  chapterId?: string;
+  chapterName?: string;
+  chapterImg?: string;
+  mp4720p?: string;
+  mp4720pStandByUrl?: string[];
+  videoInfoList?: ReelifeVideoInfo[];
+};
+
+function toNumber(value: unknown, fallback = 0): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
+
+function toStringValue(value: unknown, fallback = ""): string {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return fallback;
+}
+
+function pick720VideoUrl(chapter: ReelifeChapter, payload?: JsonRecord): string {
+  const videos = Array.isArray(chapter.videoInfoList)
+    ? chapter.videoInfoList
+    : [];
+
+  const video720 =
+    videos.find((item) => Number(item.quality) === 720 && item.videoPath) ||
+    videos.find((item) => item.videoPath);
+
+  return (
+    toStringValue(video720?.videoPath) ||
+    toStringValue(chapter.mp4720p) ||
+    toStringValue(chapter.mp4720pStandByUrl?.[0]) ||
+    toStringValue(payload?.video_url)
+  );
+}
+
+async function fetchEpisode(dramaId: string, episodeNumber: number) {
+  const payload = await fetchReelifeStreamApi(
+    `/dramas/${encodeURIComponent(dramaId)}/episodes/${episodeNumber}`,
+  );
+
+  const data = payload?.data as JsonRecord | undefined;
+  const chapterList = Array.isArray(data?.chapterContentList)
+    ? (data.chapterContentList as ReelifeChapter[])
+    : [];
+
+  const chapter = chapterList[0];
+
+  if (!chapter) return null;
+
+  const videoUrl = pick720VideoUrl(chapter, payload);
+  const chapterId = toStringValue(chapter.chapterId, String(episodeNumber));
+
+  return {
+    id: Number(`${dramaId}${String(episodeNumber).padStart(3, "0")}`),
+    dramaId: toNumber(dramaId),
+    episodeNumber,
+    title: `Episode ${episodeNumber}`,
+    videoUrl: videoUrl
+      ? `/api/reelife/stream?url=${encodeURIComponent(videoUrl)}`
+      : "",
+    originalVideoUrl: videoUrl || undefined,
+    subtitleUrl: undefined,
+    subtitleLang: undefined,
+    subtitleLabel: undefined,
+    isLocked: !videoUrl,
+    isVipOnly: !videoUrl,
+    sortOrder: episodeNumber,
+    thumbnail: toStringValue(chapter.chapterImg) || undefined,
+    reelifeEpisodeId: chapterId,
+    reelifePlayId: chapterId,
+  };
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const dramaId =
+      request.nextUrl.searchParams.get("dramaId")?.trim() ||
+      request.nextUrl.searchParams.get("bookId")?.trim() ||
+      "";
 
     if (!dramaId) {
-      return NextResponse.json({ error: "Missing dramaId" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing Reelife dramaId." },
+        { status: 400 },
+      );
     }
 
-    const [chaptersPayload, detailPayload] = await Promise.all([
-      reelifeFetch<ReelifeChaptersResponse>(
-        `/api/v1/book/${dramaId}/chapters?lang=${lang}`,
-      ),
-      reelifeFetch<ReelifeBookDetailResponse>(
-        `/api/v1/book/${dramaId}?lang=${lang}`,
-      ),
-    ]);
-
-    const detailEpisodes = toArray<ReelifeChapterItem>(
-      detailPayload?.data?.chapterContentList,
-    );
-    const chapterList = toArray<ReelifeChapterItem>(
-      chaptersPayload?.data?.chapterList,
+    const detail = await fetchReelifeStreamApi(
+      `/dramas/${encodeURIComponent(dramaId)}`,
     );
 
-    const sharedCode =
-      collectReelifeCode(
-        req.nextUrl.searchParams.get("code"),
-        chaptersPayload,
-        detailPayload,
-        detailPayload?.data?.bookVo,
-        ...detailEpisodes,
-      ) || REELIFE_DEFAULT_PLAY_CODE;
+    const data = detail?.data as JsonRecord | undefined;
+    const totalEpisodes =
+      toNumber(data?.lastChapterId) ||
+      toNumber(data?.chapterCount) ||
+      toNumber(data?.episodes) ||
+      0;
 
-    const episodes = chapterList.map((chapter, index) => {
-      const chapterId = getString(chapter.chapterId);
-      const preview = findPreviewEpisode(detailEpisodes, chapterId);
-
-      const episodeCode =
-        collectReelifeCode(chapter, preview, sharedCode) || sharedCode;
-
-      return adaptReelifeEpisode(
-        {
-          ...chapter,
-          ...(preview || {}),
-          code: episodeCode,
-        },
-        {
-          numericDramaId,
-          dramaId,
-          code: episodeCode,
-          fallbackVideoUrl: getString(preview?.mp4720p),
-          index,
-        },
+    if (totalEpisodes <= 0) {
+      return NextResponse.json(
+        { error: "Reelife detail did not include episode count.", dramaId },
+        { status: 502 },
       );
-    });
+    }
 
-    return NextResponse.json(episodes);
+    const episodeNumbers = Array.from(
+      { length: totalEpisodes },
+      (_, index) => index + 1,
+    );
+
+    const episodes = await Promise.all(
+      episodeNumbers.map((episodeNumber) =>
+        fetchEpisode(dramaId, episodeNumber).catch(() => null),
+      ),
+    );
+
+    return NextResponse.json(episodes.filter(Boolean), {
+      headers: { "Cache-Control": "no-store" },
+    });
   } catch (error) {
+    console.error("Reelife episodes route error:", error);
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unknown Reelife episodes error",
+        error: "Failed to load Reelife episodes.",
+        details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
     );

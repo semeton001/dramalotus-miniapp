@@ -1,6 +1,10 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
-import { verifyTelegramAuth } from "@/lib/auth/telegram";
+import {
+  parseTelegramInitData,
+  verifyTelegramAuth,
+  verifyTelegramWebAppInitData,
+} from "@/lib/auth/telegram";
 import {
   createWebSession,
   WEB_SESSION_COOKIE,
@@ -8,13 +12,14 @@ import {
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 type TelegramAuthPayload = {
-  id: string | number;
+  id?: string | number;
   first_name?: string;
   last_name?: string;
   username?: string;
   photo_url?: string;
-  auth_date: string | number;
-  hash: string;
+  auth_date?: string | number;
+  hash?: string;
+  init_data?: string;
 };
 
 function normalizePayload(input: TelegramAuthPayload) {
@@ -27,6 +32,21 @@ function normalizePayload(input: TelegramAuthPayload) {
     auth_date: String(input.auth_date ?? ""),
     hash: input.hash ?? "",
   };
+}
+
+function normalizeInitDataPayload(initData: string) {
+  const parsed = parseTelegramInitData(initData);
+  const rawUser = parsed.user ? JSON.parse(parsed.user) : {};
+
+  return normalizePayload({
+    id: rawUser?.id ?? "",
+    first_name: rawUser?.first_name ?? "",
+    last_name: rawUser?.last_name ?? "",
+    username: rawUser?.username ?? "",
+    photo_url: rawUser?.photo_url ?? "",
+    auth_date: parsed.auth_date ?? "",
+    hash: parsed.hash ?? "",
+  });
 }
 
 async function upsertTelegramUser(body: ReturnType<typeof normalizePayload>) {
@@ -80,9 +100,17 @@ async function upsertTelegramUser(body: ReturnType<typeof normalizePayload>) {
 }
 
 async function handleAuth(payload: TelegramAuthPayload, requestUrl: string) {
-  const body = normalizePayload(payload);
+  const botToken = process.env.TELEGRAM_BOT_TOKEN || "";
+  const initData =
+    typeof payload.init_data === "string" && payload.init_data.trim().length > 0
+      ? payload.init_data.trim()
+      : "";
 
-  const isValid = verifyTelegramAuth(body, process.env.TELEGRAM_BOT_TOKEN || "");
+  const body = initData ? normalizeInitDataPayload(initData) : normalizePayload(payload);
+
+  const isValid = initData
+    ? verifyTelegramWebAppInitData(initData, botToken)
+    : verifyTelegramAuth(body, botToken);
 
   if (!isValid) {
     return NextResponse.json({ error: "Invalid Telegram auth" }, { status: 401 });
@@ -98,7 +126,7 @@ async function handleAuth(payload: TelegramAuthPayload, requestUrl: string) {
     headerStore.get("host") ||
     new URL(requestUrl).host;
 
-  const response = NextResponse.redirect(`${proto}://${host}/me`);
+  const response = NextResponse.redirect(`${proto}://${host}/`);
 
   response.cookies.set(WEB_SESSION_COOKIE, sessionToken, {
     httpOnly: true,

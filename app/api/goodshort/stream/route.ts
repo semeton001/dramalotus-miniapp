@@ -1,5 +1,11 @@
 import { NextRequest } from "next/server";
-import { createProxyHeaders, jsonError, rewriteM3u8Playlist } from "../_shared";
+import { requireApiVip } from "@/lib/auth/requireApiVip";
+import {
+  createProxyHeaders,
+  fetchGoodshortJson,
+  jsonError,
+  rewriteM3u8Playlist,
+} from "../_shared";
 
 function isAbsoluteUrl(value: string): boolean {
   return /^https?:\/\//i.test(value);
@@ -101,13 +107,89 @@ function parseDataUrl(
   }
 }
 
-function maybeBuildVideoKeyDataUrl(videoKey: string): string {
-  const trimmed = videoKey.trim();
-  if (!trimmed) return "";
+type GoodshortPlayResponse = {
+  success?: boolean;
+  episode?: string;
+  m3u8?: string;
+  k?: string;
+  s?: string;
+};
 
+async function resolveGoodshortPlay(
+  bookId: string,
+  chapterId: string,
+  quality: string,
+): Promise<{ url: string; videoKey: string; videoSalt: string }> {
+  if (!bookId.trim() || !chapterId.trim()) {
+    return { url: "", videoKey: "", videoSalt: "" };
+  }
+
+  const payload = (await fetchGoodshortJson(
+    `/play/${encodeURIComponent(bookId)}/${encodeURIComponent(chapterId)}`,
+    {
+      q: quality || "720p",
+    },
+  )) as GoodshortPlayResponse;
+
+  return {
+    url: typeof payload?.m3u8 === "string" ? payload.m3u8.trim() : "",
+    videoKey: typeof payload?.k === "string" ? payload.k.trim() : "",
+    videoSalt: typeof payload?.s === "string" ? payload.s.trim() : "",
+  };
+}
+
+function maybeBuildVideoKeyDataUrl(videoKey: string, videoSalt = ""): string {
+  const trimmed = videoKey.trim();
+  const salt = videoSalt.trim();
+
+  if (!trimmed) return "";
   if (trimmed.startsWith("data:")) return trimmed;
 
-  return `data:text/plain;base64,${trimmed}`;
+  try {
+    const binary = atob(trimmed);
+    const bytes = new Uint8Array(binary.length);
+
+    for (let i = 0; i < binary.length; i += 1) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+
+    if (salt) {
+      const saltBytes = new TextEncoder().encode(salt);
+      const xored = new Uint8Array(bytes.length);
+
+      for (let i = 0; i < bytes.length; i += 1) {
+        xored[i] = bytes[i] ^ saltBytes[i % saltBytes.length];
+      }
+
+      const hexText = new TextDecoder().decode(xored).trim();
+
+      if (/^[0-9a-f]{32}$/i.test(hexText)) {
+        const keyBytes = new Uint8Array(16);
+
+        for (let i = 0; i < 16; i += 1) {
+          keyBytes[i] = Number.parseInt(hexText.slice(i * 2, i * 2 + 2), 16);
+        }
+
+        let keyBinary = "";
+        keyBytes.forEach((byte) => {
+          keyBinary += String.fromCharCode(byte);
+        });
+
+        return `data:application/octet-stream;base64,${btoa(keyBinary)}`;
+      }
+    }
+
+    const normalizedBytes = bytes.length > 16 ? bytes.slice(0, 16) : bytes;
+    let normalizedBinary = "";
+
+    normalizedBytes.forEach((byte) => {
+      normalizedBinary += String.fromCharCode(byte);
+    });
+
+    return `data:application/octet-stream;base64,${btoa(normalizedBinary)}`;
+  } catch {
+    return `data:application/octet-stream;base64,${trimmed}`;
+  }
 }
 
 export async function OPTIONS() {
@@ -122,9 +204,23 @@ export async function OPTIONS() {
 }
 
 export async function GET(request: NextRequest) {
+  const vipError = await requireApiVip();
+  if (vipError) return vipError;
+
   try {
-    const rawUrl = request.nextUrl.searchParams.get("url")?.trim() ?? "";
-    const videoKey = request.nextUrl.searchParams.get("videoKey")?.trim() ?? "";
+    let rawUrl = request.nextUrl.searchParams.get("url")?.trim() ?? "";
+    let videoKey = request.nextUrl.searchParams.get("videoKey")?.trim() ?? "";
+    let videoSalt = request.nextUrl.searchParams.get("videoSalt")?.trim() ?? "";
+    const bookId = request.nextUrl.searchParams.get("bookId")?.trim() ?? "";
+    const chapterId = request.nextUrl.searchParams.get("chapterId")?.trim() ?? "";
+    const quality = request.nextUrl.searchParams.get("q")?.trim() || "720p";
+
+    if (!rawUrl && bookId && chapterId) {
+      const resolved = await resolveGoodshortPlay(bookId, chapterId, quality);
+      rawUrl = resolved.url;
+      videoKey = videoKey || resolved.videoKey;
+      videoSalt = videoSalt || resolved.videoSalt;
+    }
 
     if (!rawUrl) {
       return jsonError("Missing GoodShort stream url.", 400);
@@ -152,7 +248,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (decodedUrl.startsWith("local://offline-key")) {
-      const keyDataUrl = maybeBuildVideoKeyDataUrl(videoKey);
+      const keyDataUrl = maybeBuildVideoKeyDataUrl(videoKey, videoSalt);
       if (!keyDataUrl) {
         return jsonError("Missing GoodShort video key.", 400);
       }
@@ -236,14 +332,14 @@ export async function GET(request: NextRequest) {
     if (videoKey) {
       playlistText = playlistText.replace(
         /URI="local:\/\/offline-key[^"]*"/gi,
-        `URI="/api/goodshort/stream?url=${encodeURIComponent("local://offline-key")}&videoKey=${encodeURIComponent(videoKey)}"`,
+        `URI="/api/goodshort/stream?url=${encodeURIComponent("local://offline-key")}&videoKey=${encodeURIComponent(videoKey)}&videoSalt=${encodeURIComponent(videoSalt)}"`,
       );
 
-      const keyDataUrl = maybeBuildVideoKeyDataUrl(videoKey);
+      const keyDataUrl = maybeBuildVideoKeyDataUrl(videoKey, videoSalt);
       if (keyDataUrl) {
         playlistText = playlistText.replace(
           /URI="data:text\/plain;base64,[^"]*"/gi,
-          `URI="/api/goodshort/stream?url=${encodeURIComponent(keyDataUrl)}&videoKey=${encodeURIComponent(videoKey)}"`,
+          `URI="/api/goodshort/stream?url=${encodeURIComponent(keyDataUrl)}&videoKey=${encodeURIComponent(videoKey)}&videoSalt=${encodeURIComponent(videoSalt)}"`,
         );
       }
     }

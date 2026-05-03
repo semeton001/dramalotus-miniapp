@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireApiVip } from "@/lib/auth/requireApiVip";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,7 +47,13 @@ function isValidDecodedUrl(value: string): boolean {
 }
 
 function isAllowedVideoUrl(url: URL): boolean {
+  const hostname = url.hostname.toLowerCase();
   const pathname = url.pathname.toLowerCase();
+
+  if (hostname === "dbox.inicdn.net" && pathname === "/api/play") {
+    return true;
+  }
+
   return ALLOWED_VIDEO_EXTENSIONS.some((ext) => pathname.endsWith(ext));
 }
 
@@ -201,10 +208,16 @@ async function handleProxy(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
+  const vipError = await requireApiVip();
+  if (vipError) return vipError;
+
   return handleProxy(request);
 }
 
 export async function HEAD(request: NextRequest) {
+  const vipError = await requireApiVip();
+  if (vipError) return vipError;
+
   return handleProxy(request);
 }
 

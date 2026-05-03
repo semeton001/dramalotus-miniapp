@@ -5,16 +5,18 @@ export async function GET(request: NextRequest) {
   try {
     const page = Number(request.nextUrl.searchParams.get("page") || "1") || 1;
 
-    const [popular, latest, foryou] = await Promise.all([
-      fetchFreeReelsJson(buildApiUrl("/popular", { page })),
-      fetchFreeReelsJson(buildApiUrl("/new", { page })),
-      fetchFreeReelsJson(buildApiUrl("/foryou", { page })),
+    const upstreamPage = Math.max(0, page - 1);
+
+    const [dubbing, anime, female] = await Promise.all([
+      fetchFreeReelsJson(buildApiUrl("/dubbing", { page: upstreamPage })),
+      fetchFreeReelsJson(buildApiUrl("/anime", { page: upstreamPage })),
+      fetchFreeReelsJson(buildApiUrl("/female", { page: upstreamPage })),
     ]);
 
     const pool = [
-      ...toDramaList(popular, "Populer"),
-      ...toDramaList(latest, "Baru"),
-      ...toDramaList(foryou, "ForYou"),
+      ...toDramaList(dubbing, "Dubbing"),
+      ...toDramaList(anime, "Anime"),
+      ...toDramaList(female, "Female"),
     ];
 
     const deduped = Array.from(
@@ -28,7 +30,7 @@ export async function GET(request: NextRequest) {
       .slice(0, 60)
       .map((item, index) => ({ ...item, sortOrder: index, badge: "FreeReels" }));
 
-    return NextResponse.json(jsonFeed(randomized, page, randomized.length > 0));
+    return NextResponse.json(jsonFeed(randomized, page, false));
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Gagal memuat home FreeReels." },

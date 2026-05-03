@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createStreamToken, verifyStreamToken } from "@/lib/stream/token";
 
 type AnyRecord = Record<string, unknown>;
 
@@ -14,6 +15,172 @@ const DEFAULT_HEADERS: Record<string, string> = {
 const REELSHORT_DEFAULT_CODE =
   process.env.REELSHORT_DEFAULT_CODE?.trim() ||
   "4D96F22760EA30FB0FFBA9AA87A979A6";
+
+function getReelShortCode(inputCode = ""): string {
+  return inputCode.trim() || REELSHORT_DEFAULT_CODE;
+}
+
+function redactSensitiveUrl(value: string): string {
+  return value.replace(/([?&](?:token|api_token)=)[^&]*/gi, "$1***HIDDEN***");
+}
+
+function buildSignedReelShortProxyUrl(token: string): string {
+  return `/api/reelshort/stream?token=${encodeURIComponent(token)}`;
+}
+
+type VerifiedStreamToken = NonNullable<ReturnType<typeof verifyStreamToken>>;
+
+function isAbsoluteUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value);
+}
+
+function toAbsoluteUrl(baseUrl: string, value: string): string {
+  try {
+    return new URL(value, baseUrl).toString();
+  } catch {
+    return value;
+  }
+}
+
+function buildChildSignedReelShortProxyUrl(
+  url: string,
+  parentPayload: VerifiedStreamToken,
+): string {
+  const childToken = createStreamToken({
+    provider: parentPayload.provider,
+    userId: parentPayload.userId,
+    episodeKey: parentPayload.episodeKey,
+    url,
+  });
+
+  return buildSignedReelShortProxyUrl(childToken);
+}
+
+function rewriteReelShortUriAttribute(
+  line: string,
+  manifestUrl: string,
+  tokenPayload: VerifiedStreamToken,
+): string {
+  return line.replace(/URI="([^"]+)"/g, (_match, uri) => {
+    const absolute = toAbsoluteUrl(manifestUrl, uri);
+    return `URI="${buildChildSignedReelShortProxyUrl(absolute, tokenPayload)}"`;
+  });
+}
+
+function rewriteReelShortM3u8Manifest(
+  manifestText: string,
+  manifestUrl: string,
+  tokenPayload: VerifiedStreamToken,
+): string {
+  return manifestText
+    .split(/\r?\n/)
+    .map((line) => {
+      const trimmed = line.trim();
+
+      if (!trimmed) return line;
+
+      if (
+        trimmed.startsWith("#EXT-X-KEY:") ||
+        trimmed.startsWith("#EXT-X-MAP:") ||
+        trimmed.startsWith("#EXT-X-MEDIA:")
+      ) {
+        return rewriteReelShortUriAttribute(line, manifestUrl, tokenPayload);
+      }
+
+      if (trimmed.startsWith("#")) {
+        return line;
+      }
+
+      const absolute = isAbsoluteUrl(trimmed)
+        ? trimmed
+        : toAbsoluteUrl(manifestUrl, trimmed);
+
+      return buildChildSignedReelShortProxyUrl(absolute, tokenPayload);
+    })
+    .join("\n");
+}
+
+function buildPassthroughHeaders(request: NextRequest) {
+  const headers = new Headers();
+  headers.set("Accept", "*/*");
+
+  const range = request.headers.get("range");
+  if (range) {
+    headers.set("Range", range);
+  }
+
+  const userAgent = request.headers.get("user-agent");
+  if (userAgent) {
+    headers.set("User-Agent", userAgent);
+  }
+
+  return headers;
+}
+
+async function proxyReelShortMedia(
+  request: NextRequest,
+  targetUrl: string,
+  tokenPayload: VerifiedStreamToken,
+) {
+  const upstream = await fetch(targetUrl, {
+    cache: "no-store",
+    headers: buildPassthroughHeaders(request),
+  });
+
+  if (!upstream.ok) {
+    return NextResponse.json(
+      { error: `Gagal mengambil stream upstream. status=${upstream.status}` },
+      { status: upstream.status },
+    );
+  }
+
+  const contentType =
+    upstream.headers.get("content-type") ||
+    (targetUrl.includes(".m3u8")
+      ? "application/vnd.apple.mpegurl"
+      : "video/mp4");
+
+  const isManifest =
+    contentType.includes("application/vnd.apple.mpegurl") ||
+    contentType.includes("application/x-mpegURL") ||
+    targetUrl.includes(".m3u8");
+
+  if (isManifest) {
+    const manifestText = await upstream.text();
+    const rewrittenManifest = rewriteReelShortM3u8Manifest(
+      manifestText,
+      targetUrl,
+      tokenPayload,
+    );
+
+    return new NextResponse(rewrittenManifest, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/vnd.apple.mpegurl; charset=utf-8",
+        "Cache-Control": "no-store",
+        "Access-Control-Allow-Origin": "*",
+      },
+    });
+  }
+
+  const responseHeaders = new Headers();
+  responseHeaders.set("Content-Type", contentType);
+  responseHeaders.set("Cache-Control", "no-store");
+  responseHeaders.set("Access-Control-Allow-Origin", "*");
+
+  const contentLength = upstream.headers.get("content-length");
+  const contentRange = upstream.headers.get("content-range");
+  const acceptRanges = upstream.headers.get("accept-ranges");
+
+  if (contentLength) responseHeaders.set("Content-Length", contentLength);
+  if (contentRange) responseHeaders.set("Content-Range", contentRange);
+  if (acceptRanges) responseHeaders.set("Accept-Ranges", acceptRanges);
+
+  return new NextResponse(upstream.body, {
+    status: upstream.status,
+    headers: responseHeaders,
+  });
+}
 
 function getString(record: AnyRecord, ...keys: string[]): string {
   for (const key of keys) {
@@ -65,6 +232,21 @@ function extractItems(payload: unknown): unknown[] {
   if (!payload || typeof payload !== "object") return [];
 
   const record = payload as AnyRecord;
+  const data =
+    record.data && typeof record.data === "object"
+      ? (record.data as AnyRecord)
+      : {};
+
+  const nestedLists = Array.isArray(data.lists)
+    ? data.lists.flatMap((entry) => {
+        if (!entry || typeof entry !== "object") return [];
+        const item = entry as AnyRecord;
+        return Array.isArray(item.books) ? item.books : [];
+      })
+    : [];
+
+  if (nestedLists.length > 0) return nestedLists;
+
   const candidates = [
     record.items,
     record.results,
@@ -72,6 +254,11 @@ function extractItems(payload: unknown): unknown[] {
     record.data,
     record.list,
     record.popular,
+    data.items,
+    data.results,
+    data.books,
+    data.list,
+    data.popular,
   ];
 
   for (const candidate of candidates) {
@@ -144,6 +331,7 @@ function adaptDramaItem(item: unknown, index: number) {
   const title =
     getString(
       raw,
+      "book_title",
       "title",
       "name",
       "bookName",
@@ -151,10 +339,12 @@ function adaptDramaItem(item: unknown, index: number) {
       "dramaName",
       "drama_name",
       "seriesName",
+      "share_text",
     ) || "Tanpa Judul";
 
   const pic = getString(
     raw,
+    "book_pic",
     "pic",
     "cover",
     "coverWap",
@@ -172,6 +362,7 @@ function adaptDramaItem(item: unknown, index: number) {
 
   const episodeCountRaw = getString(
     raw,
+    "chapter_count",
     "chapters",
     "chapterCount",
     "episodes",
@@ -266,7 +457,7 @@ async function fetchFeedItems(upstreamUrl: string): Promise<unknown[]> {
 
   if (!response.ok) {
     throw new Error(
-      `Upstream ReelShort gagal. status=${response.status} body=${text} url=${upstreamUrl}`,
+      `Upstream ReelShort gagal. status=${response.status} body=${text} url=${redactSensitiveUrl(upstreamUrl)}`,
     );
   }
 
@@ -283,7 +474,17 @@ export async function respondCombinedDramaFeed(
   page = 1,
 ) {
   const results = await Promise.all(
-    upstreamUrls.map((url) => fetchFeedItems(url)),
+    upstreamUrls.map(async (url) => {
+      try {
+        return await fetchFeedItems(url);
+      } catch (error) {
+        console.warn(
+          "ReelShort feed upstream gagal, memakai fallback kosong:",
+          error,
+        );
+        return [];
+      }
+    }),
   );
 
   const merged = results.flat().map(adaptDramaItem);
@@ -304,8 +505,10 @@ export async function respondSearch(query: string) {
     return NextResponse.json([], { status: 200 });
   }
 
+  const candidateCode = getReelShortCode();
+
   const { response, text, json } = await fetchJsonish(
-    `https://reelshort.dramabos.my.id/search?q=${encodeURIComponent(query)}&lang=in`,
+    `https://streamapi.web.id/p/reelshort/api/v1/search?q=${encodeURIComponent(query)}&page=1&lang=in&token=${encodeURIComponent(candidateCode)}`,
   );
 
   if (!response.ok) {
@@ -318,7 +521,17 @@ export async function respondSearch(query: string) {
     );
   }
 
-  return NextResponse.json(extractItems(json).map(adaptDramaItem), {
+  const record = json && typeof json === "object" ? (json as AnyRecord) : {};
+  const data =
+    record.data && typeof record.data === "object"
+      ? (record.data as AnyRecord)
+      : {};
+
+  const items = Array.isArray(data.lists)
+    ? data.lists
+    : extractItems(json);
+
+  return NextResponse.json(items.map(adaptDramaItem), {
     status: 200,
   });
 }
@@ -331,8 +544,10 @@ export async function respondDetail(reelShortId: string) {
     );
   }
 
+  const candidateCode = getReelShortCode();
+
   const { response, text, json } = await fetchJsonish(
-    `https://reelshort.dramabos.my.id/detail/${encodeURIComponent(reelShortId)}?lang=in`,
+    `https://streamapi.web.id/p/reelshort/api/v1/book/${encodeURIComponent(reelShortId)}?lang=in&token=${encodeURIComponent(candidateCode)}`,
   );
 
   if (!response.ok) {
@@ -436,25 +651,47 @@ function adaptReelShortEpisodes(
 ) {
   const record =
     payload && typeof payload === "object" ? (payload as AnyRecord) : {};
-  const sourceList = Array.isArray(record.episodes)
-    ? record.episodes
+  const data =
+    record.data && typeof record.data === "object"
+      ? (record.data as AnyRecord)
+      : {};
+  const sourceList = Array.isArray(data.chapters)
+    ? data.chapters
     : Array.isArray(record.chapters)
       ? record.chapters
-      : Array.isArray(payload)
-        ? payload
-        : [];
+      : Array.isArray(record.episodes)
+        ? record.episodes
+        : Array.isArray(payload)
+          ? payload
+          : [];
 
   return sourceList.map((item, index) => {
     const raw = item && typeof item === "object" ? (item as AnyRecord) : {};
 
     const episodeNumberRaw =
-      getString(raw, "episode", "episodeNumber", "episode_number") ||
-      getString(raw, "name").match(/(\d+)/)?.[1] ||
+      getString(
+        raw,
+        "serial_number",
+        "episode",
+        "episodeNumber",
+        "episode_number",
+      ) ||
+      getString(raw, "chapter_name", "name").match(/(\d+)/)?.[1] ||
       "";
     const episodeNumber = Number(episodeNumberRaw) || index + 1;
 
-    const episodeId = getString(raw, "id", "episodeId", "episode_id");
+    const episodeId = getString(
+      raw,
+      "chapter_id",
+      "id",
+      "episodeId",
+      "episode_id",
+    );
     const videoUrl = pickBestStreamUrl(raw);
+
+    const isLocked =
+      String(raw.is_lock ?? "") === "1" ||
+      String(raw.ad_vip_locked ?? "") === "1";
 
     return {
       id: createStableNumericId(
@@ -463,46 +700,46 @@ function adaptReelShortEpisodes(
       ),
       dramaId: numericDramaId,
       episodeNumber,
-      title: getString(raw, "name", "title") || `Episode ${episodeNumber}`,
+      title:
+        getString(raw, "chapter_name", "name", "title") ||
+        `Episode ${episodeNumber}`,
       duration: adaptEpisodeDuration(raw.duration),
       description: getString(raw, "description", "desc", "summary"),
       videoUrl: videoUrl || undefined,
       originalVideoUrl: videoUrl || undefined,
-      isLocked: String(raw.is_lock ?? "") === "1",
-      isVipOnly: String(raw.is_lock ?? "") === "1",
+      coverImage: getString(raw, "video_pic") || undefined,
+      isLocked,
+      isVipOnly:
+        String(raw.vip_free ?? "") === "1" ||
+        String(raw.ad_vip_locked ?? "") === "1" ||
+        isLocked,
       sortOrder: episodeNumber,
       reelShortEpisodeId: episodeId || undefined,
-      reelShortVideoId: episodeId || undefined,
+      reelShortVideoId: getString(raw, "video_id") || undefined,
       reelShortCode: code || undefined,
     };
   });
 }
 
 async function fetchEpisodesPayload(reelShortId: string, inputCode: string) {
-  const candidateCode = inputCode.trim() || REELSHORT_DEFAULT_CODE;
+  const candidateCode = getReelShortCode(inputCode);
+  const url = `https://streamapi.web.id/p/reelshort/api/v1/book/${encodeURIComponent(reelShortId)}/chapters?lang=in&token=${encodeURIComponent(candidateCode)}`;
 
-  const urls = [
-    `https://reelshort.dramabos.my.id/allepisodes/${encodeURIComponent(reelShortId)}?code=${encodeURIComponent(candidateCode)}`,
-    `https://reelshort.dramabos.my.id/chapters/${encodeURIComponent(reelShortId)}?lang=in&code=${encodeURIComponent(candidateCode)}`,
-    `https://reelshort.dramabos.my.id/chapters/${encodeURIComponent(reelShortId)}?lang=en&code=${encodeURIComponent(candidateCode)}`,
-  ];
+  const { response, text, json } = await fetchJsonish(url);
+  if (!response.ok) return null;
 
-  for (const url of urls) {
-    const { response, text, json } = await fetchJsonish(url);
-    if (!response.ok) continue;
+  const record = json && typeof json === "object" ? (json as AnyRecord) : {};
+  const data =
+    record.data && typeof record.data === "object"
+      ? (record.data as AnyRecord)
+      : {};
 
-    const record = json && typeof json === "object" ? (json as AnyRecord) : {};
-    if (Array.isArray(record.episodes) || Array.isArray(record.chapters)) {
-      return { json, code: candidateCode };
-    }
+  if (Array.isArray(data.chapters) || Array.isArray(record.chapters)) {
+    return { json, code: candidateCode };
+  }
 
-    if (Array.isArray(json)) {
-      return { json, code: candidateCode };
-    }
-
-    if (text) {
-      return { json, code: candidateCode };
-    }
+  if (text) {
+    return { json, code: candidateCode };
   }
 
   return null;
@@ -525,14 +762,8 @@ export async function respondEpisodes(request: NextRequest) {
     const payload = await fetchEpisodesPayload(reelShortId, inputCode);
 
     if (!payload) {
-      return NextResponse.json(
-        {
-          error: "Upstream ReelShort episodes gagal.",
-          requestedId: reelShortId,
-          attemptedCode: inputCode || REELSHORT_DEFAULT_CODE,
-        },
-        { status: 502 },
-      );
+      console.warn("ReelShort episodes upstream gagal, return fallback kosong.");
+      return NextResponse.json([], { status: 200 });
     }
 
     const numericDramaId = Number(dramaIdParam);
@@ -551,21 +782,40 @@ export async function respondEpisodes(request: NextRequest) {
       { status: 200 },
     );
   } catch (error) {
-    return NextResponse.json(
-      {
-        error: "Gagal memuat episode ReelShort.",
-        detail: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    );
+    console.warn("ReelShort episodes route error, return fallback kosong:", error);
+    return NextResponse.json([], { status: 200 });
   }
 }
 
-export async function respondStream(request: NextRequest) {
+export async function respondStream(request: NextRequest, userId: string) {
   try {
+    const token = request.nextUrl.searchParams.get("token")?.trim() ?? "";
+    const tokenPayload = token ? verifyStreamToken(token) : null;
+
+    if (tokenPayload) {
+      if (tokenPayload.provider !== "reelshort") {
+        return NextResponse.json(
+          { ok: false, error: "Invalid stream token provider" },
+          { status: 403 },
+        );
+      }
+
+      if (tokenPayload.userId !== userId) {
+        return NextResponse.json(
+          { ok: false, error: "Invalid stream token user" },
+          { status: 403 },
+        );
+      }
+
+      return proxyReelShortMedia(request, tokenPayload.url, tokenPayload);
+    }
+
     const directUrl = request.nextUrl.searchParams.get("url")?.trim() ?? "";
     if (directUrl) {
-      return NextResponse.json({ url: directUrl }, { status: 200 });
+      return NextResponse.json(
+        { ok: false, error: "Direct URL playback is disabled." },
+        { status: 403 },
+      );
     }
 
     const episodeId =
@@ -574,7 +824,6 @@ export async function respondStream(request: NextRequest) {
       request.nextUrl.searchParams.get("id")?.trim() ??
       request.nextUrl.searchParams.get("dramaId")?.trim() ??
       "";
-    const inputCode = request.nextUrl.searchParams.get("code")?.trim() ?? "";
 
     if (!episodeId) {
       return NextResponse.json(
@@ -583,57 +832,86 @@ export async function respondStream(request: NextRequest) {
       );
     }
 
-    const code = inputCode || REELSHORT_DEFAULT_CODE;
-
-    const candidates = [
-      `https://reelshort.dramabos.my.id/play/${encodeURIComponent(episodeId)}?code=${encodeURIComponent(code)}`,
-      `https://reelshort.dramabos.my.id/unlock/${encodeURIComponent(episodeId)}?code=${encodeURIComponent(code)}`,
-      `https://reelshort.dramabos.my.id/stream/${encodeURIComponent(episodeId)}?code=${encodeURIComponent(code)}`,
-    ];
-
-    for (const candidate of candidates) {
-      const { response, json } = await fetchJsonish(candidate);
-      if (!response.ok || !json || typeof json !== "object") continue;
-      const record = json as AnyRecord;
-      const url = getString(
-        record,
-        "url",
-        "playUrl",
-        "play_url",
-        "videoUrl",
-        "video_url",
-        "streamUrl",
-        "stream_url",
+    if (!reelShortId) {
+      return NextResponse.json(
+        { error: "Parameter id wajib diisi." },
+        { status: 400 },
       );
-      if (url) {
-        return NextResponse.json({ url }, { status: 200 });
-      }
     }
 
-    if (reelShortId) {
-      const payload = await fetchEpisodesPayload(reelShortId, code);
-      if (payload) {
-        const record =
-          payload.json && typeof payload.json === "object"
-            ? (payload.json as AnyRecord)
-            : {};
-        const sourceList = Array.isArray(record.episodes)
-          ? record.episodes
-          : Array.isArray(record.chapters)
-            ? record.chapters
-            : [];
+    const candidateCode = getReelShortCode();
+    const candidate = `https://streamapi.web.id/p/reelshort/api/v1/book/${encodeURIComponent(reelShortId)}/chapter/${encodeURIComponent(episodeId)}/video?token=${encodeURIComponent(candidateCode)}`;
 
-        for (const item of sourceList) {
-          if (!item || typeof item !== "object") continue;
-          const raw = item as AnyRecord;
-          if (getString(raw, "id") !== episodeId) continue;
+    const { response, text, json } = await fetchJsonish(candidate);
 
-          const url = pickBestStreamUrl(raw);
-          if (url) {
-            return NextResponse.json({ url }, { status: 200 });
-          }
-        }
+    if (!response.ok || !json || typeof json !== "object") {
+      return NextResponse.json(
+        {
+          error: "URL stream ReelShort tidak berhasil di-resolve.",
+          upstreamStatus: response.status,
+          upstreamBody: text,
+          episodeId,
+          reelShortId,
+        },
+        { status: response.ok ? 404 : response.status },
+      );
+    }
+
+    const record = json as AnyRecord;
+    const data =
+      record.data && typeof record.data === "object"
+        ? (record.data as AnyRecord)
+        : {};
+    const videos = Array.isArray(data.videos) ? data.videos : [];
+
+    const normalized = videos.filter(
+      (entry): entry is Record<string, unknown> =>
+        !!entry && typeof entry === "object",
+    );
+
+    const getPlayUrl = (entry: Record<string, unknown>) =>
+      getString(entry as AnyRecord, "PlayURL", "playUrl", "url");
+
+    const getDpi = (entry: Record<string, unknown>) => {
+      const raw = entry.Dpi;
+      if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+      if (typeof raw === "string" && raw.trim()) {
+        const n = Number(raw);
+        if (Number.isFinite(n)) return n;
       }
+      return 0;
+    };
+
+    const getMultiDpi = (entry: Record<string, unknown>) => {
+      const raw = entry.MultiDpi;
+      if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+      if (typeof raw === "string" && raw.trim()) {
+        const n = Number(raw);
+        if (Number.isFinite(n)) return n;
+      }
+      return 0;
+    };
+
+    const preferred =
+      normalized.find((entry) => getDpi(entry) == 720 && !!getPlayUrl(entry)) ??
+      normalized.find((entry) => getMultiDpi(entry) == 720 && !!getPlayUrl(entry)) ??
+      normalized.find((entry) => !!getPlayUrl(entry)) ??
+      null;
+
+    const url = preferred ? getPlayUrl(preferred) : "";
+
+    if (url) {
+      const streamToken = createStreamToken({
+        provider: "reelshort",
+        userId,
+        episodeKey: `${reelShortId}:${episodeId}`,
+        url,
+      });
+
+      return NextResponse.json(
+        { url: buildSignedReelShortProxyUrl(streamToken) },
+        { status: 200 },
+      );
     }
 
     return NextResponse.json(

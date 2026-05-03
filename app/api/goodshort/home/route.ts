@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  GOODSHORT_HOME_SIZE,
-  GOODSHORT_LANG,
   fetchGoodshortJson,
   normalizeGoodshortFeed,
   readPositiveInt,
@@ -12,13 +10,25 @@ export async function GET(request: NextRequest) {
     const page = readPositiveInt(request, "page", 1);
 
     const payload = await fetchGoodshortJson("/home", {
-      lang: GOODSHORT_LANG,
-      channel: -1,
+      channelId: 562,
       page,
-      size: GOODSHORT_HOME_SIZE,
+      pageSize: 100,
     });
 
-    return NextResponse.json(normalizeGoodshortFeed(payload, "Beranda"));
+    const items = normalizeGoodshortFeed(payload, "Beranda");
+
+    return NextResponse.json(
+      {
+        items,
+        hasNextPage: false,
+        page,
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      },
+    );
   } catch (error) {
     return NextResponse.json(
       {

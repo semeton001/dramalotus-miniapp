@@ -1,52 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
+import { buildShortmaxApiUrl, fetchShortmaxJson } from "../_shared";
 
-type ShortmaxEpisodeItem = {
-  episode?: number;
-  id?: number;
-  name?: string;
-  duration?: number;
-  locked?: boolean;
-  cover?: string;
-  expires?: number;
-  expires_in?: number;
-  video?: {
-    video_1080?: string;
-    video_720?: string;
-    video_480?: string;
-  };
-};
-
-type ShortmaxAllepsResponse = {
+type ShortmaxDetailResponse = {
   data?: {
+    id?: number | string;
     code?: number | string;
     name?: string;
-    totalEpisodes?: number;
-    summary?: string;
     cover?: string;
-    episodes?: ShortmaxEpisodeItem[];
+    episodes?: number | string;
+    totalEpisodes?: number | string;
+    summary?: string;
   };
-  cached?: boolean;
 };
 
-function pickBestVideoUrl(item: ShortmaxEpisodeItem): string {
-  return (
-    item.video?.video_1080?.trim() ||
-    item.video?.video_720?.trim() ||
-    item.video?.video_480?.trim() ||
-    ""
-  );
+function asNumber(value: unknown, fallback = 0): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
 }
 
-function normalizeDuration(value?: number): string | undefined {
-  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
-    return undefined;
-  }
-
-  const totalSeconds = Math.floor(value);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+function asString(value: unknown, fallback = ""): string {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return fallback;
 }
 
 export async function GET(request: NextRequest) {
@@ -59,84 +38,53 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Missing dramaId" }, { status: 400 });
     }
 
-    const token = process.env.SHORTMAX_TOKEN?.trim() || "";
+    const detail = (await fetchShortmaxJson(
+      buildShortmaxApiUrl(`/detail/${encodeURIComponent(dramaId)}`),
+    )) as ShortmaxDetailResponse;
 
-    if (!token) {
-      return NextResponse.json(
-        { error: "Missing SHORTMAX_TOKEN in environment" },
-        { status: 500 },
-      );
-    }
+    const totalEpisodes =
+      asNumber(detail?.data?.episodes) ||
+      asNumber(detail?.data?.totalEpisodes) ||
+      0;
 
-    const endpoint =
-      `https://shortmax.dramabos.my.id/api/v1/alleps/${encodeURIComponent(dramaId)}` +
-      `?lang=id&code=${encodeURIComponent(token)}&_ts=${Date.now()}`;
-
-    const response = await fetch(endpoint, {
-      method: "GET",
-      cache: "no-store",
-      headers: {
-        Accept: "application/json",
-      },
-    });
-
-    if (!response.ok) {
-      const body = await response.text().catch(() => "");
+    if (totalEpisodes <= 0) {
       return NextResponse.json(
         {
-          error: "Failed to fetch Shortmax episodes",
-          endpoint,
-          status: response.status,
-          bodyPreview: body.slice(0, 220),
+          error: "Shortmax detail did not include episode count",
+          dramaId,
         },
-        { status: 502 },
+        { status: 404 },
       );
     }
 
-    const payload = (await response.json()) as ShortmaxAllepsResponse;
+    const title = asString(detail?.data?.name);
+    const cover = asString(detail?.data?.cover);
 
-    const rawEpisodes = Array.isArray(payload?.data?.episodes)
-      ? payload.data.episodes
-      : [];
+    const episodes = Array.from({ length: totalEpisodes }, (_, index) => {
+      const episodeNumber = index + 1;
 
-    const normalizedEpisodes = rawEpisodes
-      .map((item, index) => {
-        const episodeNumber =
-          typeof item.episode === "number" && Number.isFinite(item.episode)
-            ? item.episode
-            : index + 1;
+      return {
+        id: Number(`${numericDramaId || asNumber(detail?.data?.id) || 0}${String(episodeNumber).padStart(3, "0")}`),
+        dramaId: numericDramaId || asNumber(detail?.data?.id) || 0,
+        episodeNumber,
+        title: `Episode ${episodeNumber}`,
+        duration: undefined,
+        videoUrl: `/api/shortmax/stream?dramaId=${encodeURIComponent(
+          dramaId,
+        )}&episode=${episodeNumber}`,
+        originalVideoUrl: undefined,
+        subtitleUrl: undefined,
+        subtitleLang: undefined,
+        subtitleLabel: undefined,
+        isLocked: false,
+        thumbnail: cover || undefined,
+        shortmaxDramaId: dramaId,
+        shortmaxEpisode: episodeNumber,
+        shortmaxTitle: title || undefined,
+      };
+    });
 
-        const originalVideoUrl = pickBestVideoUrl(item);
-        if (!originalVideoUrl) return null;
-
-        const stableEpisodeId =
-          typeof item.id === "number" && Number.isFinite(item.id)
-            ? item.id
-            : Number(
-                `${numericDramaId || 0}${String(episodeNumber).padStart(3, "0")}`,
-              );
-
-        return {
-          id: stableEpisodeId,
-          dramaId: numericDramaId || 0,
-          episodeNumber,
-          title:
-            typeof item.name === "string" && item.name.trim().length > 0
-              ? `${item.name.trim()} - Episode ${episodeNumber}`
-              : `Episode ${episodeNumber}`,
-          duration: normalizeDuration(item.duration),
-          videoUrl: `/api/shortmax/stream?u=${encodeURIComponent(originalVideoUrl)}`,
-          originalVideoUrl,
-          subtitleUrl: undefined,
-          subtitleLang: undefined,
-          subtitleLabel: undefined,
-          isLocked: Boolean(item.locked),
-          thumbnail: item.cover || undefined,
-        };
-      })
-      .filter(Boolean);
-
-    return NextResponse.json(normalizedEpisodes, {
+    return NextResponse.json(episodes, {
       headers: {
         "Cache-Control": "no-store",
       },

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
-export const SHORTMAX_BASE_URL = "https://shortmax.dramabos.my.id";
+export const SHORTMAX_BASE_URL = "https://streamapi.web.id/p/shortmax/api/v1";
+export const SHORTMAX_TOKEN =
+  "KFKiMIbY3Np8kbimDo7lJDNSVslwF3Fn64cI0TOtqpOP373n58ca6BKzbDsLb7qB";
 export const SHORTMAX_UPSTREAM_HEADERS = {
   Accept: "application/json, text/plain, */*",
   "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
@@ -14,8 +16,10 @@ export type ShortmaxFeedKind =
   | "home"
   | "latest"
   | "trending"
+  | "foryou"
   | "hot"
-  | "ranking";
+  | "ranking"
+  | "search";
 
 type ShortmaxRawDrama = Record<string, unknown>;
 
@@ -89,6 +93,25 @@ export function createStableNumericId(seed: string, fallback: number): number {
   return value > 0 ? value : fallback;
 }
 
+
+export function buildShortmaxApiUrl(
+  path: string,
+  params?: Record<string, string | number | undefined | null>,
+): string {
+  const url = new URL(`${SHORTMAX_BASE_URL}${path}`);
+  url.searchParams.set("lang", "id");
+  url.searchParams.set("token", SHORTMAX_TOKEN);
+
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === "") return;
+      url.searchParams.set(key, String(value));
+    });
+  }
+
+  return url.toString();
+}
+
 export async function fetchShortmaxJson(url: string, init?: RequestInit) {
   const response = await fetch(url, {
     ...init,
@@ -116,16 +139,22 @@ export function buildShortmaxFeedUrl(
 ): string {
   switch (kind) {
     case "latest":
-      return `${SHORTMAX_BASE_URL}/api/v1/new?lang=id`;
+      return buildShortmaxApiUrl("/feed/new");
     case "trending":
-      return `${SHORTMAX_BASE_URL}/api/v1/popular?lang=id&page=${page}`;
+      return buildShortmaxApiUrl("/feed/ranked");
+    case "foryou":
+      return buildShortmaxApiUrl("/foryou", { page });
     case "hot":
-      return `${SHORTMAX_BASE_URL}/api/v1/hot?lang=id&page=${page}`;
+      return buildShortmaxApiUrl("/feed/epic");
     case "ranking":
-      return `${SHORTMAX_BASE_URL}/api/v1/ranking?lang=id&page=${page}&type=${encodeURIComponent(type)}`;
+      return buildShortmaxApiUrl("/feed/ranked");
+    case "search":
+      return buildShortmaxApiUrl("/search", { page });
     case "home":
     default:
-      return `${SHORTMAX_BASE_URL}/api/v1/category/1?lang=id&pageSize=500`;
+      return buildShortmaxApiUrl("/home", {
+        tab: Math.min(5, Math.max(1, page)),
+      });
   }
 }
 
@@ -146,7 +175,19 @@ export function extractShortmaxFeedList(payload: unknown): ShortmaxRawDrama[] {
     typeof payload === "object" &&
     Array.isArray((payload as { data?: unknown[] }).data)
   ) {
-    return (payload as { data: unknown[] }).data as ShortmaxRawDrama[];
+    const data = (payload as { data: unknown[] }).data;
+
+    const nestedItems = data.flatMap((item) => {
+      if (!item || typeof item !== "object") return [];
+      const raw = item as Record<string, unknown>;
+      return Array.isArray(raw.items) ? raw.items : [];
+    });
+
+    if (nestedItems.length > 0) {
+      return nestedItems as ShortmaxRawDrama[];
+    }
+
+    return data as ShortmaxRawDrama[];
   }
 
   if (

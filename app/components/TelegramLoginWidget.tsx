@@ -30,7 +30,7 @@ export default function TelegramLoginWidget() {
       });
 
       if (res.ok) {
-        window.location.href = "/me";
+        window.location.href = "/";
         return;
       }
 

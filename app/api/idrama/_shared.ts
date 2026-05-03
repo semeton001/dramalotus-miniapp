@@ -2,8 +2,10 @@ import { NextRequest } from "next/server";
 import type { Drama } from "@/types/drama";
 import type { Episode } from "@/types/episode";
 
-export const IDRAMA_BASE_URL = "https://idrama.dramabos.my.id";
+export const IDRAMA_BASE_URL = "https://streamapi.web.id/p/idrama/api/v1";
 export const IDRAMA_DEFAULT_LANG = "id";
+export const IDRAMA_DEFAULT_TOKEN =
+  "KFKiMIbY3Np8kbimDo7lJDNSVslwF3Fn64cI0TOtqpOP373n58ca6BKzbDsLb7qB";
 export const IDRAMA_DEFAULT_CODE = "4D96F22760EA30FB0FFBA9AA87A979A6";
 export const IDRAMA_POPULAR_SECTION_ID = "section_d327e331";
 export const IDRAMA_HOT_TAB_ID = "channel_ddbdbcef";
@@ -44,7 +46,9 @@ export function normalizeStringArray(value: unknown): string[] {
         if (typeof entry === "string") return entry.trim();
         if (entry && typeof entry === "object") {
           const raw = entry as JsonRecord;
-          return pickString(raw, "tag_local", "title", "name").trim();
+          return pickString(raw, "tag_local", "short_play_name",
+    "shortPlayName",
+    "title", "name").trim();
         }
         return "";
       })
@@ -87,6 +91,7 @@ function looksLikeIdramaDramaItem(raw: JsonRecord): boolean {
     "id",
     "short_play_id",
     "shortPlayId",
+    "id",
     "dramaId",
     "drama_id",
     "series_id",
@@ -102,6 +107,8 @@ function looksLikeIdramaDramaItem(raw: JsonRecord): boolean {
     "short_play_name",
     "book_name",
     "drama_name",
+    "short_play_name",
+    "shortPlayName",
     "title",
     "name",
   );
@@ -125,7 +132,11 @@ export async function fetchIdramaJson(
   params?: Record<string, string | number | undefined>,
   init?: RequestInit,
 ) {
-  const url = new URL(path, `${IDRAMA_BASE_URL}/`);
+  const normalizedPath = path.startsWith("/") ? path.slice(1) : path;
+  const baseUrl = IDRAMA_BASE_URL.endsWith("/")
+    ? IDRAMA_BASE_URL
+    : `${IDRAMA_BASE_URL}/`;
+  const url = new URL(normalizedPath, baseUrl);
 
   if (params) {
     for (const [key, value] of Object.entries(params)) {
@@ -136,6 +147,10 @@ export async function fetchIdramaJson(
 
   if (!url.searchParams.has("lang")) {
     url.searchParams.set("lang", IDRAMA_DEFAULT_LANG);
+  }
+
+  if (!url.searchParams.has("token")) {
+    url.searchParams.set("token", IDRAMA_DEFAULT_TOKEN);
   }
 
   const response = await fetch(url.toString(), {
@@ -170,6 +185,7 @@ export function adaptIdramaDrama(
     "id",
     "short_play_id",
     "shortPlayId",
+    "id",
     "dramaId",
     "drama_id",
     "series_id",
@@ -189,7 +205,9 @@ export function adaptIdramaDrama(
     pickString(
       raw,
       "short_play_name",
-      "title",
+      "short_play_name",
+    "shortPlayName",
+    "title",
       "name",
       "book_name",
       "drama_name",
@@ -299,7 +317,9 @@ export function adaptIdramaEpisodes(
       `${dramaId}-${epNumber}`;
 
     const localTitle =
-      pickString(epRaw, "title", "episode_title") || `Episode ${epNumber}`;
+      pickString(epRaw, "short_play_name",
+    "shortPlayName",
+    "title", "episode_title") || `Episode ${epNumber}`;
 
     const streamUrl = `/api/idrama/stream?dramaId=${encodeURIComponent(
       dramaId,
@@ -522,4 +542,87 @@ export function rewriteM3u8Playlist(
 
 export function buildProxyBaseUrl(request: NextRequest): string {
   return `${request.nextUrl.origin}/api/idrama/stream`;
+}
+
+
+export function extractIdramaItemsDeep(payload: unknown): unknown[] {
+  const seen = new Set<unknown>();
+
+  const looksLikeItem = (value: unknown): boolean => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const item = value as Record<string, unknown>;
+
+    return Boolean(
+      item.id ||
+        item.dramaId ||
+        item.bookId ||
+        item.seriesId ||
+        item.series_id ||
+        item.route ||
+        item.path ||
+        item.title ||
+        item.name ||
+        item.dramaName ||
+        item.bookName,
+    );
+  };
+
+  const walk = (value: unknown): unknown[] => {
+    if (!value || typeof value !== "object") return [];
+    if (seen.has(value)) return [];
+    seen.add(value);
+
+    if (Array.isArray(value)) {
+      if (value.some(looksLikeItem)) return value.filter(looksLikeItem);
+      return value.flatMap(walk);
+    }
+
+    const record = value as Record<string, unknown>;
+    const priorityKeys = [
+      "items",
+      "list",
+      "records",
+      "rows",
+      "data",
+      "result",
+      "results",
+      "dramas",
+      "books",
+      "series",
+      "videos",
+      "contents",
+      "searchResult",
+    ];
+
+    for (const key of priorityKeys) {
+      const child = record[key];
+      const found = walk(child);
+      if (found.length > 0) return found;
+    }
+
+    return Object.values(record).flatMap(walk);
+  };
+
+  return walk(payload);
+}
+
+export function dedupeIdramaDramas<T extends { idramaDramaId?: string; idramaRawId?: string; slug?: string; id?: number }>(
+  items: T[],
+): T[] {
+  const seen = new Set<string>();
+  const output: T[] = [];
+
+  for (const item of items) {
+    const key =
+      item.idramaDramaId ||
+      item.idramaRawId ||
+      item.slug ||
+      String(item.id || "");
+
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    output.push(item);
+  }
+
+  return output;
 }

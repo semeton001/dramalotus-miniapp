@@ -1,39 +1,44 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import {
-  extractHomeChannelKeys,
+  adaptIdramaDramaList,
+  dedupeIdramaDramas,
+  extractIdramaItemsDeep,
   fetchIdramaJson,
-  flattenTabModulesToDramas,
 } from "../_shared";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const homePayload = await fetchIdramaJson("/home");
-    const channelKeys = extractHomeChannelKeys(homePayload);
+    const page = Number(request.nextUrl.searchParams.get("page") || "1") || 1;
 
-    const settled = await Promise.allSettled(
-      channelKeys.map((key) => fetchIdramaJson(`/tab/${key}`)),
+    const payloads = await Promise.all([
+      fetchIdramaJson("/genre/section_da51e8ee", {
+        page,
+        limit: 50,
+      }),
+      fetchIdramaJson("/genre/section_2a29373e", {
+        page,
+        limit: 50,
+      }),
+    ]);
+
+    const rawItems = payloads.flatMap((payload) => extractIdramaItemsDeep(payload));
+    const items = dedupeIdramaDramas(adaptIdramaDramaList(rawItems, "Beranda"));
+
+    return NextResponse.json(
+      {
+        items,
+        hasNextPage: false,
+        page,
+      },
+      { headers: { "Cache-Control": "no-store" } },
     );
-
-    const merged = settled.flatMap((result) => {
-      if (result.status !== "fulfilled") return [];
-      return flattenTabModulesToDramas(result.value, "iDrama");
-    });
-
-    const deduped = new Map<string, (typeof merged)[number]>();
-    merged.forEach((drama) => {
-      const key =
-        drama.idramaDramaId ||
-        drama.idramaRawId ||
-        drama.slug ||
-        String(drama.id);
-      deduped.set(key, drama);
-    });
-
-    return NextResponse.json(Array.from(deduped.values()));
   } catch (error) {
     console.error("iDrama home route error:", error);
     return NextResponse.json(
-      { error: "Failed to load iDrama home." },
+      {
+        error: "Failed to load iDrama home.",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 },
     );
   }

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireApiVip } from "@/lib/auth/requireApiVip";
+import { buildFlickreelsApiUrl } from "../_shared";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -101,7 +103,7 @@ function rewritePlaylist(
 
         const proxied = new URL(proxyBase);
         proxied.searchParams.set("u", encodeUrlToken(resolved.toString()));
-        return proxied.toString();
+        return `${proxied.pathname}${proxied.search}`;
       } catch {
         return line;
       }
@@ -176,11 +178,60 @@ async function fetchUpstream(
   });
 }
 
+
+type FlickReelsStreamResponse = {
+  status_code?: number;
+  msg?: string;
+  data?: {
+    hls_url?: string;
+    playlet_id?: string | number;
+    chapter_id?: string | number;
+    chapter_num?: string | number;
+  };
+};
+
+async function resolveFlickReelsStreamUrl(
+  dramaId: string,
+  chapterId: string,
+): Promise<string> {
+  if (!dramaId.trim() || !chapterId.trim()) return "";
+
+  const upstreamUrl = buildFlickreelsApiUrl(
+    `/stream/${encodeURIComponent(dramaId)}/${encodeURIComponent(chapterId)}`,
+  );
+
+  const response = await fetch(upstreamUrl, {
+    method: "GET",
+    cache: "no-store",
+    headers: {
+      Accept: "application/json,text/plain,*/*",
+    },
+  });
+
+  if (!response.ok) return "";
+
+  const payload = (await response.json()) as FlickReelsStreamResponse;
+  const hlsUrl = payload?.data?.hls_url;
+
+  return typeof hlsUrl === "string" && hlsUrl.trim() ? hlsUrl.trim() : "";
+}
+
 async function handleProxy(request: NextRequest) {
+  const dramaId = request.nextUrl.searchParams.get("dramaId")?.trim() || "";
+  const chapterId =
+    request.nextUrl.searchParams.get("chapterId")?.trim() ||
+    request.nextUrl.searchParams.get("chapter_id")?.trim() ||
+    request.nextUrl.searchParams.get("vid")?.trim() ||
+    "";
+
   const rawToken = request.nextUrl.searchParams.get("u")?.trim();
   const rawLegacyUrl = request.nextUrl.searchParams.get("url")?.trim();
 
   let rawUrl = "";
+
+  if (dramaId && chapterId) {
+    rawUrl = await resolveFlickReelsStreamUrl(dramaId, chapterId);
+  }
 
   if (rawToken) {
     try {
@@ -273,10 +324,16 @@ async function handleProxy(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
+  const vipError = await requireApiVip();
+  if (vipError) return vipError;
+
   return handleProxy(request);
 }
 
 export async function HEAD(request: NextRequest) {
+  const vipError = await requireApiVip();
+  if (vipError) return vipError;
+
   return handleProxy(request);
 }
 

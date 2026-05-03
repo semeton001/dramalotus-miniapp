@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/auth/getCurrentUser";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseAdmin = createClient(
@@ -8,15 +9,27 @@ const supabaseAdmin = createClient(
 
 export async function POST(request: Request) {
   try {
+    const currentUser = await getCurrentUser();
+
+    if (!currentUser || !currentUser.telegram_user_id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const { telegram_user_id, telegram_username } = body;
 
-    const safeTelegramUserId =
+    const requestedTelegramUserId =
       typeof telegram_user_id === "number" &&
       Number.isInteger(telegram_user_id) &&
       telegram_user_id > 0
         ? telegram_user_id
-        : null;
+        : currentUser.telegram_user_id;
+
+    if (requestedTelegramUserId !== currentUser.telegram_user_id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const safeTelegramUserId = currentUser.telegram_user_id;
 
     const safeTelegramUsername =
       typeof telegram_username === "string" &&
@@ -33,10 +46,13 @@ export async function POST(request: Request) {
 
     const { data, error } = await supabaseAdmin
       .from("user_profiles")
-      .upsert({
-        telegram_user_id: safeTelegramUserId,
-        telegram_username: safeTelegramUsername,
-      })
+      .upsert(
+        {
+          telegram_user_id: safeTelegramUserId,
+          telegram_username: safeTelegramUsername,
+        },
+        { onConflict: "telegram_user_id" }
+      )
       .select()
       .single();
 

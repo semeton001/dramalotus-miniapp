@@ -1,131 +1,42 @@
 import Link from "next/link";
-import { getCurrentUser } from "@/lib/auth/getCurrentUser";
 
 export default async function AppHeader() {
-  const user = await getCurrentUser();
-
-  const fullName =
-    [user?.first_name, user?.last_name].filter(Boolean).join(" ") ||
-    (user?.telegram_username ? `@${user.telegram_username}` : "User");
-
   return (
     <header
       style={{
-        padding: "14px 20px",
-        borderBottom: "1px solid #222",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 16,
+        position: "sticky",
+        top: 0,
+        zIndex: 50,
+        borderBottom: "1px solid rgba(255,255,255,0.08)",
+        background:
+          "linear-gradient(180deg, rgba(8,9,13,0.96) 0%, rgba(8,9,13,0.90) 100%)",
+        backdropFilter: "blur(14px)",
       }}
     >
-      <Link
-        href="/"
+      <div
         style={{
-          fontWeight: 800,
-          textDecoration: "none",
-          color: "inherit",
-          letterSpacing: 0.3,
+          maxWidth: 1320,
+          margin: "0 auto",
+          padding: "12px 14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "flex-start",
         }}
       >
-        DRAMALOTUS
-      </Link>
-
-      {user ? (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            flexWrap: "wrap",
-            justifyContent: "flex-end",
-          }}
-        >
-          <span style={{ fontSize: 14 }}>{fullName}</span>
-
-          <span
-            style={{
-              display: "inline-block",
-              padding: "4px 10px",
-              borderRadius: 999,
-              border: "1px solid #444",
-              fontSize: 12,
-              fontWeight: 700,
-            }}
-          >
-            {user.membership_status === "vip" ? "VIP" : "FREE"}
-          </span>
-
-          <Link
-            href="/episodes"
-            style={{
-              textDecoration: "none",
-              color: "inherit",
-              fontSize: 14,
-            }}
-          >
-            Episodes
-          </Link>
-
-          <Link
-            href="/member"
-            style={{
-              textDecoration: "none",
-              color: "inherit",
-              fontSize: 14,
-            }}
-          >
-            Member
-          </Link>
-
-          {user.membership_status === "vip" ? (
-            <Link
-              href="/premium-library"
-              style={{
-                textDecoration: "none",
-                color: "inherit",
-                fontSize: 14,
-              }}
-            >
-              Premium Library
-            </Link>
-          ) : (
-            <Link
-              href="/upgrade"
-              style={{
-                textDecoration: "none",
-                color: "inherit",
-                fontSize: 14,
-              }}
-            >
-              Upgrade VIP
-            </Link>
-          )}
-
-          <Link
-            href="/me"
-            style={{
-              textDecoration: "none",
-              color: "inherit",
-              fontSize: 14,
-            }}
-          >
-            My Account
-          </Link>
-        </div>
-      ) : (
         <Link
-          href="/login"
+          href="/"
           style={{
             textDecoration: "none",
-            color: "inherit",
-            fontSize: 14,
-            fontWeight: 600,
+            color: "#F4E7C3",
+            fontSize: 18,
+            fontWeight: 900,
+            letterSpacing: 0.6,
+            whiteSpace: "nowrap",
           }}
         >
-          Login
+          DRAMALOTUS
         </Link>
-      )}
+      </div>
     </header>
   );
 }

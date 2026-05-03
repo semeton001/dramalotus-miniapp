@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/auth/getCurrentUser";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseAdmin = createClient(
@@ -6,23 +7,14 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const telegramUserIdParam = searchParams.get("telegram_user_id");
+export async function GET() {
+  const currentUser = await getCurrentUser();
 
-  const safeTelegramUserId =
-    typeof telegramUserIdParam === "string" &&
-    /^\d+$/.test(telegramUserIdParam) &&
-    Number(telegramUserIdParam) > 0
-      ? telegramUserIdParam
-      : null;
-
-  if (!safeTelegramUserId) {
-    return NextResponse.json(
-      { error: "telegram_user_id must be a valid positive integer" },
-      { status: 400 },
-    );
+  if (!currentUser || !currentUser.telegram_user_id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const safeTelegramUserId = String(currentUser.telegram_user_id);
 
   const { data, error } = await supabaseAdmin
     .from("user_history")
@@ -47,15 +39,27 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const currentUser = await getCurrentUser();
+
+    if (!currentUser || !currentUser.telegram_user_id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const { telegram_user_id, drama_id, episode_id } = body;
 
-    const safeTelegramUserId =
+    const requestedTelegramUserId =
       typeof telegram_user_id === "number" &&
       Number.isInteger(telegram_user_id) &&
       telegram_user_id > 0
         ? telegram_user_id
-        : null;
+        : currentUser.telegram_user_id;
+
+    if (requestedTelegramUserId !== currentUser.telegram_user_id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const safeTelegramUserId = currentUser.telegram_user_id;
 
     const safeDramaId =
       typeof drama_id === "number" && Number.isInteger(drama_id) && drama_id > 0

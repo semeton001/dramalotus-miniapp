@@ -14,34 +14,19 @@ export async function GET(request: NextRequest) {
     const page = getPage(request, 1);
     const lang = getLang(request);
 
-    const [payload, nextPayload] = await Promise.all([
-      fetchDramaBoxHomePage(page, lang),
-      fetchDramaBoxHomePage(page + 1, lang).catch(() => null),
-    ]);
+    const payload = await fetchDramaBoxHomePage(page, lang);
+    const rawItems = dedupeDramaBoxItems(extractDramaBoxItemsDeep(payload));
 
-    const homepageItems = extractDramaBoxItemsDeep(payload);
-    const mergedItems = dedupeDramaBoxItems(homepageItems);
-
-    const adapted = adaptDramaBoxDramaList(mergedItems).filter(
+    const adapted = adaptDramaBoxDramaList(rawItems).filter(
       (item) => item.id > 0 && item.title.trim().length > 0,
     );
 
-    const items = enrichDramaBoxDramaMeta(adapted, mergedItems);
-
-    const nextItems = nextPayload
-      ? dedupeDramaBoxItems(extractDramaBoxItemsDeep(nextPayload))
-      : [];
-
-    const nextAdapted = adaptDramaBoxDramaList(nextItems).filter(
-      (item) => item.id > 0 && item.title.trim().length > 0,
-    );
-
-    const hasNextPage = nextAdapted.length > 0;
+    const items = enrichDramaBoxDramaMeta(adapted, rawItems);
 
     return NextResponse.json(
       {
         items,
-        hasNextPage,
+        hasNextPage: false,
         page,
       },
       { status: 200 },

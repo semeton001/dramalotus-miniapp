@@ -2,6 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { request as httpsRequest } from "node:https";
 import { request as httpRequest } from "node:http";
 
+const NETSHORT_EPISODE_BASE_URL =
+  "https://streamapi.web.id/p/netshort/api/v1/episode";
+
+const NETSHORT_TOKEN = process.env.NETSHORT_TOKEN?.trim() || "";
+
+type StreamapiNetshortEpisodeResponse = {
+  code?: number;
+  data?: {
+    subtitles?: Array<{
+      language?: string;
+      format?: string;
+      url?: string;
+    }>;
+  };
+};
+
 function srtToVtt(srt: string): string {
   const normalized = srt
     .replace(/\r+/g, "")
@@ -29,6 +45,17 @@ function looksLikeVtt(text: string): boolean {
   return text.trimStart().startsWith("WEBVTT");
 }
 
+function emptyVtt(): NextResponse {
+  return new NextResponse("WEBVTT\n\n", {
+    status: 200,
+    headers: {
+      "Content-Type": "text/vtt; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+}
+
 function isTlsCertError(error: unknown): boolean {
   const code =
     error &&
@@ -45,6 +72,54 @@ function isTlsCertError(error: unknown): boolean {
     code === "SELF_SIGNED_CERT_IN_CHAIN" ||
     code === "CERT_HAS_EXPIRED"
   );
+}
+
+async function resolveSubtitleUrl(
+  dramaId: string,
+  episodeNo: string,
+): Promise<string> {
+  const upstreamUrl = `${NETSHORT_EPISODE_BASE_URL}/${encodeURIComponent(
+    dramaId,
+  )}/${encodeURIComponent(episodeNo)}?lang=id_ID&token=${NETSHORT_TOKEN}`;
+
+  const response = await fetch(upstreamUrl, {
+    method: "GET",
+    cache: "no-store",
+    headers: {
+      Accept: "application/json, text/plain, */*",
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Netshort episode failed: ${response.status}`);
+  }
+
+  const payload = (await response.json()) as StreamapiNetshortEpisodeResponse;
+  const subtitles = Array.isArray(payload.data?.subtitles)
+    ? payload.data.subtitles
+    : [];
+
+  const subtitle =
+    subtitles.find(
+      (item) =>
+        typeof item.language === "string" &&
+        item.language.toLowerCase().startsWith("id") &&
+        typeof item.url === "string" &&
+        item.url.trim().length > 0,
+    ) ||
+    subtitles.find(
+      (item) => typeof item.url === "string" && item.url.trim().length > 0,
+    );
+
+  const subtitleUrl = subtitle?.url?.trim() || "";
+
+  if (!subtitleUrl) {
+    throw new Error("Netshort subtitle URL not found.");
+  }
+
+  return subtitleUrl;
 }
 
 async function fetchTextWithInsecureTls(
@@ -79,10 +154,7 @@ async function fetchTextWithInsecureTls(
         const status = res.statusCode || 500;
         const location = res.headers.location;
 
-        if (
-          location &&
-          [301, 302, 303, 307, 308].includes(status)
-        ) {
+        if (location && [301, 302, 303, 307, 308].includes(status)) {
           const nextUrl = new URL(location, target).toString();
           res.resume();
           fetchTextWithInsecureTls(nextUrl, redirectCount + 1)
@@ -124,13 +196,24 @@ async function fetchTextWithInsecureTls(
 }
 
 export async function GET(request: NextRequest) {
-  const url = request.nextUrl.searchParams.get("url")?.trim() ?? "";
+  const directUrl = request.nextUrl.searchParams.get("url")?.trim() ?? "";
+  const dramaId = request.nextUrl.searchParams.get("dramaId")?.trim() ?? "";
+  const episodeNo = request.nextUrl.searchParams.get("episodeNo")?.trim() ?? "";
 
-  if (!url) {
-    return NextResponse.json({ error: "url is required." }, { status: 400 });
-  }
+  let url = directUrl;
 
   try {
+    if (!url && dramaId && episodeNo) {
+      url = await resolveSubtitleUrl(dramaId, episodeNo);
+    }
+
+    if (!url) {
+      return NextResponse.json(
+        { error: "url or dramaId+episodeNo is required." },
+        { status: 400 },
+      );
+    }
+
     let status = 200;
     let contentType = "";
     let rawText = "";
@@ -138,7 +221,6 @@ export async function GET(request: NextRequest) {
     try {
       const response = await fetch(url, {
         cache: "no-store",
-        redirect: "follow",
         headers: {
           Accept: "*/*",
           "User-Agent":
@@ -150,7 +232,9 @@ export async function GET(request: NextRequest) {
       contentType = response.headers.get("content-type") || "";
       rawText = await response.text();
     } catch (error) {
-      if (!isTlsCertError(error)) throw error;
+      if (!isTlsCertError(error)) {
+        throw error;
+      }
 
       const fallback = await fetchTextWithInsecureTls(url);
       status = fallback.status;
@@ -159,59 +243,33 @@ export async function GET(request: NextRequest) {
     }
 
     if (status < 200 || status >= 300) {
-      return NextResponse.json(
-        {
-          error: `subtitle fetch failed: ${status}`,
-          detail: rawText.slice(0, 300),
+      return new NextResponse(rawText || "Failed to load subtitle.", {
+        status,
+        headers: {
+          "Content-Type": contentType || "text/plain; charset=utf-8",
+          "Access-Control-Allow-Origin": "*",
         },
-        { status },
-      );
+      });
     }
 
-    if (!rawText || rawText.trim().length === 0) {
-      return NextResponse.json(
-        { error: "subtitle body is empty" },
-        { status: 500 },
-      );
-    }
-
-    let body = rawText;
-
-    if (looksLikeVtt(rawText)) {
-      body = rawText;
-    } else if (
-      looksLikeSrt(rawText) ||
-      url.toLowerCase().includes(".srt") ||
-      contentType.includes("text/plain")
-    ) {
-      body = srtToVtt(rawText);
-    } else {
-      body = `WEBVTT
-
-STYLE
-::cue {
-  background: transparent;
-}
+    const body = looksLikeVtt(rawText)
+      ? rawText
+      : looksLikeSrt(rawText)
+        ? srtToVtt(rawText)
+        : `WEBVTT
 
 ${rawText}`;
-    }
 
     return new NextResponse(body, {
       status: 200,
       headers: {
         "Content-Type": "text/vtt; charset=utf-8",
-        "Cache-Control": "no-store",
+        "Cache-Control": "public, max-age=60, s-maxage=300",
+        "Access-Control-Allow-Origin": "*",
       },
     });
   } catch (error) {
-    console.error("NETSHORT_SUBTITLE_ERROR", error);
-
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Failed to load subtitle.",
-      },
-      { status: 500 },
-    );
+    console.warn("NetShort subtitle gagal, return VTT kosong:", error);
+    return emptyVtt();
   }
 }
