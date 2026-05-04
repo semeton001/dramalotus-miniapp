@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adaptMeloloDramaDetail, adaptMeloloDramaList, adaptMeloloSearchList } from "@/lib/adapters/drama/melolo";
+import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
 import { adaptMeloloEpisodeList } from "@/lib/adapters/episode/melolo";
 
 export const MELOLO_PAGE_SIZE = 50;
@@ -519,6 +520,24 @@ export async function respondEpisodes(request: NextRequest): Promise<NextRespons
     const adaptedEpisodes = adaptMeloloEpisodeList(videos.payload, {
       dramaId: createStableNumericId(meloloDramaId, 1),
       meloloDramaId,
+    }).map((episode) => {
+      const episodeNumber =
+        Number.isInteger(episode.episodeNumber) && episode.episodeNumber > 0
+          ? episode.episodeNumber
+          : 1;
+
+      return {
+        ...episode,
+        episodeNumber,
+        title: episode.title || `Episode ${episodeNumber}`,
+        videoUrl: `/api/melolo/stream?dramaId=${encodeURIComponent(
+          meloloDramaId,
+        )}&episodeNumber=${episodeNumber}`,
+        originalVideoUrl: "",
+        isLocked: episodeNumber > FREE_EPISODE_LIMIT,
+        isVipOnly: episodeNumber > FREE_EPISODE_LIMIT,
+        sortOrder: episodeNumber,
+      };
     });
 
     return NextResponse.json(adaptedEpisodes, { status: 200 });
