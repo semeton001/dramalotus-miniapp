@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Drama } from "@/types/drama";
+import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
 
 export const STARDUSTTV_BASE_URL =
   "https://streamapi.web.id/p/stardusttv/api/v1";
-export const STARDUSTTV_TOKEN =
-  "KFKiMIbY3Np8kbimDo7lJDNSVslwF3Fn64cI0TOtqpOP373n58ca6BKzbDsLb7qB";
+export const STARDUSTTV_TOKEN = process.env.STARDUSTTV_TOKEN?.trim() || "";
 export const STARDUSTTV_LANG = "id";
 export const STARDUSTTV_SOURCE_ID = "15";
 export const STARDUSTTV_SOURCE_NAME = "StardustTV";
@@ -274,17 +274,15 @@ export function adaptStardustEpisode(
     dramaId: numericDramaId,
     episodeNumber,
     title: `Episode ${episodeNumber}`,
-    videoUrl: h264
-      ? `/api/stardusttv/stream?url=${encodeURIComponent(h264)}`
-      : `/api/stardusttv/stream?videoId=${encodeURIComponent(
-          videoId,
-        )}&episode=${encodeURIComponent(String(episodeNumber))}`,
-    originalVideoUrl: h264 || undefined,
+    videoUrl: `/api/stardusttv/stream?videoId=${encodeURIComponent(
+      videoId,
+    )}&episode=${encodeURIComponent(String(episodeNumber))}&episodeNumber=${episodeNumber}`,
+    originalVideoUrl: undefined,
     subtitleUrl: undefined,
     subtitleLang: undefined,
     subtitleLabel: undefined,
-    isLocked: isVip,
-    isVipOnly: isVip,
+    isLocked: episodeNumber > FREE_EPISODE_LIMIT || isVip,
+    isVipOnly: episodeNumber > FREE_EPISODE_LIMIT || isVip,
     sortOrder: episodeNumber,
     thumbnail: thumbnail || undefined,
     stardusttvEpisodeId: episodeId,
@@ -302,8 +300,8 @@ export function extractEpisodeStreamUrl(payload: unknown): string {
   return pickString(data, "h264", "h265", "video_url", "url");
 }
 
-function buildRelativeProxyUrl(targetUrl: string): string {
-  return `/api/stardusttv/stream?url=${encodeURIComponent(targetUrl)}`;
+function buildRelativeProxyUrl(_targetUrl: string): string {
+  return "";
 }
 
 export function rewriteM3u8Playlist(
