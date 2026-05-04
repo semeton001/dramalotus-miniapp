@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Drama } from "@/types/drama";
+import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
 
 export const DRAMANOVA_BASE_URL =
   "https://streamapi.web.id/p/dramanova/api/v1";
 export const DRAMANOVA_VIDEO_BASE_URL =
   "https://streamapi.web.id/p/dramanova/api/video";
-export const DRAMANOVA_TOKEN =
-  "KFKiMIbY3Np8kbimDo7lJDNSVslwF3Fn64cI0TOtqpOP373n58ca6BKzbDsLb7qB";
+export const DRAMANOVA_TOKEN = process.env.DRAMANOVA_TOKEN?.trim() || "";
 export const DRAMANOVA_LANG = "in";
 export const DRAMANOVA_SOURCE_ID = "19";
 export const DRAMANOVA_SOURCE_NAME = "DramaNova";
@@ -330,7 +330,7 @@ export async function buildDramaNovaEpisodes(
       const episodeNumber = toNumber(episode.number, index + 1);
       const episodeId = pickString(episode, "id") || `${dramaId}-${episodeNumber}`;
       const fileId = pickString(episode, "fileId");
-      const isVip = episodeNumber >= 10;
+      const isVip = episodeNumber > FREE_EPISODE_LIMIT;
       const subtitle = pickSubtitleFromEpisode(episode);
 
       return {
@@ -339,7 +339,9 @@ export async function buildDramaNovaEpisodes(
         episodeNumber,
         title: `Episode ${episodeNumber}`,
         videoUrl: fileId
-          ? `/api/dramanova/stream?fileId=${encodeURIComponent(fileId)}`
+          ? `/api/dramanova/stream?fileId=${encodeURIComponent(
+              fileId,
+            )}&episodeNumber=${episodeNumber}`
           : "",
         originalVideoUrl: "",
         isLocked: isVip,
@@ -382,7 +384,7 @@ export async function proxyRemoteMedia(
 
   if (!response.ok) {
     return NextResponse.json(
-      { error: `Failed to load DramaNova media: ${response.status}`, rawUrl },
+      { error: `Failed to load DramaNova media: ${response.status}` },
       { status: response.status },
     );
   }
