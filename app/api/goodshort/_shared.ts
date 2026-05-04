@@ -590,16 +590,7 @@ export function rewriteM3u8Playlist(
             return `URI="${uri}"`;
           }
 
-          if (uriTrimmed.toLowerCase().startsWith("data:")) {
-            return `URI="/api/goodshort/stream?url=${encodeURIComponent(uriTrimmed)}"`;
-          }
-
-          if (uriTrimmed.toLowerCase().startsWith("local://offline-key")) {
-            return `URI="/api/goodshort/stream?url=${encodeURIComponent(uriTrimmed)}"`;
-          }
-
-          const absolute = absolutizeUrl(uriTrimmed, playlistUrl);
-          return `URI="/api/goodshort/stream?url=${encodeURIComponent(absolute)}"`;
+          return `URI="${uri}"`;
         });
       }
 
@@ -611,16 +602,7 @@ export function rewriteM3u8Playlist(
         return line;
       }
 
-      if (trimmed.toLowerCase().startsWith("data:")) {
-        return `/api/goodshort/stream?url=${encodeURIComponent(trimmed)}`;
-      }
-
-      if (trimmed.toLowerCase().startsWith("local://offline-key")) {
-        return `/api/goodshort/stream?url=${encodeURIComponent(trimmed)}`;
-      }
-
-      const absolute = absolutizeUrl(trimmed, playlistUrl);
-      return `/api/goodshort/stream?url=${encodeURIComponent(absolute)}`;
+      return line;
     })
     .join("\n");
 }
