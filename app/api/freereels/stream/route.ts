@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth/getCurrentUser";
 import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
 import { createStreamToken, verifyStreamToken } from "@/lib/stream/token";
 import { checkStreamRateLimit } from "@/lib/rate-limit/stream";
+import { isMiniappRequest } from "@/lib/auth/isMiniappRequest";
 import {
   getFreeReelsCode,
   resolvePlayData,
@@ -209,9 +210,10 @@ function extractSubtitleUrlFromPlayPayload(payload: unknown): string {
 }
 
 export async function GET(request: NextRequest) {
-  const user = await getCurrentUser();
+  const isMiniapp = isMiniappRequest(request);
+  const user = isMiniapp ? null : await getCurrentUser();
 
-  if (!user) {
+  if (!isMiniapp && !user) {
     return NextResponse.json(
       { ok: false, error: "Unauthorized" },
       { status: 401 },
@@ -229,7 +231,7 @@ export async function GET(request: NextRequest) {
       if (
         !tokenPayload ||
         tokenPayload.provider !== "freereels" ||
-        tokenPayload.userId !== user.id ||
+        (!isMiniapp && user && tokenPayload.userId !== user.id) ||
         !hasSameOrigin(tokenPayload.url, targetUrl)
       ) {
         return NextResponse.json(
@@ -321,7 +323,7 @@ export async function GET(request: NextRequest) {
 
     const isFreeEpisode = episodeNumber <= FREE_EPISODE_LIMIT;
 
-    if (!isFreeEpisode && user.membership_status !== "vip") {
+    if (!isMiniapp && !isFreeEpisode && user!.membership_status !== "vip") {
       return NextResponse.json(
         {
           ok: false,
@@ -332,8 +334,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (user.membership_status === "vip" && user.vip_until) {
-      const expiresAt = new Date(user.vip_until).getTime();
+    if (!isMiniapp && user!.membership_status === "vip" && user!.vip_until) {
+      const expiresAt = new Date(user!.vip_until).getTime();
 
       if (!Number.isNaN(expiresAt) && expiresAt <= Date.now()) {
         return NextResponse.json(
@@ -359,14 +361,22 @@ export async function GET(request: NextRequest) {
 
     const streamToken = createStreamToken({
       provider: "freereels",
-      userId: user.id,
+      userId: isMiniapp ? "miniapp" : user!.id,
       episodeKey: `${dramaId.trim()}:${episodeId.trim()}`,
       url: playableUrl,
     });
 
+    const subtitleUrl = extractSubtitleUrlFromPlayPayload(payload);
+
+    console.warn("FreeReels stream resolved:", {
+      dramaId: dramaId.trim(),
+      episodeId: episodeId.trim(),
+      hasSubtitle: Boolean(subtitleUrl),
+    });
+
     return NextResponse.json({
       url: buildSignedProxyUrl(playableUrl, streamToken),
-      subtitleUrl: extractSubtitleUrlFromPlayPayload(payload),
+      subtitleUrl,
     });
   } catch (error) {
     return NextResponse.json(

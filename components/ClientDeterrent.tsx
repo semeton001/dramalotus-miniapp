@@ -4,6 +4,26 @@ import { useEffect, useRef } from "react";
 
 const DEVTOOLS_THRESHOLD = 170;
 
+function isMiniAppPath() {
+  return window.location.pathname === "/tg" || window.location.pathname.startsWith("/tg/");
+}
+
+function isTelegramMiniApp() {
+  const maybeWindow = window as Window & {
+    Telegram?: {
+      WebApp?: unknown;
+    };
+  };
+
+  return Boolean(maybeWindow.Telegram?.WebApp);
+}
+
+function isMobileLike() {
+  return /Android|iPhone|iPad|iPod|Mobile|Telegram/i.test(
+    navigator.userAgent || "",
+  );
+}
+
 function isBlockedShortcut(event: KeyboardEvent) {
   const key = event.key.toLowerCase();
 
@@ -20,17 +40,7 @@ function isDevToolsLikelyOpen() {
   const widthDiff = window.outerWidth - window.innerWidth;
   const heightDiff = window.outerHeight - window.innerHeight;
 
-  if (widthDiff > DEVTOOLS_THRESHOLD || heightDiff > DEVTOOLS_THRESHOLD) {
-    return true;
-  }
-
-  const start = performance.now();
-  // Deterrent timing check. DevTools can slow this path when debugging is active.
-  // eslint-disable-next-line no-debugger
-  debugger;
-  const elapsed = performance.now() - start;
-
-  return elapsed > 100;
+  return widthDiff > DEVTOOLS_THRESHOLD || heightDiff > DEVTOOLS_THRESHOLD;
 }
 
 function leaveSite() {
@@ -61,6 +71,14 @@ export default function ClientDeterrent() {
   const hasTriggeredRef = useRef(false);
 
   useEffect(() => {
+    // Jangan aktifkan deterrent di Telegram MiniApp / route /tg.
+    // Proteksi stream tetap dilakukan di backend API.
+    if (isMiniAppPath() || isTelegramMiniApp()) {
+      return;
+    }
+
+    const shouldRunAutoDevtoolsDetector = !isMobileLike();
+
     const trigger = () => {
       if (hasTriggeredRef.current) return;
       hasTriggeredRef.current = true;
@@ -76,20 +94,28 @@ export default function ClientDeterrent() {
 
       event.preventDefault();
       event.stopPropagation();
-      trigger();
-    };
 
-    const interval = window.setInterval(() => {
-      if (isDevToolsLikelyOpen()) {
+      if (shouldRunAutoDevtoolsDetector) {
         trigger();
       }
-    }, 1000);
+    };
+
+    const interval = shouldRunAutoDevtoolsDetector
+      ? window.setInterval(() => {
+          if (isDevToolsLikelyOpen()) {
+            trigger();
+          }
+        }, 1000)
+      : null;
 
     document.addEventListener("contextmenu", handleContextMenu, true);
     document.addEventListener("keydown", handleKeyDown, true);
 
     return () => {
-      window.clearInterval(interval);
+      if (interval) {
+        window.clearInterval(interval);
+      }
+
       document.removeEventListener("contextmenu", handleContextMenu, true);
       document.removeEventListener("keydown", handleKeyDown, true);
     };

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/getCurrentUser";
 import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
+import { isMiniappRequest } from "@/lib/auth/isMiniappRequest";
 import { respondStream } from "../_shared";
 import { checkStreamRateLimit } from "@/lib/rate-limit/stream";
 
@@ -8,21 +9,24 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export async function GET(request: NextRequest) {
-  const user = await getCurrentUser();
+  const isMiniapp = isMiniappRequest(request);
+  const user = isMiniapp ? null : await getCurrentUser();
 
-  if (!user) {
+  if (!isMiniapp && !user) {
     return NextResponse.json(
       { ok: false, error: "Unauthorized" },
       { status: 401 },
     );
   }
 
-  const rateLimitError = checkStreamRateLimit({
-    request,
-    provider: "reelshort",
-    userId: user.id,
-  });
-  if (rateLimitError) return rateLimitError;
+  if (!isMiniapp) {
+    const rateLimitError = checkStreamRateLimit({
+      request,
+      provider: "reelshort",
+      userId: user!.id,
+    });
+    if (rateLimitError) return rateLimitError;
+  }
 
   const directUrl = request.nextUrl.searchParams.get("url")?.trim() ?? "";
   const token = request.nextUrl.searchParams.get("token")?.trim() ?? "";
@@ -47,7 +51,7 @@ export async function GET(request: NextRequest) {
 
     const isFreeEpisode = episodeNumber <= FREE_EPISODE_LIMIT;
 
-    if (!isFreeEpisode && user.membership_status !== "vip") {
+    if (!isMiniapp && !isFreeEpisode && user!.membership_status !== "vip") {
       return NextResponse.json(
         {
           ok: false,
@@ -58,8 +62,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (user.membership_status === "vip" && user.vip_until) {
-      const expiresAt = new Date(user.vip_until).getTime();
+    if (!isMiniapp && user!.membership_status === "vip" && user!.vip_until) {
+      const expiresAt = new Date(user!.vip_until).getTime();
 
       if (!Number.isNaN(expiresAt) && expiresAt <= Date.now()) {
         return NextResponse.json(
@@ -70,5 +74,5 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return respondStream(request, user.id);
+  return respondStream(request, isMiniapp ? "miniapp" : user!.id);
 }

@@ -325,6 +325,8 @@ export default function PlayerScreen({
   const [resolvedReelifeUrl, setResolvedReelifeUrl] = useState("");
   const [isResolvingReelife, setIsResolvingReelife] = useState(false);
   const [resolvedReelShortUrl, setResolvedReelShortUrl] = useState("");
+  const [miniappDebugStreamUrl, setMiniappDebugStreamUrl] = useState("");
+  const [miniappDebugStreamStatus, setMiniappDebugStreamStatus] = useState("");
   const [isResolvingReelShort, setIsResolvingReelShort] = useState(false);
   const [resolvedFreeReelsUrl, setResolvedFreeReelsUrl] = useState("");
   const [resolvedFreeReelsSubtitleUrl, setResolvedFreeReelsSubtitleUrl] =
@@ -1096,6 +1098,43 @@ export default function PlayerScreen({
     AD_TOTAL_DURATION_SECONDS,
     isVideoAd,
   ]);
+
+  useEffect(() => {
+    if (!videoSrc?.includes("/api/")) return;
+
+    setMiniappDebugStreamUrl(videoSrc);
+    setMiniappDebugStreamStatus("checking...");
+
+    let cancelled = false;
+
+    async function checkStreamStatus() {
+      try {
+        const response = await fetch(videoSrc, {
+          method: "HEAD",
+          credentials: "include",
+          cache: "no-store",
+        });
+
+        if (cancelled) return;
+
+        setMiniappDebugStreamStatus(
+          `${response.status} ${response.statusText} | ${response.headers.get("content-type") || "no content-type"}`,
+        );
+      } catch (error) {
+        if (cancelled) return;
+
+        setMiniappDebugStreamStatus(
+          error instanceof Error ? error.message : "HEAD check failed",
+        );
+      }
+    }
+
+    checkStreamStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [videoSrc]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -2034,6 +2073,16 @@ export default function PlayerScreen({
                   </div>
                 ) : videoSrc ? (
                   <>
+                  {miniappDebugStreamUrl ? (
+                    <div className="absolute left-2 right-2 top-2 z-50 max-h-24 overflow-auto rounded-xl border border-yellow-400/40 bg-black/80 p-2 text-[10px] text-yellow-100 break-all">
+                      <div className="mb-1 font-semibold">Debug stream URL:</div>
+                      <div>{miniappDebugStreamUrl}</div>
+                      <div className="mt-1 text-[9px] text-yellow-200/80">
+                        Status: {miniappDebugStreamStatus || "-"}
+                      </div>
+                    </div>
+                  ) : null}
+
                   <video
                     key={
                       isFreeReelsDrama

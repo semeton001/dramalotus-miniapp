@@ -126,7 +126,7 @@ export async function GET(request: Request) {
           description: "",
           videoUrl: `/api/dramawave/stream?dramaId=${encodeURIComponent(
             dramaId,
-          )}&episodeNo=${episodeNumber}`,
+          )}&episodeNo=${episodeNumber}&miniapp=1`,
           originalVideoUrl: undefined,
           thumbnail:
             typeof episode.cover === "string" && episode.cover.length > 0

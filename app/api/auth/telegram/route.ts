@@ -99,7 +99,11 @@ async function upsertTelegramUser(body: ReturnType<typeof normalizePayload>) {
   return newUser.id as string;
 }
 
-async function handleAuth(payload: TelegramAuthPayload, requestUrl: string) {
+async function handleAuth(
+  payload: TelegramAuthPayload,
+  requestUrl: string,
+  responseMode: "redirect" | "json" = "redirect",
+) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN || "";
   const initData =
     typeof payload.init_data === "string" && payload.init_data.trim().length > 0
@@ -126,7 +130,10 @@ async function handleAuth(payload: TelegramAuthPayload, requestUrl: string) {
     headerStore.get("host") ||
     new URL(requestUrl).host;
 
-  const response = NextResponse.redirect(`${proto}://${host}/`);
+  const response =
+    responseMode === "json"
+      ? NextResponse.json({ ok: true, userId })
+      : NextResponse.redirect(`${proto}://${host}/`);
 
   response.cookies.set(WEB_SESSION_COOKIE, sessionToken, {
     httpOnly: true,
@@ -164,7 +171,12 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const payload = (await req.json()) as TelegramAuthPayload;
-    return await handleAuth(payload, req.url);
+    const responseMode =
+      typeof payload.init_data === "string" && payload.init_data.trim()
+        ? "json"
+        : "redirect";
+
+    return await handleAuth(payload, req.url, responseMode);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Internal server error";
     return NextResponse.json({ error: message }, { status: 500 });

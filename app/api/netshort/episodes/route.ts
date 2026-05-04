@@ -132,7 +132,7 @@ export async function GET(request: NextRequest) {
           duration: "",
           slug: `netshort-${rawDramaId}-episode-${episodeNumber}`,
           description: "",
-          videoUrl: `/api/netshort/stream?dramaId=${encodeURIComponent(rawDramaId)}&episodeNo=${episodeNumber}`,
+          videoUrl: `/api/netshort/stream?dramaId=${encodeURIComponent(rawDramaId)}&episodeNo=${episodeNumber}&miniapp=1`,
           originalVideoUrl: undefined,
           thumbnail:
             typeof episode.cover === "string" && episode.cover.length > 0

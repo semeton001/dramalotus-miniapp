@@ -2,10 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/auth/getCurrentUser";
 
-const TEMP_VIP_USER_IDS = new Set([
-  "6536406815",
-  "2046400681",
-]);
+const TEMP_VIP_USER_IDS = new Set<string>();
 
 function normalizeTelegramUserId(value: string | null): number | null {
   if (!value) return null;
@@ -29,16 +26,23 @@ export async function GET(request: NextRequest) {
   try {
     const currentUser = await getCurrentUser();
 
-    if (!currentUser || !currentUser.telegram_user_id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const rawTelegramUserId = request.nextUrl.searchParams.get("telegram_user_id");
     const requestedTelegramUserId = normalizeTelegramUserId(rawTelegramUserId);
-    const telegramUserId = requestedTelegramUserId ?? currentUser.telegram_user_id;
 
-    if (telegramUserId !== currentUser.telegram_user_id) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    let telegramUserId: number | null = null;
+
+    if (currentUser?.telegram_user_id) {
+      telegramUserId = requestedTelegramUserId ?? currentUser.telegram_user_id;
+
+      if (telegramUserId !== currentUser.telegram_user_id) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    } else {
+      telegramUserId = requestedTelegramUserId;
+    }
+
+    if (!telegramUserId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { data, error } = await supabaseAdmin
@@ -55,11 +59,6 @@ export async function GET(request: NextRequest) {
       data?.membership_status === "vip" ? "vip" : "free";
 
     let vip_until = normalizeVipUntil(data?.vip_until);
-
-    if (!data && TEMP_VIP_USER_IDS.has(String(telegramUserId))) {
-      membership_status = "vip";
-      vip_until = null;
-    }
 
     if (vip_until) {
       const expiresAt = new Date(vip_until).getTime();

@@ -6,6 +6,7 @@ import { request as httpsRequest } from "node:https";
 import { request as httpRequest } from "node:http";
 import { Readable } from "node:stream";
 import { checkStreamRateLimit } from "@/lib/rate-limit/stream";
+import { isMiniappRequest } from "@/lib/auth/isMiniappRequest";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -395,9 +396,10 @@ async function resolveNetshortEpisodeVideoUrl(
 }
 
 async function handleProxy(request: NextRequest) {
-  const user = await getCurrentUser();
+  const isMiniapp = isMiniappRequest(request);
+  const user = isMiniapp ? null : await getCurrentUser();
 
-  if (!user) {
+  if (!isMiniapp && !user) {
     return NextResponse.json(
       { ok: false, error: "Unauthorized" },
       { status: 401, headers: buildCorsHeaders("application/json") },
@@ -419,6 +421,8 @@ async function handleProxy(request: NextRequest) {
     if (
       !tokenPayload ||
       tokenPayload.provider !== "netshort" ||
+      !isMiniapp &&
+      user &&
       tokenPayload.userId !== user.id
     ) {
       return NextResponse.json(
@@ -437,22 +441,36 @@ async function handleProxy(request: NextRequest) {
   } else if (dramaId && episodeNo) {
     rawUrl = await resolveNetshortEpisodeVideoUrl(dramaId, episodeNo);
 
-    const initialToken = createStreamToken({
+    const initialPayload: VerifiedStreamToken = {
       provider: "netshort",
-      userId: user.id,
+      userId: isMiniapp ? "miniapp" : user!.id,
       episodeKey: `${dramaId}:${episodeNo}`,
       url: rawUrl,
-    });
+      exp: Math.floor(Date.now() / 1000) + 180,
+    };
 
-    const tokenUrl = `/api/netshort/stream?token=${encodeURIComponent(initialToken)}`;
+    const isMiniappRequest = request.nextUrl.searchParams.get("miniapp") === "1";
 
-    return new NextResponse(null, {
-      status: 307,
-      headers: {
-        Location: tokenUrl,
-        ...buildCorsHeaders(),
-      },
-    });
+    if (isMiniappRequest) {
+      parentPayload = initialPayload;
+    } else {
+      const initialToken = createStreamToken({
+        provider: initialPayload.provider,
+        userId: initialPayload.userId,
+        episodeKey: initialPayload.episodeKey,
+        url: initialPayload.url,
+      });
+
+      const tokenUrl = `/api/netshort/stream?token=${encodeURIComponent(initialToken)}`;
+
+      return new NextResponse(null, {
+        status: 307,
+        headers: {
+          Location: tokenUrl,
+          ...buildCorsHeaders(),
+        },
+      });
+    }
   }
 
   if (!rawUrl || !parentPayload) {
@@ -609,6 +627,8 @@ async function handleProxy(request: NextRequest) {
 
 
 async function requireNetshortAccess(request: NextRequest) {
+  if (isMiniappRequest(request)) return null;
+
   const user = await getCurrentUser();
 
   if (!user) {

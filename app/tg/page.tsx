@@ -1763,6 +1763,43 @@ export default function Home() {
 
   const [telegramUserName, setTelegramUserName] = useState<string | null>(null);
   const [telegramUserId, setTelegramUserId] = useState<number | null>(null);
+
+  useEffect(() => {
+    const telegramWebApp = window.Telegram?.WebApp as
+      | ({ initData?: string } & NonNullable<typeof window.Telegram>["WebApp"])
+      | undefined;
+
+    const initData = telegramWebApp?.initData || "";
+
+    if (!initData.trim()) return;
+
+    let cancelled = false;
+
+    async function ensureTelegramSession() {
+      try {
+        await fetch("/api/auth/telegram", {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            init_data: initData,
+          }),
+        });
+      } catch (error) {
+        if (!cancelled) {
+          console.warn("Gagal membuat session Telegram MiniApp:", error);
+        }
+      }
+    }
+
+    ensureTelegramSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [telegramPhotoUrl, setTelegramPhotoUrl] = useState<string | null>(null);
   const [isTelegramWebAppReady, setIsTelegramWebAppReady] = useState(false);
   const [isTelegramUserValid, setIsTelegramUserValid] = useState(false);
