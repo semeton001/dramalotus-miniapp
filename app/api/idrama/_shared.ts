@@ -4,9 +4,8 @@ import type { Episode } from "@/types/episode";
 
 export const IDRAMA_BASE_URL = "https://streamapi.web.id/p/idrama/api/v1";
 export const IDRAMA_DEFAULT_LANG = "id";
-export const IDRAMA_DEFAULT_TOKEN =
-  "KFKiMIbY3Np8kbimDo7lJDNSVslwF3Fn64cI0TOtqpOP373n58ca6BKzbDsLb7qB";
-export const IDRAMA_DEFAULT_CODE = "4D96F22760EA30FB0FFBA9AA87A979A6";
+export const IDRAMA_DEFAULT_TOKEN = process.env.IDRAMA_TOKEN?.trim() || "";
+export const IDRAMA_DEFAULT_CODE = process.env.IDRAMA_CODE?.trim() || "";
 export const IDRAMA_POPULAR_SECTION_ID = "section_d327e331";
 export const IDRAMA_HOT_TAB_ID = "channel_ddbdbcef";
 
@@ -323,7 +322,7 @@ export function adaptIdramaEpisodes(
 
     const streamUrl = `/api/idrama/stream?dramaId=${encodeURIComponent(
       dramaId,
-    )}&ep=${epNumber}&code=${encodeURIComponent(code || IDRAMA_DEFAULT_CODE)}`;
+    )}&ep=${epNumber}`;
 
     return {
       id: createStableNumericId(epId, numericDramaId * 1000 + epNumber),

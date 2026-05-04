@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
 import {
   IDRAMA_DEFAULT_CODE,
   adaptIdramaEpisodes,
@@ -6,8 +7,7 @@ import {
 } from "../_shared";
 
 const IDRAMA_UNLOCK_BASE_URL = "https://captain.sapimu.au/idrama/api/v1";
-const IDRAMA_UNLOCK_TOKEN =
-  "e58d7eee19710b97553a0b73aeda687be4cb05d3b378b8fc8d65d5facf6cb438";
+const IDRAMA_UNLOCK_TOKEN = process.env.IDRAMA_UNLOCK_TOKEN?.trim() || "";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -91,17 +91,15 @@ function normalizeEpisode(
     dramaId: numericDramaId || toNumber(dramaId),
     episodeNumber,
     title: `Episode ${episodeNumber}`,
-    videoUrl: playUrl
-      ? `/api/idrama/stream?u=${encodeURIComponent(playUrl)}`
-      : `/api/idrama/stream?dramaId=${encodeURIComponent(
-          dramaId,
-        )}&ep=${episodeNumber}&code=${encodeURIComponent(IDRAMA_DEFAULT_CODE)}`,
-    originalVideoUrl: playUrl || undefined,
+    videoUrl: `/api/idrama/stream?dramaId=${encodeURIComponent(
+      dramaId,
+    )}&ep=${episodeNumber}&episodeNumber=${episodeNumber}`,
+    originalVideoUrl: undefined,
     subtitleUrl: undefined,
     subtitleLang: undefined,
     subtitleLabel: undefined,
-    isLocked: !playUrl,
-    isVipOnly: !playUrl,
+    isLocked: episodeNumber > FREE_EPISODE_LIMIT,
+    isVipOnly: episodeNumber > FREE_EPISODE_LIMIT,
     sortOrder: episodeNumber,
     thumbnail: toStringValue(raw.episode_cover) || undefined,
     idramaEpisodeId: toStringValue(raw.episode_id) || String(episodeNumber),
