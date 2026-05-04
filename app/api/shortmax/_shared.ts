@@ -480,10 +480,8 @@ export function normalizeShortmaxEpisodes(
         title:
           pickString(item, "title", "name", "episodeTitle", "episode_title") ||
           `Episode ${episodeNumber}`,
-        videoUrl: `/api/shortmax/stream?u=${encodeURIComponent(originalVideoUrl)}`,
-        subtitleUrl: subtitleOriginal
-          ? `/api/shortmax/subtitle?url=${encodeURIComponent(subtitleOriginal)}`
-          : undefined,
+        videoUrl: "",
+        subtitleUrl: undefined,
         subtitleLang: "id-ID",
         subtitleLabel: "Indonesian",
         originalVideoUrl,
@@ -563,7 +561,7 @@ export async function proxyBinaryResponse(
               ? `${origin}${trimmed}`
               : `${parent}${trimmed}`;
 
-          return `/api/shortmax/stream?u=${encodeURIComponent(absoluteUrl)}`;
+          return line;
         } catch {
           return line;
         }
