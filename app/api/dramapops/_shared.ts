@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Drama } from "@/types/drama";
+import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
 
 export const DRAMAPOPS_BASE_URL =
   "https://streamapi.web.id/p/dramapops/api/v1";
-export const DRAMAPOPS_TOKEN =
-  "KFKiMIbY3Np8kbimDo7lJDNSVslwF3Fn64cI0TOtqpOP373n58ca6BKzbDsLb7qB";
+export const DRAMAPOPS_TOKEN = process.env.DRAMAPOPS_TOKEN?.trim() || "";
 export const DRAMAPOPS_LANG = "id";
 export const DRAMAPOPS_SOURCE_ID = "18";
 export const DRAMAPOPS_SOURCE_NAME = "Dramapops";
@@ -325,9 +325,8 @@ export async function buildDramapopsEpisode(
   );
 
   const data = (payload as JsonRecord)?.data as JsonRecord | undefined;
-  const videoUrl = pickBestVideoUrl(payload);
   const subtitle = pickSubtitle(payload);
-  const isVip = episodeNumber >= 10;
+  const isVip = episodeNumber > FREE_EPISODE_LIMIT;
   const title = `Episode ${episodeNumber}`;
 
   return {
@@ -335,10 +334,10 @@ export async function buildDramapopsEpisode(
     dramaId: numericDramaId,
     episodeNumber,
     title,
-    videoUrl: videoUrl
-      ? `/api/dramapops/stream?url=${encodeURIComponent(videoUrl)}`
-      : `/api/dramapops/stream?movieId=${encodeURIComponent(movieId)}&episode=${episodeNumber}`,
-    originalVideoUrl: videoUrl || undefined,
+    videoUrl: `/api/dramapops/stream?movieId=${encodeURIComponent(
+      movieId,
+    )}&episode=${episodeNumber}&episodeNumber=${episodeNumber}`,
+    originalVideoUrl: undefined,
     isLocked: isVip,
     isVipOnly: isVip,
     sortOrder: episodeNumber,
@@ -376,7 +375,7 @@ export async function buildDramapopsEpisodes(
             numericDramaId,
           );
 
-          return item.originalVideoUrl ? item : null;
+          return item.videoUrl ? item : null;
         } catch {
           return null;
         }
