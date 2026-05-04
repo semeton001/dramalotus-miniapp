@@ -307,12 +307,7 @@ export function buildProxyBaseUrl(request: NextRequest): string {
 
 export function normalizeProxyPlaylistUrls(
   playlistText: string,
-  request: NextRequest,
+  _request: NextRequest,
 ): string {
-  const origin = request.nextUrl.origin.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-  return playlistText
-    .replace(new RegExp(`${origin}/api/dramabite/stream\\?url=`, "g"), "/api/dramabite/stream?url=")
-    .replace(/http:\/\/localhost:\d+\/api\/dramabite\/stream\?url=/g, "/api/dramabite/stream?url=")
-    .replace(/https?:\/\/127\.0\.0\.1:\d+\/api\/dramabite\/stream\?url=/g, "/api/dramabite/stream?url=");
+  return playlistText;
 }
