@@ -1,77 +1,32 @@
-import { NextRequest } from "next/server";
-import { requireApiVip } from "@/lib/auth/requireApiVip";
+import { NextRequest, NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/auth/getCurrentUser";
+import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
+import { isMiniappRequest } from "@/lib/auth/isMiniappRequest";
+import { checkStreamRateLimit } from "@/lib/rate-limit/stream";
+import { createStreamToken, verifyStreamToken } from "@/lib/stream/token";
 import { buildShortmaxApiUrl, fetchShortmaxJson } from "../_shared";
 
-function withCors(headers: Headers) {
-  headers.set("Access-Control-Allow-Origin", "*");
-  headers.set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
-  headers.set("Access-Control-Allow-Headers", "*");
-  return headers;
-}
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-function isPlaylistTarget(target: string, contentType: string) {
-  return (
-    target.includes(".m3u8") ||
-    contentType.includes("application/vnd.apple.mpegurl") ||
-    contentType.includes("application/x-mpegURL") ||
-    contentType.includes("audio/mpegurl")
-  );
-}
+const ALLOWED_PROTOCOLS = new Set(["http:", "https:"]);
 
-function absolutizeUrl(line: string, playlistUrl: string): string {
-  if (line.startsWith("http://") || line.startsWith("https://")) {
-    return line;
-  }
+const HOP_BY_HOP_HEADERS = new Set([
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+  "content-encoding",
+  "content-length",
+  "host",
+]);
 
-  const base = new URL(playlistUrl);
-  let absolute: URL;
-
-  if (line.startsWith("/")) {
-    absolute = new URL(`${base.protocol}//${base.host}${line}`);
-  } else {
-    absolute = new URL(line, playlistUrl);
-  }
-
-  if (!absolute.search && base.search) {
-    absolute.search = base.search;
-  }
-
-  return absolute.toString();
-}
-
-function proxifyUrl(url: string, _request: NextRequest): string {
-  return `/api/shortmax/stream?u=${encodeURIComponent(url)}`;
-}
-
-function rewritePlaylist(
-  content: string,
-  playlistUrl: string,
-  request: NextRequest,
-): string {
-  return content
-    .split("\n")
-    .map((line) => {
-      const trimmed = line.trim();
-
-      if (!trimmed) return line;
-
-      if (trimmed.startsWith("#")) {
-        if (trimmed.includes('URI="')) {
-          return line.replace(/URI="([^"]+)"/g, (_match, uri) => {
-            const absolute = absolutizeUrl(uri, playlistUrl);
-            return `URI="${proxifyUrl(absolute, request)}"`;
-          });
-        }
-
-        return line;
-      }
-
-      const absolute = absolutizeUrl(trimmed, playlistUrl);
-      return proxifyUrl(absolute, request);
-    })
-    .join("\n");
-}
-
+type VerifiedStreamToken = NonNullable<ReturnType<typeof verifyStreamToken>>;
 
 type ShortmaxPlayResponse = {
   data?: {
@@ -82,6 +37,150 @@ type ShortmaxPlayResponse = {
     };
   };
 };
+
+function buildCorsHeaders(contentType?: string | null) {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET,HEAD,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Range",
+    "Access-Control-Expose-Headers":
+      "Content-Length, Content-Range, Accept-Ranges, Content-Type",
+    ...(contentType ? { "Content-Type": contentType } : {}),
+  };
+}
+
+function isLikelyPlaylist(contentType: string | null, url: URL): boolean {
+  const lowerType = (contentType || "").toLowerCase();
+  const pathname = url.pathname.toLowerCase();
+
+  return (
+    lowerType.includes("application/vnd.apple.mpegurl") ||
+    lowerType.includes("application/x-mpegurl") ||
+    lowerType.includes("audio/mpegurl") ||
+    pathname.endsWith(".m3u8")
+  );
+}
+
+function buildProxyUrl(resolved: URL, parentPayload: VerifiedStreamToken): string {
+  const token = createStreamToken({
+    provider: parentPayload.provider,
+    userId: parentPayload.userId,
+    episodeKey: parentPayload.episodeKey,
+    url: resolved.toString(),
+  });
+
+  return `/api/shortmax/stream?token=${encodeURIComponent(token)}`;
+}
+
+function absolutizeUrl(line: string, playlistUrl: URL): URL {
+  const resolved = new URL(line, playlistUrl);
+
+  if (!resolved.search && playlistUrl.search) {
+    resolved.search = playlistUrl.search;
+  }
+
+  return resolved;
+}
+
+function rewritePlaylist(
+  content: string,
+  upstreamUrl: URL,
+  parentPayload: VerifiedStreamToken,
+): string {
+  return content
+    .split(/\r?\n/)
+    .map((line) => {
+      const trimmed = line.trim();
+
+      if (!trimmed) return line;
+
+      if (trimmed.startsWith("#")) {
+        if (!trimmed.includes('URI="')) return line;
+
+        return line.replace(/URI="([^"]+)"/g, (_match, uri: string) => {
+          try {
+            const resolved = absolutizeUrl(uri, upstreamUrl);
+
+            if (!ALLOWED_PROTOCOLS.has(resolved.protocol)) {
+              return `URI="${uri}"`;
+            }
+
+            return `URI="${buildProxyUrl(resolved, parentPayload)}"`;
+          } catch {
+            return `URI="${uri}"`;
+          }
+        });
+      }
+
+      try {
+        const resolved = absolutizeUrl(trimmed, upstreamUrl);
+
+        if (!ALLOWED_PROTOCOLS.has(resolved.protocol)) {
+          return line;
+        }
+
+        return buildProxyUrl(resolved, parentPayload);
+      } catch {
+        return line;
+      }
+    })
+    .join("\n");
+}
+
+function copyUpstreamHeaders(
+  upstream: Response,
+  contentType?: string | null,
+): Headers {
+  const headers = new Headers(buildCorsHeaders(contentType));
+
+  upstream.headers.forEach((value, key) => {
+    const lower = key.toLowerCase();
+
+    if (HOP_BY_HOP_HEADERS.has(lower)) return;
+    if (lower === "content-type" && contentType) return;
+    if (lower === "access-control-allow-origin") return;
+    if (lower === "access-control-allow-methods") return;
+    if (lower === "access-control-allow-headers") return;
+    if (lower === "access-control-expose-headers") return;
+
+    headers.set(key, value);
+  });
+
+  if (contentType) {
+    headers.set("Content-Type", contentType);
+  }
+
+  headers.set("Cache-Control", "no-store");
+  headers.set("Access-Control-Allow-Origin", "*");
+  headers.set("Access-Control-Allow-Methods", "GET,HEAD,OPTIONS");
+  headers.set("Access-Control-Allow-Headers", "Content-Type, Range");
+  headers.set(
+    "Access-Control-Expose-Headers",
+    "Content-Length, Content-Range, Accept-Ranges, Content-Type",
+  );
+
+  return headers;
+}
+
+function buildUpstreamHeaders(request: NextRequest, upstreamUrl: URL): Headers {
+  const headers = new Headers();
+  const range = request.headers.get("range");
+
+  if (range) {
+    headers.set("Range", range);
+  }
+
+  headers.set("Accept", "*/*");
+  headers.set(
+    "User-Agent",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+  );
+  headers.set("Accept-Language", "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7");
+  headers.set("Origin", upstreamUrl.origin);
+  headers.set("Referer", `${upstreamUrl.origin}/`);
+
+  return headers;
+}
 
 async function resolveShortmaxPlayUrl(
   dramaId: string,
@@ -96,120 +195,259 @@ async function resolveShortmaxPlayUrl(
   )) as ShortmaxPlayResponse;
 
   const video720 = payload?.data?.video?.video_720;
+  const video1080 = payload?.data?.video?.video_1080;
+  const video480 = payload?.data?.video?.video_480;
 
-  return typeof video720 === "string" && video720.trim()
-    ? video720.trim()
-    : "";
+  return [video720, video1080, video480].find(
+    (url): url is string => typeof url === "string" && url.trim().length > 0,
+  )?.trim() ?? "";
 }
 
-export async function OPTIONS() {
-  return new Response(null, {
-    status: 204,
-    headers: withCors(new Headers()),
+async function requireShortmaxAccess(request: NextRequest) {
+  if (isMiniappRequest(request)) return null;
+
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return NextResponse.json(
+      { ok: false, error: "Unauthorized" },
+      { status: 401, headers: buildCorsHeaders("application/json") },
+    );
+  }
+
+  const token = request.nextUrl.searchParams.get("token")?.trim() ?? "";
+  const legacyUrl = request.nextUrl.searchParams.get("url")?.trim() ?? "";
+  const legacyU = request.nextUrl.searchParams.get("u")?.trim() ?? "";
+
+  if (legacyUrl || legacyU) {
+    return NextResponse.json(
+      { ok: false, error: "Direct URL playback is disabled." },
+      { status: 403, headers: buildCorsHeaders("application/json") },
+    );
+  }
+
+  const rateLimitError = checkStreamRateLimit({
+    request,
+    provider: "shortmax",
+    userId: user.id,
+  });
+  if (rateLimitError) return rateLimitError;
+
+  if (token) return null;
+
+  const episodeNumber = Number(
+    request.nextUrl.searchParams.get("episode") ||
+      request.nextUrl.searchParams.get("episodeNumber") ||
+      request.nextUrl.searchParams.get("ep") ||
+      "1",
+  );
+
+  if (!Number.isInteger(episodeNumber) || episodeNumber < 1) {
+    return NextResponse.json(
+      { ok: false, error: "episode tidak valid." },
+      { status: 400, headers: buildCorsHeaders("application/json") },
+    );
+  }
+
+  const isFreeEpisode = episodeNumber <= FREE_EPISODE_LIMIT;
+
+  if (!isFreeEpisode && user.membership_status !== "vip") {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "VIP_REQUIRED",
+        message: "Episode ini hanya untuk VIP.",
+      },
+      { status: 403, headers: buildCorsHeaders("application/json") },
+    );
+  }
+
+  if (user.membership_status === "vip" && user.vip_until) {
+    const expiresAt = new Date(user.vip_until).getTime();
+
+    if (!Number.isNaN(expiresAt) && expiresAt <= Date.now()) {
+      return NextResponse.json(
+        { ok: false, error: "VIP_EXPIRED" },
+        { status: 403, headers: buildCorsHeaders("application/json") },
+      );
+    }
+  }
+
+  return null;
+}
+
+async function proxyMedia(
+  request: NextRequest,
+  rawUrl: string,
+  parentPayload: VerifiedStreamToken,
+) {
+  let upstreamUrl: URL;
+
+  try {
+    upstreamUrl = new URL(rawUrl);
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid upstream URL." },
+      { status: 400, headers: buildCorsHeaders("application/json") },
+    );
+  }
+
+  if (!ALLOWED_PROTOCOLS.has(upstreamUrl.protocol)) {
+    return NextResponse.json(
+      { error: "Unsupported protocol." },
+      { status: 400, headers: buildCorsHeaders("application/json") },
+    );
+  }
+
+  const upstream = await fetch(upstreamUrl.toString(), {
+    method: request.method === "HEAD" ? "HEAD" : "GET",
+    headers: buildUpstreamHeaders(request, upstreamUrl),
+    cache: "no-store",
+    redirect: "follow",
+  });
+
+  const contentType = upstream.headers.get("content-type");
+
+  if (!upstream.ok) {
+    const body = await upstream.text().catch(() => "");
+
+    return new NextResponse(body || `Upstream error ${upstream.status}`, {
+      status: upstream.status,
+      headers: copyUpstreamHeaders(upstream, contentType),
+    });
+  }
+
+  if (request.method === "HEAD") {
+    return new NextResponse(null, {
+      status: upstream.status,
+      headers: copyUpstreamHeaders(
+        upstream,
+        isLikelyPlaylist(contentType, upstreamUrl)
+          ? "application/vnd.apple.mpegurl; charset=utf-8"
+          : contentType,
+      ),
+    });
+  }
+
+  if (isLikelyPlaylist(contentType, upstreamUrl)) {
+    const text = await upstream.text();
+    const rewritten = rewritePlaylist(text, upstreamUrl, parentPayload);
+
+    return new NextResponse(rewritten, {
+      status: upstream.status,
+      headers: copyUpstreamHeaders(
+        upstream,
+        "application/vnd.apple.mpegurl; charset=utf-8",
+      ),
+    });
+  }
+
+  return new NextResponse(upstream.body, {
+    status: upstream.status,
+    headers: copyUpstreamHeaders(upstream, contentType),
+  });
+}
+
+async function handleStream(request: NextRequest) {
+  const isMiniapp = isMiniappRequest(request);
+  const user = isMiniapp ? null : await getCurrentUser();
+
+  const token = request.nextUrl.searchParams.get("token")?.trim() ?? "";
+  const legacyUrl = request.nextUrl.searchParams.get("url")?.trim() ?? "";
+  const legacyU = request.nextUrl.searchParams.get("u")?.trim() ?? "";
+
+  if (legacyUrl || legacyU) {
+    return NextResponse.json(
+      { ok: false, error: "Direct URL playback is disabled." },
+      { status: 403, headers: buildCorsHeaders("application/json") },
+    );
+  }
+
+  if (token) {
+    const payload = verifyStreamToken(token);
+
+    if (
+      !payload ||
+      payload.provider !== "shortmax" ||
+      (!isMiniapp && user && payload.userId !== user.id)
+    ) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid or expired stream token" },
+        { status: 403, headers: buildCorsHeaders("application/json") },
+      );
+    }
+
+    return proxyMedia(request, payload.url, payload);
+  }
+
+  const dramaId = request.nextUrl.searchParams.get("dramaId")?.trim() || "";
+  const episode =
+    request.nextUrl.searchParams.get("episode")?.trim() ||
+    request.nextUrl.searchParams.get("episodeNumber")?.trim() ||
+    request.nextUrl.searchParams.get("ep")?.trim() ||
+    "";
+
+  if (!dramaId || !episode) {
+    return NextResponse.json(
+      { error: "Missing dramaId/episode" },
+      { status: 400, headers: buildCorsHeaders("application/json") },
+    );
+  }
+
+  const resolvedUrl = await resolveShortmaxPlayUrl(dramaId, episode);
+
+  if (!resolvedUrl) {
+    return NextResponse.json(
+      { error: "Failed to resolve ShortMax stream" },
+      { status: 404, headers: buildCorsHeaders("application/json") },
+    );
+  }
+
+  const initialPayload: VerifiedStreamToken = {
+    provider: "shortmax",
+    userId: isMiniapp ? "miniapp" : user!.id,
+    episodeKey: `${dramaId}:${episode}`,
+    url: resolvedUrl,
+    exp: Math.floor(Date.now() / 1000) + 180,
+  };
+
+  if (isMiniapp) {
+    return proxyMedia(request, resolvedUrl, initialPayload);
+  }
+
+  const initialToken = createStreamToken({
+    provider: initialPayload.provider,
+    userId: initialPayload.userId,
+    episodeKey: initialPayload.episodeKey,
+    url: initialPayload.url,
+  });
+
+  return new NextResponse(null, {
+    status: 307,
+    headers: {
+      Location: `/api/shortmax/stream?token=${encodeURIComponent(initialToken)}`,
+      ...buildCorsHeaders(),
+    },
   });
 }
 
 export async function GET(request: NextRequest) {
-  const vipError = await requireApiVip();
-  if (vipError) return vipError;
+  const accessError = await requireShortmaxAccess(request);
+  if (accessError) return accessError;
 
-  try {
-    const dramaId = request.nextUrl.searchParams.get("dramaId")?.trim() || "";
-    const episode = request.nextUrl.searchParams.get("episode")?.trim() || "";
-    let target = request.nextUrl.searchParams.get("u")?.trim() || "";
+  return handleStream(request);
+}
 
-    if (!target && dramaId && episode) {
-      target = await resolveShortmaxPlayUrl(dramaId, episode);
-    }
+export async function HEAD(request: NextRequest) {
+  const accessError = await requireShortmaxAccess(request);
+  if (accessError) return accessError;
 
-    if (!target) {
-      return new Response("Missing u or dramaId/episode", {
-        status: 400,
-        headers: withCors(new Headers()),
-      });
-    }
+  return handleStream(request);
+}
 
-    const incomingRange = request.headers.get("range");
-    const upstreamHeaders = new Headers();
-
-    upstreamHeaders.set("accept", "*/*");
-    upstreamHeaders.set(
-      "user-agent",
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
-    );
-
-    try {
-      const targetUrl = new URL(target);
-      upstreamHeaders.set("origin", `${targetUrl.protocol}//${targetUrl.host}`);
-      upstreamHeaders.set(
-        "referer",
-        `${targetUrl.protocol}//${targetUrl.host}/`,
-      );
-    } catch {
-      // ignore invalid url parse
-    }
-
-    if (incomingRange) {
-      upstreamHeaders.set("range", incomingRange);
-    }
-
-    const upstream = await fetch(target, {
-      method: "GET",
-      headers: upstreamHeaders,
-      cache: "no-store",
-      redirect: "follow",
-    });
-
-    const contentType = upstream.headers.get("content-type") || "";
-    const headers = new Headers();
-
-    if (contentType) headers.set("content-type", contentType);
-
-    const contentLength = upstream.headers.get("content-length");
-    if (contentLength) headers.set("content-length", contentLength);
-
-    const contentRange = upstream.headers.get("content-range");
-    if (contentRange) headers.set("content-range", contentRange);
-
-    const acceptRanges = upstream.headers.get("accept-ranges");
-    if (acceptRanges) headers.set("accept-ranges", acceptRanges);
-
-    headers.set("cache-control", "no-store");
-    withCors(headers);
-
-    if (!upstream.ok) {
-      const body = await upstream.text().catch(() => "");
-      return new Response(body || `Upstream error ${upstream.status}`, {
-        status: upstream.status,
-        headers,
-      });
-    }
-
-    if (isPlaylistTarget(target, contentType)) {
-      const text = await upstream.text();
-      const rewritten = rewritePlaylist(text, target, request);
-
-      headers.delete("content-length");
-      headers.delete("content-range");
-      headers.set("content-type", "application/vnd.apple.mpegurl");
-
-      return new Response(rewritten, {
-        status: upstream.status,
-        headers,
-      });
-    }
-
-    return new Response(upstream.body, {
-      status: upstream.status,
-      headers,
-    });
-  } catch (error) {
-    return new Response(
-      error instanceof Error ? error.message : "Unknown Shortmax stream error",
-      {
-        status: 500,
-        headers: withCors(new Headers()),
-      },
-    );
-  }
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: buildCorsHeaders(),
+  });
 }

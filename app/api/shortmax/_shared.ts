@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export const SHORTMAX_BASE_URL = "https://streamapi.web.id/p/shortmax/api/v1";
-export const SHORTMAX_TOKEN =
-  "KFKiMIbY3Np8kbimDo7lJDNSVslwF3Fn64cI0TOtqpOP373n58ca6BKzbDsLb7qB";
+export const SHORTMAX_TOKEN = process.env.SHORTMAX_TOKEN?.trim() || "";
 export const SHORTMAX_UPSTREAM_HEADERS = {
   Accept: "application/json, text/plain, */*",
   "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
