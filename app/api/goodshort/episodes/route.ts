@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
           duration: normalizeDuration(chapter.playTime),
           videoUrl: `/api/goodshort/stream?bookId=${encodeURIComponent(
             dramaId,
-          )}&chapterId=${encodeURIComponent(chapterId)}&q=720p`,
+          )}&chapterId=${encodeURIComponent(chapterId)}&episodeNumber=${episodeNumber}&q=720p`,
           originalVideoUrl: undefined,
           subtitleUrl: undefined,
           subtitleLang: undefined,

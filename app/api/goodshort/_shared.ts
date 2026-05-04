@@ -4,8 +4,7 @@ import type { Episode } from "@/types/episode";
 
 export const GOODSHORT_BASE_URL = "https://streamapi.web.id/p/goodshort/api/v1";
 export const GOODSHORT_LANG = "id";
-export const GOODSHORT_TOKEN =
-  "KFKiMIbY3Np8kbimDo7lJDNSVslwF3Fn64cI0TOtqpOP373n58ca6BKzbDsLb7qB";
+export const GOODSHORT_TOKEN = process.env.GOODSHORT_TOKEN?.trim() || "";
 export const GOODSHORT_CODE = "4D96F22760EA30FB0FFBA9AA87A979A6";
 export const GOODSHORT_HOME_SIZE = 20;
 export const GOODSHORT_SEARCH_SIZE = 15;
