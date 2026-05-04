@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Drama } from "@/types/drama";
+import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
 
 export const FLEXTV_BASE_URL = "https://streamapi.web.id/p/flextv/api/v1";
-export const FLEXTV_TOKEN =
-  "KFKiMIbY3Np8kbimDo7lJDNSVslwF3Fn64cI0TOtqpOP373n58ca6BKzbDsLb7qB";
+export const FLEXTV_TOKEN = process.env.FLEXTV_TOKEN?.trim() || "";
 export const FLEXTV_LANG = "id";
 export const FLEXTV_SOURCE_ID = "14";
 export const FLEXTV_SOURCE_NAME = "FlexTV";
@@ -275,7 +275,7 @@ export function adaptFlextvEpisode(
 ): Episode {
   const episodeNumber = toNumber(raw.series_no) || toNumber(raw.number) || 1;
   const episodeId = pickString(raw, "id", "episode_id") || String(episodeNumber);
-  const isVip = episodeNumber >= 13 || toNumber(raw.is_vip_free) === 1;
+  const isVip = episodeNumber > FREE_EPISODE_LIMIT || toNumber(raw.is_vip_free) === 1;
 
   return {
     id: createStableNumericId(`${seriesId}-${episodeId}`, episodeNumber),
@@ -284,7 +284,7 @@ export function adaptFlextvEpisode(
     title: `Episode ${episodeNumber}`,
     videoUrl: `/api/flextv/stream?seriesId=${encodeURIComponent(
       seriesId,
-    )}&episodeId=${encodeURIComponent(episodeId)}`,
+    )}&episodeId=${encodeURIComponent(episodeId)}&episodeNumber=${episodeNumber}`,
     originalVideoUrl: undefined,
     subtitleUrl: undefined,
     subtitleLang: undefined,
