@@ -450,10 +450,15 @@ export default function PlayerScreen({
   const adBody = hasActiveAdCampaign ? adCampaign?.body || "" : "";
   const adMediaUrl = hasActiveAdCampaign ? adCampaign?.mediaUrl || "" : "";
 
-  const selectedEpisodeNumber =
+  const rawSelectedEpisodeNumber =
     typeof selectedEpisode?.episodeNumber === "number"
       ? selectedEpisode.episodeNumber
-      : 0;
+      : Number(selectedEpisode?.episodeNumber || 0);
+
+  const selectedEpisodeNumber =
+    Number.isInteger(rawSelectedEpisodeNumber) && rawSelectedEpisodeNumber > 0
+      ? rawSelectedEpisodeNumber
+      : 1;
 
   const selectedEpisodeLockedForMembership = useMemo(
     () => isEpisodeLockedByMembership(selectedEpisode, membershipStatus),
