@@ -694,12 +694,6 @@ export default function PlayerScreen({
         return;
       }
 
-      if (rawVideoSrc.includes("/api/reelife/stream?url=")) {
-        setResolvedReelifeUrl(rawVideoSrc);
-        setIsResolvingReelife(false);
-        setVideoError(null);
-        return;
-      }
 
       setIsResolvingReelife(true);
       setResolvedReelifeUrl("");

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Drama } from "@/types/drama";
 import type { Episode } from "@/types/episode";
+import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
 
 export const REELIFE_BASE = "https://reelife.dramabos.my.id";
 export const REELIFE_LANG = "in";
@@ -342,33 +343,30 @@ export function adaptReelifeEpisode(
       : createStableNumericId(dramaId || "reelife-drama", 1);
 
   const title = pickFirstString(item.chapterName, `Episode ${chapterId}`);
-  const directUrl = pickFirstString(opts.fallbackVideoUrl, item.mp4720p);
+  const episodeNumber = parseEpisodeNumber(title || chapterId);
+  const fallbackVideoUrl = pickFirstString(opts.fallbackVideoUrl, item.mp4720p);
   const code =
     pickFirstString(item.code, opts.code) || REELIFE_DEFAULT_PLAY_CODE;
 
   return {
     id: createStableNumericId(rawSeed, (opts.index || 0) + 1),
     dramaId: numericDramaId,
-    episodeNumber: parseEpisodeNumber(title || chapterId),
+    episodeNumber,
     title,
     duration: "",
     slug: `reelife-${dramaId}-${chapterId}`,
     description: "",
-    videoUrl: directUrl
-      ? `/api/reelife/stream?url=${encodeURIComponent(directUrl)}&dramaId=${encodeURIComponent(
-          dramaId,
-        )}&episodeId=${encodeURIComponent(chapterId)}${code ? `&code=${encodeURIComponent(code)}` : ""}`
-      : `/api/reelife/stream?dramaId=${encodeURIComponent(
-          dramaId,
-        )}&episodeId=${encodeURIComponent(chapterId)}${code ? `&code=${encodeURIComponent(code)}` : ""}`,
-    originalVideoUrl: directUrl || undefined,
+    videoUrl: `/api/reelife/stream?dramaId=${encodeURIComponent(
+      dramaId,
+    )}&episodeId=${encodeURIComponent(chapterId)}&episodeNumber=${episodeNumber}`,
+    originalVideoUrl: undefined,
     thumbnail: pickFirstString(item.chapterImg) || undefined,
-    isLocked: getNumber(item.isCharge) === 1 && getNumber(item.price) > 0,
-    isVipOnly: getNumber(item.price) > 0,
+    isLocked: episodeNumber > FREE_EPISODE_LIMIT,
+    isVipOnly: episodeNumber > FREE_EPISODE_LIMIT,
     sortOrder: opts.index || 0,
     reelifeEpisodeId: chapterId || undefined,
     reelifePlayId: chapterId || undefined,
-    reelifeCode: code || undefined,
+    reelifeCode: undefined,
   };
 }
 

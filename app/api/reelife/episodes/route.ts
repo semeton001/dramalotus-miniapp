@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
 
 type JsonRecord = Record<string, unknown>;
 
 const REELIFE_API_BASE_URL = "https://streamapi.web.id/p/reelife/api/v1";
-const REELIFE_API_TOKEN =
-  "KFKiMIbY3Np8kbimDo7lJDNSVslwF3Fn64cI0TOtqpOP373n58ca6BKzbDsLb7qB";
+const REELIFE_API_TOKEN = process.env.REELIFE_API_TOKEN?.trim() || "";
 
 async function fetchReelifeStreamApi(pathname: string): Promise<JsonRecord> {
   const normalizedPath = pathname.startsWith("/") ? pathname.slice(1) : pathname;
@@ -97,23 +97,23 @@ async function fetchEpisode(dramaId: string, episodeNumber: number) {
 
   if (!chapter) return null;
 
-  const videoUrl = pick720VideoUrl(chapter, payload);
   const chapterId = toStringValue(chapter.chapterId, String(episodeNumber));
+  const isVip = episodeNumber > FREE_EPISODE_LIMIT;
 
   return {
     id: Number(`${dramaId}${String(episodeNumber).padStart(3, "0")}`),
     dramaId: toNumber(dramaId),
     episodeNumber,
     title: `Episode ${episodeNumber}`,
-    videoUrl: videoUrl
-      ? `/api/reelife/stream?url=${encodeURIComponent(videoUrl)}`
-      : "",
-    originalVideoUrl: videoUrl || undefined,
+    videoUrl: `/api/reelife/stream?dramaId=${encodeURIComponent(
+      dramaId,
+    )}&episodeId=${encodeURIComponent(chapterId)}&episodeNumber=${episodeNumber}`,
+    originalVideoUrl: undefined,
     subtitleUrl: undefined,
     subtitleLang: undefined,
     subtitleLabel: undefined,
-    isLocked: !videoUrl,
-    isVipOnly: !videoUrl,
+    isLocked: isVip,
+    isVipOnly: isVip,
     sortOrder: episodeNumber,
     thumbnail: toStringValue(chapter.chapterImg) || undefined,
     reelifeEpisodeId: chapterId,
