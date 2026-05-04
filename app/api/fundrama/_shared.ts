@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Drama } from "@/types/drama";
+import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
 
 export const FUNDRAMA_BASE_URL = "https://streamapi.web.id/p/fundrama/api/v1";
-export const FUNDRAMA_TOKEN =
-  "KFKiMIbY3Np8kbimDo7lJDNSVslwF3Fn64cI0TOtqpOP373n58ca6BKzbDsLb7qB";
+export const FUNDRAMA_TOKEN = process.env.FUNDRAMA_TOKEN?.trim() || "";
 export const FUNDRAMA_LANG = "id";
 export const FUNDRAMA_SOURCE_ID = "13";
 export const FUNDRAMA_SOURCE_NAME = "FunDrama";
@@ -299,20 +299,17 @@ export function adaptFundramaEpisode(
   const episodeNumber = toNumber(raw.erev) || toNumber(raw.episode) || 1;
   const episodeId =
     pickString(raw, "esecur", "vticke", "id") || String(episodeNumber);
-  const videoUrl = pickBestVideoUrl(raw.ptitl);
-  const isVip = false;
+  const isVip = episodeNumber > FREE_EPISODE_LIMIT;
 
   return {
     id: createStableNumericId(`${dramaId}-${episodeId}`, episodeNumber),
     dramaId: numericDramaId,
     episodeNumber,
     title: `Episode ${episodeNumber}`,
-    videoUrl: videoUrl
-      ? `/api/fundrama/stream?url=${encodeURIComponent(videoUrl)}`
-      : `/api/fundrama/stream?dramaId=${encodeURIComponent(
-          dramaId,
-        )}&episode=${encodeURIComponent(String(episodeNumber))}`,
-    originalVideoUrl: videoUrl || undefined,
+    videoUrl: `/api/fundrama/stream?dramaId=${encodeURIComponent(
+      dramaId,
+    )}&episode=${encodeURIComponent(String(episodeNumber))}&episodeNumber=${episodeNumber}`,
+    originalVideoUrl: undefined,
     subtitleUrl: undefined,
     subtitleLang: undefined,
     subtitleLabel: undefined,
