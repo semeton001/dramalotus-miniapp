@@ -769,10 +769,15 @@ export default function PlayerScreen({
         (selectedEpisode?.reelShortEpisodeId?.trim?.() || "") ||
         (selectedEpisode?.reelShortVideoId?.trim?.() || "");
 
-      const episodeNumber =
+      const rawEpisodeNumber =
         typeof selectedEpisode?.episodeNumber === "number"
           ? selectedEpisode.episodeNumber
           : Number(selectedEpisode?.episodeNumber || 0);
+
+      const episodeNumber =
+        Number.isInteger(rawEpisodeNumber) && rawEpisodeNumber > 0
+          ? rawEpisodeNumber
+          : 1;
 
       if (!reelShortId || !episodeId) {
         setResolvedReelShortUrl("");
