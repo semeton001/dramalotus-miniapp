@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Drama } from "@/types/drama";
+import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
 
 export const MICRODRAMA_BASE_URL =
   "https://streamapi.web.id/p/microdrama/api/v1";
-export const MICRODRAMA_TOKEN =
-  "KFKiMIbY3Np8kbimDo7lJDNSVslwF3Fn64cI0TOtqpOP373n58ca6BKzbDsLb7qB";
+export const MICRODRAMA_TOKEN = process.env.MICRODRAMA_TOKEN?.trim() || "";
 export const MICRODRAMA_LANG = "id";
 export const MICRODRAMA_SOURCE_ID = "14";
 export const MICRODRAMA_SOURCE_NAME = "MicroDrama";
@@ -295,20 +295,17 @@ export function adaptMicrodramaEpisode(
 ): Episode {
   const episodeNumber = toNumber(raw.index) || toNumber(raw.episode) || 1;
   const episodeId = pickString(raw, "id") || String(episodeNumber);
-  const videoUrl = pickBestVideoUrl(raw.videos);
-  const isVip = episodeNumber >= 10;
+  const isVip = episodeNumber > FREE_EPISODE_LIMIT;
 
   return {
     id: createStableNumericId(`${dramaId}-${episodeId}`, episodeNumber),
     dramaId: numericDramaId,
     episodeNumber,
     title: `Episode ${episodeNumber}`,
-    videoUrl: videoUrl
-      ? `/api/microdrama/stream?url=${encodeURIComponent(videoUrl)}`
-      : `/api/microdrama/stream?dramaId=${encodeURIComponent(
-          dramaId,
-        )}&episode=${encodeURIComponent(String(episodeNumber))}`,
-    originalVideoUrl: videoUrl || undefined,
+    videoUrl: `/api/microdrama/stream?dramaId=${encodeURIComponent(
+      dramaId,
+    )}&episode=${encodeURIComponent(String(episodeNumber))}&episodeNumber=${episodeNumber}`,
+    originalVideoUrl: undefined,
     subtitleUrl: undefined,
     subtitleLang: undefined,
     subtitleLabel: undefined,
