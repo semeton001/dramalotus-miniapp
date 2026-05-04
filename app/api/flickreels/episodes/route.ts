@@ -120,7 +120,7 @@ export async function GET(request: NextRequest) {
           thumbnail: toStringValue(item.chapter_cover) || undefined,
           videoUrl: `/api/flickreels/stream?dramaId=${encodeURIComponent(
             dramaId,
-          )}&chapterId=${encodeURIComponent(chapterId)}`,
+          )}&chapterId=${encodeURIComponent(chapterId)}&episodeNumber=${episodeNumber}`,
           isLocked,
           isVipOnly,
           sortOrder: episodeNumber,

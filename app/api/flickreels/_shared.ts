@@ -5,8 +5,7 @@ import { normalizeFlickreelsFeed } from "@/lib/adapters/drama/flickreels";
 export const FLICKREELS_BASE_URL = "https://streamapi.web.id/p/flickreels/api/v1";
 export const FLICKREELS_SOURCE_ID = "6";
 export const FLICKREELS_LANG = "id";
-export const FLICKREELS_TOKEN =
-  "KFKiMIbY3Np8kbimDo7lJDNSVslwF3Fn64cI0TOtqpOP373n58ca6BKzbDsLb7qB";
+export const FLICKREELS_TOKEN = process.env.FLICKREELS_TOKEN?.trim() || "";
 
 export function buildFlickreelsApiUrl(
   path: string,
