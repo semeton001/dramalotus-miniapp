@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Drama } from "@/types/drama";
+import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
 
 export const DRAMABITE_BASE_URL =
   "https://streamapi.web.id/p/dramabite/api/v1";
-export const DRAMABITE_TOKEN =
-  "KFKiMIbY3Np8kbimDo7lJDNSVslwF3Fn64cI0TOtqpOP373n58ca6BKzbDsLb7qB";
+export const DRAMABITE_TOKEN = process.env.DRAMABITE_TOKEN?.trim() || "";
 export const DRAMABITE_LANG = "id";
 export const DRAMABITE_SOURCE_ID = "13";
 export const DRAMABITE_SOURCE_NAME = "DramaBite";
@@ -264,8 +264,8 @@ export function adaptDramabiteEpisode(
     subtitleUrl: undefined,
     subtitleLang: undefined,
     subtitleLabel: undefined,
-    isLocked: episodeNumber >= 10,
-    isVipOnly: episodeNumber >= 10,
+    isLocked: episodeNumber > FREE_EPISODE_LIMIT,
+    isVipOnly: episodeNumber > FREE_EPISODE_LIMIT,
     sortOrder: episodeNumber,
     thumbnail: undefined,
     dramabiteEpisodeId: episodeId,
@@ -290,15 +290,13 @@ export function rewriteM3u8Playlist(
       if (!trimmed || trimmed.startsWith("#")) {
         if (trimmed.startsWith("#EXT-X-KEY") && trimmed.includes('URI="')) {
           return trimmed.replace(/URI="([^"]+)"/g, (_, uri: string) => {
-            const absolute = new URL(uri, base).toString();
-            return `URI="${proxyBaseUrl}?url=${encodeURIComponent(absolute)}"`;
+            return `URI="${uri}"`;
           });
         }
         return line;
       }
 
-      const absolute = new URL(trimmed, base).toString();
-      return `${proxyBaseUrl}?url=${encodeURIComponent(absolute)}`;
+      return line;
     })
     .join("\n");
 }
