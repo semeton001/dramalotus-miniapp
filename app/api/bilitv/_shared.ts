@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Drama } from "@/types/drama";
+import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
 
 export const BILITV_BASE_URL = "https://streamapi.web.id/p/bilitv/api/v1";
-export const BILITV_TOKEN =
-  "KFKiMIbY3Np8kbimDo7lJDNSVslwF3Fn64cI0TOtqpOP373n58ca6BKzbDsLb7qB";
+export const BILITV_TOKEN = process.env.BILITV_TOKEN?.trim() || "";
 export const BILITV_LANG = "id";
 export const BILITV_SOURCE_ID = "20";
 export const BILITV_SOURCE_NAME = "BiliTV";
@@ -313,8 +313,7 @@ export async function buildBiliTVEpisodes(
     .map((episode, index) => {
       const episodeNumber = toNumber(episode.number, index + 1);
       const episodeId = pickString(episode, "id") || `${dramaId}-${episodeNumber}`;
-      const free = episode.free === true;
-      const isVip = !free;
+      const isVip = episodeNumber > FREE_EPISODE_LIMIT;
 
       return {
         id: createStableNumericId(`${dramaId}-${episodeId}`, episodeNumber),
@@ -323,7 +322,7 @@ export async function buildBiliTVEpisodes(
         title: `Episode ${episodeNumber}`,
         videoUrl: `/api/bilitv/stream?dramaId=${encodeURIComponent(
           dramaId,
-        )}&episode=${episodeNumber}`,
+        )}&episode=${episodeNumber}&episodeNumber=${episodeNumber}`,
         originalVideoUrl: "",
         subtitleUrl: `/api/bilitv/subtitle?dramaId=${encodeURIComponent(
           dramaId,
@@ -380,108 +379,3 @@ export async function fetchBiliTVSubtitleVtt(
   return pickString(record, "vtt", "subtitle", "text");
 }
 
-function absolutizeM3u8Line(line: string, baseUrl: string): string {
-  const trimmed = line.trim();
-  if (!trimmed || trimmed.startsWith("#")) return line;
-
-  try {
-    return new URL(trimmed, baseUrl).toString();
-  } catch {
-    return line;
-  }
-}
-
-function stripBiliTVSubtitleAttributes(line: string): string {
-  return line
-    .replace(/,SUBTITLES="[^"]*"/g, "")
-    .replace(/,CLOSED-CAPTIONS="[^"]*"/g, "");
-}
-
-function shouldDropBiliTVPlaylistLine(line: string): boolean {
-  const normalized = line.trim().toUpperCase();
-
-  return (
-    normalized.startsWith("#EXT-X-MEDIA:") &&
-    (normalized.includes("TYPE=SUBTITLES") ||
-      normalized.includes("TYPE=CLOSED-CAPTIONS"))
-  );
-}
-
-function proxifyM3u8Line(line: string, baseUrl: string): string {
-  if (shouldDropBiliTVPlaylistLine(line)) return "";
-
-  const cleanedLine = stripBiliTVSubtitleAttributes(line);
-  const absolute = absolutizeM3u8Line(cleanedLine, baseUrl);
-  if (!absolute.trim() || absolute.trim().startsWith("#")) return absolute;
-
-  return `/api/bilitv/stream?url=${encodeURIComponent(absolute)}`;
-}
-
-export async function proxyRemoteMedia(
-  request: NextRequest,
-  rawUrl: string,
-): Promise<NextResponse> {
-  const response = await fetch(rawUrl, {
-    method: "GET",
-    headers: {
-      Accept: "*/*",
-      "User-Agent":
-        request.headers.get("user-agent") ||
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-      Referer: "https://www.bilitv.com/",
-      Origin: "https://www.bilitv.com",
-      ...(request.headers.get("range")
-        ? { Range: request.headers.get("range") as string }
-        : {}),
-    },
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    return NextResponse.json(
-      { error: `Failed to load BiliTV media: ${response.status}`, rawUrl },
-      { status: response.status },
-    );
-  }
-
-  const contentType = response.headers.get("content-type") || "";
-
-  if (
-    contentType.includes("application/vnd.apple.mpegurl") ||
-    contentType.includes("application/x-mpegurl") ||
-    rawUrl.includes(".m3u8")
-  ) {
-    const text = await response.text();
-    const playlist = text
-      .split(/\r?\n/)
-      .map((line) => proxifyM3u8Line(line, rawUrl))
-      .filter((line) => line.trim().length > 0)
-      .join("\n");
-
-    return new NextResponse(playlist, {
-      status: 200,
-      headers: {
-        "content-type": "application/x-mpegurl",
-        "cache-control": "no-store",
-        "access-control-allow-origin": "*",
-      },
-    });
-  }
-
-  const headers = new Headers();
-  headers.set("content-type", contentType || "video/mp2t");
-  headers.set("cache-control", "no-store");
-  headers.set("access-control-allow-origin", "*");
-
-  const contentLength = response.headers.get("content-length");
-  const contentRange = response.headers.get("content-range");
-  if (contentLength) headers.set("content-length", contentLength);
-  if (contentRange) headers.set("content-range", contentRange);
-
-  const body = await response.arrayBuffer();
-
-  return new NextResponse(body, {
-    status: response.status,
-    headers,
-  });
-}
