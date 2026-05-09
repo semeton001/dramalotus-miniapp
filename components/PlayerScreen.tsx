@@ -264,6 +264,130 @@ function isEpisodeLockedByMembership(
   return !canAccessEpisodeByMembership(episode, membershipStatus);
 }
 
+function DramaBoxSubtitleOverlay({
+  isActive,
+  subtitleSrc,
+  videoSrc,
+  videoRef,
+  reloadKey,
+}: {
+  isActive: boolean;
+  subtitleSrc: string;
+  videoSrc: string;
+  videoRef: { current: HTMLVideoElement | null };
+  reloadKey: string;
+}) {
+  const [cues, setCues] = useState<SubtitleCue[]>([]);
+  const [activeText, setActiveText] = useState("");
+
+  useEffect(() => {
+    if (!isActive || !subtitleSrc) {
+      setCues([]);
+      setActiveText("");
+      return;
+    }
+
+    let cancelled = false;
+
+    setCues([]);
+    setActiveText("");
+
+    const loadSubtitle = async () => {
+      try {
+        const response = await fetch(subtitleSrc, {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error(`DramaBox subtitle fetch failed: ${response.status}`);
+        }
+
+        const text = await response.text();
+        if (cancelled) return;
+
+        const parsedCues = mergeFastSubtitleCues(parseSubtitleText(text), {
+          maxGap: 0.28,
+          maxDuration: 4.8,
+          maxCharsPerLine: 24,
+        });
+
+        setCues(parsedCues);
+      } catch (error) {
+        console.error("Gagal memuat subtitle DramaBox overlay:", error);
+
+        if (!cancelled) {
+          setCues([]);
+          setActiveText("");
+        }
+      }
+    };
+
+    void loadSubtitle();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isActive, subtitleSrc, videoSrc, reloadKey]);
+
+  useEffect(() => {
+    if (!isActive || cues.length === 0) {
+      setActiveText("");
+      return;
+    }
+
+    const updateSubtitle = () => {
+      const video = videoRef.current;
+
+      if (!video) {
+        setActiveText("");
+        return;
+      }
+
+      const current = video.currentTime;
+      const activeCue = cues.find(
+        (cue) => current >= cue.start && current <= cue.end,
+      );
+
+      setActiveText(
+        activeCue?.text ? formatOverlaySubtitleText(activeCue.text, 24) : "",
+      );
+    };
+
+    const video = videoRef.current;
+
+    video?.addEventListener("timeupdate", updateSubtitle);
+    video?.addEventListener("seeked", updateSubtitle);
+    video?.addEventListener("playing", updateSubtitle);
+    video?.addEventListener("loadedmetadata", updateSubtitle);
+    video?.addEventListener("loadeddata", updateSubtitle);
+
+    const intervalId = window.setInterval(updateSubtitle, 200);
+
+    updateSubtitle();
+    window.setTimeout(updateSubtitle, 500);
+    window.setTimeout(updateSubtitle, 1200);
+
+    return () => {
+      video?.removeEventListener("timeupdate", updateSubtitle);
+      video?.removeEventListener("seeked", updateSubtitle);
+      video?.removeEventListener("playing", updateSubtitle);
+      video?.removeEventListener("loadedmetadata", updateSubtitle);
+      video?.removeEventListener("loadeddata", updateSubtitle);
+      window.clearInterval(intervalId);
+    };
+  }, [isActive, cues, videoRef, videoSrc, reloadKey]);
+
+  if (!isActive || !activeText) return null;
+
+  return (
+    <div className="pointer-events-none absolute left-1/2 top-[72%] z-20 w-[82%] -translate-x-1/2 -translate-y-1/2 text-center">
+      <div className="mx-auto whitespace-pre-line break-words text-center text-[18px] font-bold leading-6 text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.95),0_0_4px_rgba(0,0,0,0.9)]">
+        {activeText}
+      </div>
+    </div>
+  );
+}
+
 export default function PlayerScreen({
   selectedDrama,
   selectedEpisode,
@@ -325,8 +449,6 @@ export default function PlayerScreen({
   const [resolvedReelifeUrl, setResolvedReelifeUrl] = useState("");
   const [isResolvingReelife, setIsResolvingReelife] = useState(false);
   const [resolvedReelShortUrl, setResolvedReelShortUrl] = useState("");
-  const [miniappDebugStreamUrl, setMiniappDebugStreamUrl] = useState("");
-  const [miniappDebugStreamStatus, setMiniappDebugStreamStatus] = useState("");
   const [isResolvingReelShort, setIsResolvingReelShort] = useState(false);
   const [resolvedFreeReelsUrl, setResolvedFreeReelsUrl] = useState("");
   const [resolvedFreeReelsSubtitleUrl, setResolvedFreeReelsSubtitleUrl] =
@@ -357,11 +479,6 @@ export default function PlayerScreen({
     SubtitleCue[]
   >([]);
   const [activeBilitvSubtitle, setActiveBilitvSubtitle] = useState("");
-
-  const [dramaboxSubtitleCues, setDramaboxSubtitleCues] = useState<
-    SubtitleCue[]
-  >([]);
-  const [activeDramaboxSubtitle, setActiveDramaboxSubtitle] = useState("");
 
   const isNetshortDrama = useMemo(() => {
     return (
@@ -1033,11 +1150,6 @@ export default function PlayerScreen({
       setActiveFreeReelsSubtitle("");
     }
 
-    if (isDramaboxDrama) {
-      setDramaboxSubtitleCues([]);
-      setActiveDramaboxSubtitle("");
-    }
-
     if (isDramapopsDrama) {
       setDramapopsSubtitleCues([]);
       setActiveDramapopsSubtitle("");
@@ -1120,43 +1232,6 @@ export default function PlayerScreen({
     AD_TOTAL_DURATION_SECONDS,
     isVideoAd,
   ]);
-
-  useEffect(() => {
-    if (!videoSrc?.includes("/api/")) return;
-
-    setMiniappDebugStreamUrl(videoSrc);
-    setMiniappDebugStreamStatus("checking...");
-
-    let cancelled = false;
-
-    async function checkStreamStatus() {
-      try {
-        const response = await fetch(videoSrc, {
-          method: "HEAD",
-          credentials: "include",
-          cache: "no-store",
-        });
-
-        if (cancelled) return;
-
-        setMiniappDebugStreamStatus(
-          `${response.status} ${response.statusText} | ${response.headers.get("content-type") || "no content-type"}`,
-        );
-      } catch (error) {
-        if (cancelled) return;
-
-        setMiniappDebugStreamStatus(
-          error instanceof Error ? error.message : "HEAD check failed",
-        );
-      }
-    }
-
-    checkStreamStatus();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [videoSrc]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -1404,16 +1479,7 @@ export default function PlayerScreen({
           setActiveDramawaveSubtitle("");
         }
 
-        if (subtitleSrc.includes("/api/dramabox/subtitle")) {
-          setDramaboxSubtitleCues(
-            mergeFastSubtitleCues(cues, {
-              maxGap: 0.28,
-              maxDuration: 4.8,
-              maxCharsPerLine: 24,
-            }),
-          );
-          setActiveDramaboxSubtitle("");
-        }
+
       } catch (error) {
         console.error("Gagal memuat subtitle overlay:", error);
         if (!cancelled) {
@@ -1447,10 +1513,6 @@ export default function PlayerScreen({
             setActiveDramawaveSubtitle("");
           }
 
-          if (subtitleSrc.includes("/api/dramabox/subtitle")) {
-            setDramaboxSubtitleCues([]);
-            setActiveDramaboxSubtitle("");
-          }
         }
       }
     };
@@ -1683,37 +1745,6 @@ export default function PlayerScreen({
       video.removeEventListener("seeked", updateSubtitle);
     };
   }, [subtitleSrc, dramawaveSubtitleCues]);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    const isDramaboxSubtitle =
-      subtitleSrc?.includes("/api/dramabox/subtitle") ?? false;
-
-    if (!video || !isDramaboxSubtitle || dramaboxSubtitleCues.length === 0) {
-      setActiveDramaboxSubtitle("");
-      return;
-    }
-
-    const updateSubtitle = () => {
-      const current = video.currentTime;
-      const activeCue = dramaboxSubtitleCues.find(
-        (cue) => current >= cue.start && current <= cue.end,
-      );
-
-      setActiveDramaboxSubtitle(
-        activeCue?.text ? formatOverlaySubtitleText(activeCue.text, 24) : "",
-      );
-    };
-
-    video.addEventListener("timeupdate", updateSubtitle);
-    video.addEventListener("seeked", updateSubtitle);
-    updateSubtitle();
-
-    return () => {
-      video.removeEventListener("timeupdate", updateSubtitle);
-      video.removeEventListener("seeked", updateSubtitle);
-    };
-  }, [subtitleSrc, dramaboxSubtitleCues]);
 
   const handleLoadedMetadata = async () => {
     const video = videoRef.current;
@@ -2143,16 +2174,6 @@ export default function PlayerScreen({
                   </div>
                 ) : videoSrc ? (
                   <>
-                  {miniappDebugStreamUrl ? (
-                    <div className="absolute left-2 right-2 top-2 z-50 max-h-24 overflow-auto rounded-xl border border-yellow-400/40 bg-black/80 p-2 text-[10px] text-yellow-100 break-all">
-                      <div className="mb-1 font-semibold">Debug stream URL:</div>
-                      <div>{miniappDebugStreamUrl}</div>
-                      <div className="mt-1 text-[9px] text-yellow-200/80">
-                        Status: {miniappDebugStreamStatus || "-"}
-                      </div>
-                    </div>
-                  ) : null}
-
                   <video
                     key={
                       isFreeReelsDrama
@@ -2338,13 +2359,14 @@ export default function PlayerScreen({
                   </div>
                 ) : null}
 
-                {isDramaboxDrama && activeDramaboxSubtitle ? (
-                  <div className="pointer-events-none absolute left-1/2 top-[72%] z-20 w-[82%] -translate-x-1/2 -translate-y-1/2 text-center">
-                    <div className="mx-auto whitespace-pre-line break-words text-center text-[18px] font-bold leading-6 text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.95),0_0_4px_rgba(0,0,0,0.9)]">
-                      {activeDramaboxSubtitle}
-                    </div>
-                  </div>
-                ) : null}
+                <DramaBoxSubtitleOverlay
+                  key={`${selectedEpisodeIdentity}:${videoSrc}:${subtitleSrc}`}
+                  isActive={isDramaboxDrama}
+                  subtitleSrc={subtitleSrc}
+                  videoSrc={videoSrc}
+                  videoRef={videoRef}
+                  reloadKey={`${selectedEpisodeIdentity}:${videoSrc}:${subtitleSrc}`}
+                />
 
                 {isNetshortDrama && activeNetshortSubtitle ? (
                   <div className="pointer-events-none absolute left-1/2 top-[72%] z-20 w-[82%] -translate-x-1/2 -translate-y-1/2 text-center">
