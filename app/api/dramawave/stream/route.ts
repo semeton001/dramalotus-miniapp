@@ -71,7 +71,9 @@ function toProxyUrl(resolved: URL, parentPayload: VerifiedStreamToken): string {
     url: resolved.toString(),
   });
 
-  return `/api/dramawave/stream?token=${encodeURIComponent(childToken)}`;
+  const miniappParam = parentPayload.userId === "miniapp" ? "&miniapp=1" : "";
+
+  return `/api/dramawave/stream?token=${encodeURIComponent(childToken)}${miniappParam}`;
 }
 
 function rewriteDirectiveUris(
@@ -160,11 +162,15 @@ function copyUpstreamHeaders(
   return headers;
 }
 
-function buildUpstreamHeaders(request: NextRequest, upstreamUrl: URL): Headers {
+function buildUpstreamHeaders(
+  request: NextRequest,
+  upstreamUrl: URL,
+  options?: { omitRange?: boolean },
+): Headers {
   const headers = new Headers();
   const range = request.headers.get("range");
 
-  if (range) {
+  if (range && !options?.omitRange) {
     headers.set("Range", range);
   }
 
@@ -187,7 +193,8 @@ async function fetchUpstream(
   request: NextRequest,
   upstreamUrl: URL,
 ): Promise<Response> {
-  const headers = buildUpstreamHeaders(request, upstreamUrl);
+  const omitRange = upstreamUrl.pathname.toLowerCase().endsWith(".m3u8");
+  const headers = buildUpstreamHeaders(request, upstreamUrl, { omitRange });
 
   return fetch(upstreamUrl.toString(), {
     method: request.method === "HEAD" ? "HEAD" : "GET",
@@ -375,9 +382,9 @@ async function handleProxy(request: NextRequest) {
       exp: Math.floor(Date.now() / 1000) + 180,
     };
 
-    const isMiniappRequest = request.nextUrl.searchParams.get("miniapp") === "1";
+    const isMiniappParam = request.nextUrl.searchParams.get("miniapp") === "1";
 
-    if (isMiniappRequest) {
+    if (isMiniappParam) {
       parentPayload = initialPayload;
     } else {
       const initialToken = createStreamToken({

@@ -264,6 +264,130 @@ function isEpisodeLockedByMembership(
   return !canAccessEpisodeByMembership(episode, membershipStatus);
 }
 
+function DramawaveSubtitleOverlay({
+  isActive,
+  subtitleSrc,
+  videoSrc,
+  videoRef,
+  reloadKey,
+}: {
+  isActive: boolean;
+  subtitleSrc: string;
+  videoSrc: string;
+  videoRef: { current: HTMLVideoElement | null };
+  reloadKey: string;
+}) {
+  const [cues, setCues] = useState<SubtitleCue[]>([]);
+  const [activeText, setActiveText] = useState("");
+
+  useEffect(() => {
+    if (!isActive || !subtitleSrc) {
+      setCues([]);
+      setActiveText("");
+      return;
+    }
+
+    let cancelled = false;
+
+    setCues([]);
+    setActiveText("");
+
+    const loadSubtitle = async () => {
+      try {
+        const response = await fetch(subtitleSrc, {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error(`Dramawave subtitle fetch failed: ${response.status}`);
+        }
+
+        const text = await response.text();
+        if (cancelled) return;
+
+        const parsedCues = mergeFastSubtitleCues(parseSubtitleText(text), {
+          maxGap: 0.18,
+          maxDuration: 4.2,
+          maxCharsPerLine: 30,
+        });
+
+        setCues(parsedCues);
+      } catch (error) {
+        console.error("Gagal memuat subtitle Dramawave overlay:", error);
+
+        if (!cancelled) {
+          setCues([]);
+          setActiveText("");
+        }
+      }
+    };
+
+    void loadSubtitle();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isActive, subtitleSrc, videoSrc, reloadKey]);
+
+  useEffect(() => {
+    if (!isActive || cues.length === 0) {
+      setActiveText("");
+      return;
+    }
+
+    const updateSubtitle = () => {
+      const video = videoRef.current;
+
+      if (!video) {
+        setActiveText("");
+        return;
+      }
+
+      const current = video.currentTime;
+      const activeCue = cues.find(
+        (cue) => current >= cue.start && current <= cue.end,
+      );
+
+      setActiveText(
+        activeCue?.text ? formatOverlaySubtitleText(activeCue.text, 30) : "",
+      );
+    };
+
+    const video = videoRef.current;
+
+    video?.addEventListener("timeupdate", updateSubtitle);
+    video?.addEventListener("seeked", updateSubtitle);
+    video?.addEventListener("playing", updateSubtitle);
+    video?.addEventListener("loadedmetadata", updateSubtitle);
+    video?.addEventListener("loadeddata", updateSubtitle);
+
+    const intervalId = window.setInterval(updateSubtitle, 200);
+
+    updateSubtitle();
+    window.setTimeout(updateSubtitle, 500);
+    window.setTimeout(updateSubtitle, 1200);
+
+    return () => {
+      video?.removeEventListener("timeupdate", updateSubtitle);
+      video?.removeEventListener("seeked", updateSubtitle);
+      video?.removeEventListener("playing", updateSubtitle);
+      video?.removeEventListener("loadedmetadata", updateSubtitle);
+      video?.removeEventListener("loadeddata", updateSubtitle);
+      window.clearInterval(intervalId);
+    };
+  }, [isActive, cues, videoRef, videoSrc, reloadKey]);
+
+  if (!isActive || !activeText) return null;
+
+  return (
+    <div className="pointer-events-none absolute left-1/2 top-[72%] z-20 w-[82%] -translate-x-1/2 -translate-y-1/2 text-center">
+      <div className="mx-auto whitespace-pre-line break-words text-center text-[18px] font-bold leading-6 text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.95),0_0_4px_rgba(0,0,0,0.9)]">
+        {activeText}
+      </div>
+    </div>
+  );
+}
+
 function DramaBoxSubtitleOverlay({
   isActive,
   subtitleSrc,
@@ -420,10 +544,6 @@ export default function PlayerScreen({
   }, []);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [dramawaveSubtitleCues, setDramawaveSubtitleCues] = useState<
-    SubtitleCue[]
-  >([]);
-  const [activeDramawaveSubtitle, setActiveDramawaveSubtitle] = useState("");
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
   const pendingAutoplayRef = useRef(false);
@@ -1396,9 +1516,7 @@ export default function PlayerScreen({
         !isFreeReelsDrama &&
         !isDramapopsDrama &&
         !isDramanovaDrama &&
-        !isBilitvDrama &&
-        !subtitleSrc.includes("/api/dramawave/subtitle") &&
-        !subtitleSrc.includes("/api/dramabox/subtitle"))
+        !isBilitvDrama)
     ) {
       setNetshortSubtitleCues([]);
       setActiveNetshortSubtitle("");
@@ -1468,16 +1586,7 @@ export default function PlayerScreen({
           setActiveDramanovaSubtitle("");
         }
 
-        if (subtitleSrc.includes("/api/dramawave/subtitle")) {
-          setDramawaveSubtitleCues(
-            mergeFastSubtitleCues(cues, {
-              maxGap: 0.18,
-              maxDuration: 4.2,
-              maxCharsPerLine: 30,
-            }),
-          );
-          setActiveDramawaveSubtitle("");
-        }
+
 
 
       } catch (error) {
@@ -1506,11 +1615,6 @@ export default function PlayerScreen({
           if (isBilitvDrama) {
             setBilitvSubtitleCues([]);
             setActiveBilitvSubtitle("");
-          }
-
-          if (subtitleSrc.includes("/api/dramawave/subtitle")) {
-            setDramawaveSubtitleCues([]);
-            setActiveDramawaveSubtitle("");
           }
 
         }
@@ -1714,37 +1818,6 @@ export default function PlayerScreen({
       window.clearInterval(intervalId);
     };
   }, [isBilitvDrama, bilitvSubtitleCues]);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    const isDramawaveSubtitle =
-      subtitleSrc?.includes("/api/dramawave/subtitle") ?? false;
-
-    if (!video || !isDramawaveSubtitle || dramawaveSubtitleCues.length === 0) {
-      setActiveDramawaveSubtitle("");
-      return;
-    }
-
-    const updateSubtitle = () => {
-      const current = video.currentTime;
-      const activeCue = dramawaveSubtitleCues.find(
-        (cue) => current >= cue.start && current <= cue.end,
-      );
-
-      setActiveDramawaveSubtitle(
-        activeCue?.text ? formatOverlaySubtitleText(activeCue.text, 30) : "",
-      );
-    };
-
-    video.addEventListener("timeupdate", updateSubtitle);
-    video.addEventListener("seeked", updateSubtitle);
-    updateSubtitle();
-
-    return () => {
-      video.removeEventListener("timeupdate", updateSubtitle);
-      video.removeEventListener("seeked", updateSubtitle);
-    };
-  }, [subtitleSrc, dramawaveSubtitleCues]);
 
   const handleLoadedMetadata = async () => {
     const video = videoRef.current;
@@ -2280,13 +2353,6 @@ export default function PlayerScreen({
                         </div>
                       </div>
                     ) : null}
-                    {activeDramawaveSubtitle ? (
-                      <div className="pointer-events-none absolute inset-x-0 bottom-[22%] z-30 flex justify-center px-5">
-                        <div className="max-w-[82%] whitespace-pre-line text-center text-[18px] font-semibold leading-tight text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.98),0_0_4px_rgba(0,0,0,0.9)]">
-                          {activeDramawaveSubtitle}
-                        </div>
-                      </div>
-                    ) : null}
                   </>
 
                 ) : isLoadingEpisodes || isResolvingVideo ? (
@@ -2358,6 +2424,15 @@ export default function PlayerScreen({
                     </div>
                   </div>
                 ) : null}
+
+                <DramawaveSubtitleOverlay
+                  key={`dramawave:${selectedEpisodeIdentity}:${videoSrc}:${subtitleSrc}`}
+                  isActive={subtitleSrc.includes("/api/dramawave/subtitle")}
+                  subtitleSrc={subtitleSrc}
+                  videoSrc={videoSrc}
+                  videoRef={videoRef}
+                  reloadKey={`dramawave:${selectedEpisodeIdentity}:${videoSrc}:${subtitleSrc}`}
+                />
 
                 <DramaBoxSubtitleOverlay
                   key={`${selectedEpisodeIdentity}:${videoSrc}:${subtitleSrc}`}
