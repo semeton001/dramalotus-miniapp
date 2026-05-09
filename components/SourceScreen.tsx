@@ -86,10 +86,9 @@ type SourceScreenProps = {
 };
 
 const dramaBoxTabs: Array<{ label: string; value: SourceTab }> = [
-  { label: "🏠 Beranda", value: "Beranda" },
-  { label: "🏆 Ranking", value: "Ranking" },
-  { label: "✨ ForYou", value: "ForYou" },
-  { label: "🎲 Acak", value: "Acak" },
+  { label: "Beranda", value: "Beranda" },
+  { label: "Ranking", value: "Ranking" },
+  { label: "VIP", value: "VIP" },
 ];
 
 const reelShortTabs: Array<{ label: string; value: SourceTab }> = [

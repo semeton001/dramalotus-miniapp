@@ -6,43 +6,41 @@ import {
   extractDramaBoxItemsDeep,
   fetchDramaBoxSearch,
   getLang,
-  getPage,
-  getSearchQuery,
 } from "../_shared";
 
 export async function GET(request: NextRequest) {
   try {
-    const query = getSearchQuery(request);
-    const page = getPage(request, 1);
+    const query =
+      request.nextUrl.searchParams.get("query")?.trim() ||
+      request.nextUrl.searchParams.get("q")?.trim() ||
+      "";
+
     const lang = getLang(request);
 
     if (!query) {
-      return NextResponse.json(
-        {
-          items: [],
-          hasNextPage: false,
-          page,
-        },
-        { status: 200 },
-      );
+      return NextResponse.json({ items: [], page: 1, hasNextPage: false });
     }
 
-    const payload = await fetchDramaBoxSearch(query, page, lang);
-    const rawItems = dedupeDramaBoxItems(extractDramaBoxItemsDeep(payload));
+    const payloads = await Promise.all([
+      fetchDramaBoxSearch(query, 1, lang),
+      fetchDramaBoxSearch(query, 2, lang),
+    ]);
 
-    const adapted = adaptDramaBoxSearchList(rawItems).filter(
-      (item) => item.id > 0 && item.title.trim().length > 0,
+    const rawItems = dedupeDramaBoxItems(
+      payloads.flatMap((payload) => extractDramaBoxItemsDeep(payload)),
     );
 
-    const items = enrichDramaBoxDramaMeta(adapted, rawItems);
+    const adapted = adaptDramaBoxSearchList(rawItems).filter(
+      (item) => item.coverImage || item.posterImage,
+    );
 
     return NextResponse.json(
       {
-        items,
+        items: enrichDramaBoxDramaMeta(adapted, rawItems),
+        page: 1,
         hasNextPage: false,
-        page,
       },
-      { status: 200 },
+      { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
     console.error("Failed to search DramaBox:", error);

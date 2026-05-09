@@ -358,10 +358,22 @@ export default function PlayerScreen({
   >([]);
   const [activeBilitvSubtitle, setActiveBilitvSubtitle] = useState("");
 
+  const [dramaboxSubtitleCues, setDramaboxSubtitleCues] = useState<
+    SubtitleCue[]
+  >([]);
+  const [activeDramaboxSubtitle, setActiveDramaboxSubtitle] = useState("");
+
   const isNetshortDrama = useMemo(() => {
     return (
       selectedDrama.sourceName === "Netshort" ||
       selectedDrama.source?.toLowerCase() === "netshort"
+    );
+  }, [selectedDrama]);
+
+  const isDramaboxDrama = useMemo(() => {
+    return (
+      selectedDrama.sourceName === "DramaBox" ||
+      selectedDrama.source?.toLowerCase() === "dramabox"
     );
   }, [selectedDrama]);
 
@@ -475,6 +487,7 @@ export default function PlayerScreen({
 
   const usesSourceSpecificEpisodeIdentity =
     isNetshortDrama ||
+    isDramaboxDrama ||
     isShortmaxDrama ||
     isGoodshortDrama ||
     isIdramaDrama ||
@@ -1020,6 +1033,11 @@ export default function PlayerScreen({
       setActiveFreeReelsSubtitle("");
     }
 
+    if (isDramaboxDrama) {
+      setDramaboxSubtitleCues([]);
+      setActiveDramaboxSubtitle("");
+    }
+
     if (isDramapopsDrama) {
       setDramapopsSubtitleCues([]);
       setActiveDramapopsSubtitle("");
@@ -1304,7 +1322,8 @@ export default function PlayerScreen({
         !isDramapopsDrama &&
         !isDramanovaDrama &&
         !isBilitvDrama &&
-        !subtitleSrc.includes("/api/dramawave/subtitle"))
+        !subtitleSrc.includes("/api/dramawave/subtitle") &&
+        !subtitleSrc.includes("/api/dramabox/subtitle"))
     ) {
       setNetshortSubtitleCues([]);
       setActiveNetshortSubtitle("");
@@ -1384,6 +1403,17 @@ export default function PlayerScreen({
           );
           setActiveDramawaveSubtitle("");
         }
+
+        if (subtitleSrc.includes("/api/dramabox/subtitle")) {
+          setDramaboxSubtitleCues(
+            mergeFastSubtitleCues(cues, {
+              maxGap: 0.28,
+              maxDuration: 4.8,
+              maxCharsPerLine: 24,
+            }),
+          );
+          setActiveDramaboxSubtitle("");
+        }
       } catch (error) {
         console.error("Gagal memuat subtitle overlay:", error);
         if (!cancelled) {
@@ -1415,6 +1445,11 @@ export default function PlayerScreen({
           if (subtitleSrc.includes("/api/dramawave/subtitle")) {
             setDramawaveSubtitleCues([]);
             setActiveDramawaveSubtitle("");
+          }
+
+          if (subtitleSrc.includes("/api/dramabox/subtitle")) {
+            setDramaboxSubtitleCues([]);
+            setActiveDramaboxSubtitle("");
           }
         }
       }
@@ -1648,6 +1683,37 @@ export default function PlayerScreen({
       video.removeEventListener("seeked", updateSubtitle);
     };
   }, [subtitleSrc, dramawaveSubtitleCues]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    const isDramaboxSubtitle =
+      subtitleSrc?.includes("/api/dramabox/subtitle") ?? false;
+
+    if (!video || !isDramaboxSubtitle || dramaboxSubtitleCues.length === 0) {
+      setActiveDramaboxSubtitle("");
+      return;
+    }
+
+    const updateSubtitle = () => {
+      const current = video.currentTime;
+      const activeCue = dramaboxSubtitleCues.find(
+        (cue) => current >= cue.start && current <= cue.end,
+      );
+
+      setActiveDramaboxSubtitle(
+        activeCue?.text ? formatOverlaySubtitleText(activeCue.text, 24) : "",
+      );
+    };
+
+    video.addEventListener("timeupdate", updateSubtitle);
+    video.addEventListener("seeked", updateSubtitle);
+    updateSubtitle();
+
+    return () => {
+      video.removeEventListener("timeupdate", updateSubtitle);
+      video.removeEventListener("seeked", updateSubtitle);
+    };
+  }, [subtitleSrc, dramaboxSubtitleCues]);
 
   const handleLoadedMetadata = async () => {
     const video = videoRef.current;
@@ -2169,7 +2235,8 @@ export default function PlayerScreen({
                     !isDramanovaDrama &&
                     !isBilitvDrama &&
                     subtitleSrc &&
-                    !subtitleSrc.includes("/api/dramawave/subtitle") ? (
+                    !subtitleSrc.includes("/api/dramawave/subtitle") &&
+        !subtitleSrc.includes("/api/dramabox/subtitle") ? (
                       <track
                         kind="subtitles"
                         src={subtitleSrc}
@@ -2267,6 +2334,14 @@ export default function PlayerScreen({
                           {isMuted ? "Unmute" : "Mute"}
                         </button>
                       </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                {isDramaboxDrama && activeDramaboxSubtitle ? (
+                  <div className="pointer-events-none absolute left-1/2 top-[72%] z-20 w-[82%] -translate-x-1/2 -translate-y-1/2 text-center">
+                    <div className="mx-auto whitespace-pre-line break-words text-center text-[18px] font-bold leading-6 text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.95),0_0_4px_rgba(0,0,0,0.9)]">
+                      {activeDramaboxSubtitle}
                     </div>
                   </div>
                 ) : null}

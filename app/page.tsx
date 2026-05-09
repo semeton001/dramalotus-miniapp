@@ -155,7 +155,7 @@ type HistoryItem = {
   episodeId: number;
 };
 
-type DramaBoxTab = "Beranda" | "Ranking" | "ForYou" | "Acak";
+type DramaBoxTab = "Beranda" | "Ranking" | "VIP";
 type ReelShortTab = "Beranda" | "For You" | "Trending" | "Romance";
 type MeloloTab = "Beranda" | "Romance" | "ForYou" | "Pewaris";
 type DramawaveTab =
@@ -666,20 +666,17 @@ function isFreeReelsSource(source: Source | null): boolean {
 }
 
 function getDramaBoxTabEndpoint(
-  tab: "Beranda" | "Ranking" | "ForYou" | "Acak",
-  page = 1,
+  tab: DramaBoxTab,
+  _page = 1,
 ): string {
   switch (tab) {
-    case "Beranda":
-      return `/api/dramabox/home?page=${page}`;
     case "Ranking":
       return "/api/dramabox/latest";
-    case "ForYou":
+    case "VIP":
       return "/api/dramabox/dubbing";
-    case "Acak":
-      return "/api/dramabox/random";
+    case "Beranda":
     default:
-      return `/api/dramabox/home?page=${page}`;
+      return "/api/dramabox/home";
   }
 }
 
@@ -2472,12 +2469,7 @@ export default function Home() {
       if (isDramaBoxSource(selectedSource)) {
         setDramaBoxPage(1);
 
-        if (
-          tab === "Beranda" ||
-          tab === "Ranking" ||
-          tab === "ForYou" ||
-          tab === "Acak"
-        ) {
+        if (tab === "Beranda" || tab === "Ranking" || tab === "VIP") {
           setDramaBoxTab(tab);
         } else {
           setDramaBoxTab("Beranda");
@@ -8414,18 +8406,6 @@ export default function Home() {
       return matchesSource && matchesSearch;
     });
 
-    if (defaultSourceTab === "Ranking") {
-      return baseFiltered.filter((drama) => drama.isTrending);
-    }
-
-    if (defaultSourceTab === "ForYou") {
-      return baseFiltered;
-    }
-
-    if (defaultSourceTab === "Acak") {
-      return [...baseFiltered].sort(() => Math.random() - 0.5);
-    }
-
     return [...baseFiltered].sort((a, b) => {
       const aOrder = a.sortOrder ?? 9999;
       const bOrder = b.sortOrder ?? 9999;
@@ -9599,14 +9579,7 @@ export default function Home() {
           isTelegramReady={isTelegramWebAppReady}
           dramaBoxPage={dramaBoxPage}
           dramaBoxHasNextPage={dramaBoxHasNextPage}
-          showDramaBoxPagination={
-            isDramaBoxSource(selectedSource) &&
-            submittedSearchQuery.trim().length === 0 &&
-            (dramaBoxTab === "Beranda" ||
-              dramaBoxTab === "Ranking" ||
-              dramaBoxTab === "ForYou" ||
-              dramaBoxTab === "Acak")
-          }
+          showDramaBoxPagination={false}
           onDramaBoxPrevPage={handleDramaBoxPrevPage}
           onDramaBoxNextPage={handleDramaBoxNextPage}
           bilitvPage={bilitvPage}

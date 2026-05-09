@@ -2,11 +2,11 @@ import { NextRequest } from "next/server";
 import type { Drama } from "@/types/drama";
 import type { Episode } from "@/types/episode";
 import type { DramaBoxDramaResponse } from "@/lib/adapters/drama/dramabox";
+import { createStreamToken } from "@/lib/stream/token";
 
-export const DRAMABOX_BASE_URL = "https://streamapi.web.id/p/dramaboxv2/api";
+export const DRAMABOX_BASE_URL = "https://streamapi.web.id/p/dramaboxv4/api";
 export const DRAMABOX_LANG = "in";
-export const DRAMABOX_TOKEN =
-  "KFKiMIbY3Np8kbimDo7lJDNSVslwF3Fn64cI0TOtqpOP373n58ca6BKzbDsLb7qB";
+export const DRAMABOX_TOKEN = process.env.DRAMABOX_TOKEN?.trim() || "";
 export const DRAMABOX_EPISODE_CODE =
   process.env.DRAMABOX_EPISODE_CODE?.trim() ||
   "4D96F22760EA30FB0FFBA9AA87A979A6";
@@ -163,7 +163,7 @@ export async function fetchDramaBoxHomePage(page: number, lang = DRAMABOX_LANG) 
   return fetchJson(
     buildDramaBoxApiUrl("/home", {
       page,
-      size: 50,
+      size: 10,
       lang,
     }),
   );
@@ -173,14 +173,6 @@ export async function fetchDramaBoxRanking(lang = DRAMABOX_LANG) {
   return fetchJson(buildDramaBoxApiUrl("/rank", { lang }));
 }
 
-export async function fetchDramaBoxForYou(lang = DRAMABOX_LANG) {
-  return fetchJson(
-    buildDramaBoxApiUrl("/theater", {
-      channelId: 205,
-      lang,
-    }),
-  );
-}
 
 export async function fetchDramaBoxSearch(
   keyword: string,
@@ -200,8 +192,13 @@ export async function fetchDramaBoxLatest(lang = DRAMABOX_LANG) {
   return fetchDramaBoxRanking(lang);
 }
 
-export async function fetchDramaBoxDubbed(page: number, lang = DRAMABOX_LANG) {
-  return fetchDramaBoxForYou(lang);
+export async function fetchDramaBoxDubbed(_page: number, lang = DRAMABOX_LANG) {
+  const [page1, page2] = await Promise.all([
+    fetchDramaBoxSearch("sulih suara", 1, lang),
+    fetchDramaBoxSearch("sulih suara", 2, lang),
+  ]);
+
+  return { data: [page1, page2] };
 }
 
 export async function fetchDramaBoxPopular(lang = DRAMABOX_LANG) {
@@ -285,8 +282,17 @@ export function adaptDramaBoxEpisode(
     getString(item["720p"]) ||
     getString(item["1080p"]);
 
-  const proxiedVideoUrl = upstreamVideoUrl
-    ? `/api/dramabox/stream?u=${encodeUrlToken(upstreamVideoUrl)}`
+  const streamToken = upstreamVideoUrl
+    ? createStreamToken({
+        provider: "dramabox",
+        userId: "episode-list",
+        episodeKey: `${bookId}:${chapterId}:${episodeNumber}`,
+        url: upstreamVideoUrl,
+      })
+    : "";
+
+  const proxiedVideoUrl = streamToken
+    ? `/api/dramabox/stream?token=${encodeURIComponent(streamToken)}&episodeNumber=${episodeNumber}`
     : "";
 
   const title = getString(item.chapterName) || `Episode ${episodeNumber}`;
@@ -303,8 +309,11 @@ export function adaptDramaBoxEpisode(
     duration: "",
     description: "",
     thumbnail: getString(item.cover) || undefined,
+    subtitleUrl: `/api/dramabox/subtitle?bookId=${encodeURIComponent(bookId)}&episodeNo=${encodeURIComponent(String(episodeNumber))}`,
+    subtitleLang: "id",
+    subtitleLabel: "Indonesia",
     videoUrl: proxiedVideoUrl,
-    originalVideoUrl: upstreamVideoUrl || undefined,
+    originalVideoUrl: undefined,
     isLocked: isPaid,
     isVipOnly: isPaid,
     sortOrder: episodeNumber,

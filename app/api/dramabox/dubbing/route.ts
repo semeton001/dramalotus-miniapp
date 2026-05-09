@@ -4,45 +4,40 @@ import {
   dedupeDramaBoxItems,
   enrichDramaBoxDramaMeta,
   extractDramaBoxItemsDeep,
-  fetchDramaBoxForYou,
+  fetchDramaBoxSearch,
   getLang,
-  getPage,
 } from "../_shared";
 
 export async function GET(request: NextRequest) {
   try {
     const lang = getLang(request);
-    const page = getPage(request, 1);
+    const payloads = await Promise.all([
+      fetchDramaBoxSearch("sulih suara", 1, lang),
+      fetchDramaBoxSearch("sulih suara", 2, lang),
+    ]);
 
-    const payload = await fetchDramaBoxForYou(lang);
-    const rawItems = dedupeDramaBoxItems(extractDramaBoxItemsDeep(payload));
+    const rawItems = dedupeDramaBoxItems(
+      payloads.flatMap((payload) => extractDramaBoxItemsDeep(payload)),
+    );
 
     const adapted = adaptDramaBoxDramaList(rawItems).filter(
-      (item) => item.id > 0 && item.title.trim().length > 0,
-    );
-
-    const items = enrichDramaBoxDramaMeta(adapted, rawItems).map(
-      (item, index) => ({
-        ...item,
-        badge: "ForYou",
-        sortOrder: index,
-      }),
+      (item) => item.coverImage || item.posterImage,
     );
 
     return NextResponse.json(
       {
-        items,
+        items: enrichDramaBoxDramaMeta(adapted, rawItems),
+        page: 1,
         hasNextPage: false,
-        page,
       },
-      { status: 200 },
+      { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
-    console.error("Failed to fetch DramaBox ForYou:", error);
+    console.error("Failed to fetch DramaBox VIP:", error);
 
     return NextResponse.json(
       {
-        error: "Failed to fetch DramaBox ForYou",
+        error: "Failed to fetch DramaBox VIP",
         details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },

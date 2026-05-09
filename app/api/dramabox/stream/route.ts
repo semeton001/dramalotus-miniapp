@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiVip } from "@/lib/auth/requireApiVip";
+import { getCurrentUser } from "@/lib/auth/getCurrentUser";
+import { isMiniappRequest } from "@/lib/auth/isMiniappRequest";
+import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
+import { checkStreamRateLimit } from "@/lib/rate-limit/stream";
+import { verifyStreamToken } from "@/lib/stream/token";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+type VerifiedStreamToken = NonNullable<ReturnType<typeof verifyStreamToken>>;
 
 const ALLOWED_PROTOCOLS = new Set(["http:", "https:"]);
-const ALLOWED_VIDEO_EXTENSIONS = [".mp4", ".m4v", ".mov"];
 const HOP_BY_HOP_HEADERS = new Set([
   "connection",
   "keep-alive",
@@ -31,32 +37,6 @@ function buildCorsHeaders(contentType?: string | null) {
   };
 }
 
-function decodeUrlToken(value: string): string {
-  return Buffer.from(value, "base64url").toString("utf8");
-}
-
-function isValidDecodedUrl(value: string): boolean {
-  if (!value || value.trim().length === 0) return false;
-
-  try {
-    const url = new URL(value);
-    return ALLOWED_PROTOCOLS.has(url.protocol) && !!url.hostname;
-  } catch {
-    return false;
-  }
-}
-
-function isAllowedVideoUrl(url: URL): boolean {
-  const hostname = url.hostname.toLowerCase();
-  const pathname = url.pathname.toLowerCase();
-
-  if (hostname === "dbox.inicdn.net" && pathname === "/api/play") {
-    return true;
-  }
-
-  return ALLOWED_VIDEO_EXTENSIONS.some((ext) => pathname.endsWith(ext));
-}
-
 function copyUpstreamHeaders(
   upstream: Response,
   contentType?: string | null,
@@ -75,7 +55,7 @@ function copyUpstreamHeaders(
     headers.set(key, value);
   });
 
-  headers.set("Cache-Control", "public, max-age=60, s-maxage=120");
+  headers.set("Cache-Control", "no-store");
   headers.set("Access-Control-Allow-Origin", "*");
   headers.set("Access-Control-Allow-Methods", "GET,HEAD,OPTIONS");
   headers.set("Access-Control-Allow-Headers", "Content-Type, Range");
@@ -87,17 +67,25 @@ function copyUpstreamHeaders(
   return headers;
 }
 
+function isValidUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return ALLOWED_PROTOCOLS.has(url.protocol) && Boolean(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
 function buildUpstreamHeaders(request: NextRequest, upstreamUrl: URL): Headers {
   const headers = new Headers();
   const range = request.headers.get("range");
 
-  if (range) {
-    headers.set("Range", range);
-  }
+  if (range) headers.set("Range", range);
 
   headers.set(
     "User-Agent",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    request.headers.get("user-agent") ||
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
   );
   headers.set("Accept", "*/*");
   headers.set("Accept-Language", "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7");
@@ -110,91 +98,151 @@ function buildUpstreamHeaders(request: NextRequest, upstreamUrl: URL): Headers {
   return headers;
 }
 
-async function fetchUpstream(
+async function requireDramaboxAccess(
   request: NextRequest,
-  upstreamUrl: URL,
-): Promise<Response> {
-  const headers = buildUpstreamHeaders(request, upstreamUrl);
+  payload: VerifiedStreamToken,
+) {
+  if (payload.provider !== "dramabox") {
+    return NextResponse.json(
+      { ok: false, error: "Invalid stream provider." },
+      { status: 403, headers: buildCorsHeaders("application/json") },
+    );
+  }
 
-  return fetch(upstreamUrl.toString(), {
-    method: request.method === "HEAD" ? "HEAD" : "GET",
-    headers,
-    cache: "no-store",
-    redirect: "follow",
+  const directParam =
+    request.nextUrl.searchParams.get("u")?.trim() ||
+    request.nextUrl.searchParams.get("url")?.trim() ||
+    "";
+
+  if (directParam) {
+    return NextResponse.json(
+      { ok: false, error: "Direct URL playback is disabled." },
+      { status: 403, headers: buildCorsHeaders("application/json") },
+    );
+  }
+
+  if (isMiniappRequest(request)) return null;
+
+  const episodeNumber = Number(
+    request.nextUrl.searchParams.get("episodeNumber") ||
+      request.nextUrl.searchParams.get("episode") ||
+      request.nextUrl.searchParams.get("ep") ||
+      payload.episodeKey?.split(":").pop() ||
+      "1",
+  );
+
+  if (!Number.isInteger(episodeNumber) || episodeNumber < 1) {
+    return NextResponse.json(
+      { ok: false, error: "episodeNumber tidak valid." },
+      { status: 400, headers: buildCorsHeaders("application/json") },
+    );
+  }
+
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return NextResponse.json(
+      { ok: false, error: "Unauthorized" },
+      { status: 401, headers: buildCorsHeaders("application/json") },
+    );
+  }
+
+  const rateLimitError = checkStreamRateLimit({
+    request,
+    provider: "dramabox",
+    userId: user.id,
   });
+  if (rateLimitError) return rateLimitError;
+
+  const isFreeEpisode = episodeNumber <= FREE_EPISODE_LIMIT;
+
+  if (!isFreeEpisode && user.membership_status !== "vip") {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "VIP_REQUIRED",
+        message: "Episode ini hanya untuk VIP.",
+      },
+      { status: 403, headers: buildCorsHeaders("application/json") },
+    );
+  }
+
+  if (user.membership_status === "vip" && user.vip_until) {
+    const expiresAt = new Date(user.vip_until).getTime();
+
+    if (!Number.isNaN(expiresAt) && expiresAt <= Date.now()) {
+      return NextResponse.json(
+        { ok: false, error: "VIP_EXPIRED" },
+        { status: 403, headers: buildCorsHeaders("application/json") },
+      );
+    }
+  }
+
+  return null;
 }
 
 async function handleProxy(request: NextRequest) {
-  const rawToken = request.nextUrl.searchParams.get("u")?.trim();
-  const rawLegacyUrl = request.nextUrl.searchParams.get("url")?.trim();
+  const legacyDirect =
+    request.nextUrl.searchParams.get("u")?.trim() ||
+    request.nextUrl.searchParams.get("url")?.trim() ||
+    "";
 
-  let rawUrl = "";
-
-  if (rawToken) {
-    try {
-      rawUrl = decodeUrlToken(rawToken).trim();
-    } catch {
-      return NextResponse.json(
-        { error: "Invalid u token." },
-        { status: 400, headers: buildCorsHeaders("application/json") },
-      );
-    }
-  } else if (rawLegacyUrl) {
-    rawUrl = rawLegacyUrl;
+  if (legacyDirect) {
+    return NextResponse.json(
+      { ok: false, error: "Direct URL playback is disabled." },
+      { status: 403, headers: buildCorsHeaders("application/json") },
+    );
   }
 
-  if (!rawUrl) {
+  const token = request.nextUrl.searchParams.get("token")?.trim() || "";
+
+  if (!token) {
     return NextResponse.json(
-      { error: "Missing required query parameter: u or url" },
+      { ok: false, error: "Missing stream token." },
       { status: 400, headers: buildCorsHeaders("application/json") },
     );
   }
 
-  if (!isValidDecodedUrl(rawUrl)) {
+  const payload = verifyStreamToken(token);
+
+  if (!payload?.url || !isValidUrl(payload.url)) {
     return NextResponse.json(
-      { error: "Decoded URL is invalid or incomplete." },
-      { status: 400, headers: buildCorsHeaders("application/json") },
+      { ok: false, error: "Invalid stream token." },
+      { status: 403, headers: buildCorsHeaders("application/json") },
     );
   }
 
-  let upstreamUrl: URL;
+  const accessError = await requireDramaboxAccess(request, payload);
+  if (accessError) return accessError;
 
-  try {
-    upstreamUrl = new URL(rawUrl);
-  } catch {
-    return NextResponse.json(
-      { error: "Invalid upstream URL." },
-      { status: 400, headers: buildCorsHeaders("application/json") },
-    );
-  }
+  const upstreamUrl = new URL(payload.url);
+  const upstreamResponse = await fetch(upstreamUrl.toString(), {
+    method: request.method === "HEAD" ? "HEAD" : "GET",
+    headers: buildUpstreamHeaders(request, upstreamUrl),
+    cache: "no-store",
+    redirect: "follow",
+  });
 
-  if (!ALLOWED_PROTOCOLS.has(upstreamUrl.protocol)) {
-    return NextResponse.json(
-      { error: "Unsupported protocol." },
-      { status: 400, headers: buildCorsHeaders("application/json") },
-    );
-  }
-
-  if (!isAllowedVideoUrl(upstreamUrl)) {
-    return NextResponse.json(
-      { error: "Unsupported video path." },
-      { status: 400, headers: buildCorsHeaders("application/json") },
-    );
-  }
-
-  const upstreamResponse = await fetchUpstream(request, upstreamUrl);
   const contentType = upstreamResponse.headers.get("content-type");
 
   if (!upstreamResponse.ok) {
     const text = await upstreamResponse.text().catch(() => "");
 
-    return new NextResponse(text || "Upstream request failed.", {
-      status: upstreamResponse.status,
-      headers: copyUpstreamHeaders(upstreamResponse, contentType),
-    });
+    return NextResponse.json(
+      {
+        ok: false,
+        source: "dramabox",
+        error: `Upstream media error ${upstreamResponse.status}`,
+        details: text.slice(0, 300),
+      },
+      {
+        status: 502,
+        headers: buildCorsHeaders("application/json"),
+      },
+    );
   }
 
-  if (request.method == "HEAD") {
+  if (request.method === "HEAD") {
     return new NextResponse(null, {
       status: upstreamResponse.status,
       headers: copyUpstreamHeaders(upstreamResponse, contentType),
@@ -208,16 +256,10 @@ async function handleProxy(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  const vipError = await requireApiVip();
-  if (vipError) return vipError;
-
   return handleProxy(request);
 }
 
 export async function HEAD(request: NextRequest) {
-  const vipError = await requireApiVip();
-  if (vipError) return vipError;
-
   return handleProxy(request);
 }
 
