@@ -2,7 +2,6 @@ import { NextRequest } from "next/server";
 import type { Drama } from "@/types/drama";
 import type { Episode } from "@/types/episode";
 import type { DramaBoxDramaResponse } from "@/lib/adapters/drama/dramabox";
-import { createStreamToken } from "@/lib/stream/token";
 
 export const DRAMABOX_BASE_URL = "https://streamapi.web.id/p/dramaboxv4/api";
 export const DRAMABOX_LANG = "in";
@@ -163,7 +162,7 @@ export async function fetchDramaBoxHomePage(page: number, lang = DRAMABOX_LANG) 
   return fetchJson(
     buildDramaBoxApiUrl("/home", {
       page,
-      size: 10,
+      pageSize: 10,
       lang,
     }),
   );
@@ -203,6 +202,20 @@ export async function fetchDramaBoxDubbed(_page: number, lang = DRAMABOX_LANG) {
 
 export async function fetchDramaBoxPopular(lang = DRAMABOX_LANG) {
   return fetchDramaBoxRanking(lang);
+}
+
+export async function fetchDramaBoxPlay(
+  bookId: string,
+  episode: number,
+  lang = DRAMABOX_LANG,
+) {
+  return fetchJson(
+    buildDramaBoxApiUrl("/play", {
+      bookId,
+      episode,
+      lang,
+    }),
+  );
 }
 
 export async function fetchDramaBoxEpisodeList(
@@ -276,24 +289,8 @@ export function adaptDramaBoxEpisode(
     index + 1;
 
   const chapterId = getString(item.chapterId) || `${bookId}-${episodeNumber}`;
-  const upstreamVideoUrl =
-    getString(item.url) ||
-    getString(item.videoUrl) ||
-    getString(item["720p"]) ||
-    getString(item["1080p"]);
-
-  const streamToken = upstreamVideoUrl
-    ? createStreamToken({
-        provider: "dramabox",
-        userId: "episode-list",
-        episodeKey: `${bookId}:${chapterId}:${episodeNumber}`,
-        url: upstreamVideoUrl,
-      })
-    : "";
-
-  const proxiedVideoUrl = streamToken
-    ? `/api/dramabox/stream?token=${encodeURIComponent(streamToken)}&episodeNumber=${episodeNumber}`
-    : "";
+  const proxiedVideoUrl =
+    `/api/dramabox/stream?bookId=${encodeURIComponent(bookId)}&episode=${episodeNumber}`;
 
   const title = getString(item.chapterName) || `Episode ${episodeNumber}`;
   const isPaid = Boolean(item.isCharge) || Boolean(item.isPay);
@@ -353,7 +350,6 @@ export function mapDramaBoxEpisodes(
 
   return items
     .map((item, index) => adaptDramaBoxEpisode(item, bookId, index))
-    .filter((episode) => Boolean(episode.videoUrl))
     .sort((a, b) => a.episodeNumber - b.episodeNumber);
 }
 
