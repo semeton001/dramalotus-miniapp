@@ -1,627 +1,144 @@
-import { NextRequest } from "next/server";
 import type { Drama } from "@/types/drama";
 import type { Episode } from "@/types/episode";
 
-export const IDRAMA_BASE_URL = "https://streamapi.web.id/p/idrama/api/v1";
+export const IDRAMA_BASE_URL =
+  (process.env.IDRAMA_BASE_URL || "https://captain.sapimu.au/idrama").replace(/\/+$/, "");
+
 export const IDRAMA_DEFAULT_LANG = "id";
-export const IDRAMA_DEFAULT_TOKEN = process.env.IDRAMA_TOKEN?.trim() || "";
-export const IDRAMA_DEFAULT_CODE = process.env.IDRAMA_CODE?.trim() || "";
-export const IDRAMA_POPULAR_SECTION_ID = "section_d327e331";
-export const IDRAMA_HOT_TAB_ID = "channel_ddbdbcef";
+export const IDRAMA_TOKEN = process.env.IDRAMA_TOKEN?.trim() || "";
 
-type JsonRecord = Record<string, unknown>;
+export const IDRAMA_HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+  Accept: "application/json, text/plain, */*",
+  Authorization: `Bearer ${IDRAMA_TOKEN}`,
+};
 
-export function pickString(raw: JsonRecord, ...keys: string[]): string {
-  for (const key of keys) {
-    const value = raw[key];
-    if (typeof value === "string" && value.trim().length > 0) {
-      return value.trim();
-    }
-    if (typeof value === "number" && Number.isFinite(value)) {
-      return String(value);
-    }
-  }
-  return "";
-}
-
-export function pickNumber(raw: JsonRecord, ...keys: string[]): number {
-  for (const key of keys) {
-    const value = raw[key];
-    if (typeof value === "number" && Number.isFinite(value)) {
-      return value;
-    }
-    if (typeof value === "string" && value.trim().length > 0) {
-      const parsed = Number(value);
-      if (Number.isFinite(parsed)) return parsed;
-    }
-  }
-  return 0;
-}
-
-export function normalizeStringArray(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value
-      .map((entry) => {
-        if (typeof entry === "string") return entry.trim();
-        if (entry && typeof entry === "object") {
-          const raw = entry as JsonRecord;
-          return pickString(raw, "tag_local", "short_play_name",
-    "shortPlayName",
-    "title", "name").trim();
-        }
-        return "";
-      })
-      .filter(Boolean);
-  }
-
-  if (typeof value === "string" && value.trim().length > 0) {
-    return value
-      .split(/[|,/]/)
-      .map((entry) => entry.trim())
-      .filter(Boolean);
-  }
-
-  return [];
-}
-
-export function createStableNumericId(seed: string, fallback: number): number {
-  if (!seed.trim()) return fallback;
-
-  let value = 17;
-  for (const ch of seed) {
-    value = (value * 31 + ch.charCodeAt(0)) % 2147483647;
-  }
-
-  return value > 0 ? value : fallback;
-}
-
-export function extractDramaIdFromRoutePath(routePath: string): string {
-  const match =
-    routePath.match(/short_series_id=(\d+)/i) ||
-    routePath.match(/\/drama\/(\d+)/i) ||
-    routePath.match(/\/book\/(\d+)/i);
-
-  return match?.[1] ?? "";
-}
-
-function looksLikeIdramaDramaItem(raw: JsonRecord): boolean {
-  const directId = pickString(
-    raw,
-    "id",
-    "short_play_id",
-    "shortPlayId",
-    "id",
-    "dramaId",
-    "drama_id",
-    "series_id",
-    "short_series_id",
-  );
-
-  const routePath = pickString(raw, "route_path", "open_method", "jump_url");
-  const routeDramaId = extractDramaIdFromRoutePath(routePath);
-
-  const hasDramaId = !!(directId || routeDramaId);
-  const hasDramaTitle = !!pickString(
-    raw,
-    "short_play_name",
-    "book_name",
-    "drama_name",
-    "short_play_name",
-    "shortPlayName",
-    "title",
-    "name",
-  );
-  const hasArtwork = !!pickString(
-    raw,
-    "cover_url",
-    "compress_cover_url",
-    "image",
-    "pic",
-    "poster",
-    "thumb",
-  );
-  const hasEpisodeInfo =
-    pickNumber(raw, "current_count", "total_count", "episode_count", "episodes") > 0;
-
-  return hasDramaId && (hasDramaTitle || hasArtwork || hasEpisodeInfo);
-}
+type JsonRecord = Record<string, any>;
 
 export async function fetchIdramaJson(
   path: string,
   params?: Record<string, string | number | undefined>,
-  init?: RequestInit,
 ) {
-  const normalizedPath = path.startsWith("/") ? path.slice(1) : path;
-  const baseUrl = IDRAMA_BASE_URL.endsWith("/")
-    ? IDRAMA_BASE_URL
-    : `${IDRAMA_BASE_URL}/`;
-  const url = new URL(normalizedPath, baseUrl);
+  const clean = path.startsWith("/") ? path : `/${path}`;
+  const url = new URL(`${IDRAMA_BASE_URL}/api/v1${clean}`);
 
   if (params) {
-    for (const [key, value] of Object.entries(params)) {
-      if (value === undefined || value === null || value === "") continue;
-      url.searchParams.set(key, String(value));
-    }
+    Object.entries(params).forEach(([k, v]) => {
+      if (v === undefined || v === null || v === "") return;
+      url.searchParams.set(k, String(v));
+    });
   }
 
   if (!url.searchParams.has("lang")) {
     url.searchParams.set("lang", IDRAMA_DEFAULT_LANG);
   }
 
-  if (!url.searchParams.has("token")) {
-    url.searchParams.set("token", IDRAMA_DEFAULT_TOKEN);
-  }
-
-  const response = await fetch(url.toString(), {
-    ...init,
-    headers: {
-      Accept: "application/json, text/plain, */*",
-      ...(init?.headers ?? {}),
-    },
+  const res = await fetch(url.toString(), {
+    headers: IDRAMA_HEADERS,
     cache: "no-store",
   });
 
-  if (!response.ok) {
-    throw new Error(`iDrama request failed: ${response.status} ${url.pathname}`);
+  if (!res.ok) {
+    throw new Error(`iDrama upstream ${res.status}`);
   }
 
-  return response.json();
+  return res.json();
 }
 
-export function adaptIdramaDrama(
-  item: unknown,
-  index: number,
-  badge = "iDrama",
-): Drama | null {
-  if (!item || typeof item !== "object") return null;
+export async function postIdramaJson(path: string) {
+  const clean = path.startsWith("/") ? path : `/${path}`;
+  const url = `${IDRAMA_BASE_URL}/api/v1${clean}`;
 
-  const raw = item as JsonRecord;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: IDRAMA_HEADERS,
+    cache: "no-store",
+  });
 
-  if (!looksLikeIdramaDramaItem(raw)) return null;
+  if (!res.ok) {
+    throw new Error(`iDrama upstream ${res.status}`);
+  }
 
-  const explicitDramaId = pickString(
-    raw,
-    "id",
-    "short_play_id",
-    "shortPlayId",
-    "id",
-    "dramaId",
-    "drama_id",
-    "series_id",
-    "short_series_id",
-  );
+  return res.json();
+}
 
-  const routePath = pickString(raw, "route_path", "open_method", "jump_url");
-  const routeVal = pickString(raw, "route_val", "target_id");
-  const routeDramaId = extractDramaIdFromRoutePath(routePath) || routeVal;
-
-  const dramaId = explicitDramaId || routeDramaId;
+function toDrama(item: JsonRecord, idx: number): Drama | null {
+  const dramaId = Number(item.id || item.short_play_id || 0);
   if (!dramaId) return null;
 
-  const numericId = createStableNumericId(dramaId, Date.now() + index);
-
-  const title =
-    pickString(
-      raw,
-      "short_play_name",
-      "short_play_name",
-    "shortPlayName",
-    "title",
-      "name",
-      "book_name",
-      "drama_name",
-    ) || "Tanpa Judul";
-
-  const coverImage =
-    pickString(
-      raw,
-      "cover_url",
-      "compress_cover_url",
-      "image",
-      "pic",
-      "poster",
-      "thumb",
-    ) || undefined;
-
-  const description =
-    pickString(raw, "introduction", "desc", "summary", "description") || "";
-
-  const tags = Array.from(
-    new Set([
-      ...normalizeStringArray(raw["category_tag"]),
-      ...normalizeStringArray(raw["content_tag"]),
-      ...normalizeStringArray(raw["tags"]),
-      "Drama",
-    ]),
-  ).slice(0, 8);
-
-  const totalEpisodes = pickNumber(
-    raw,
-    "current_count",
-    "total_count",
-    "episode_count",
-    "episodes",
-  );
-
-  const code = pickString(raw, "code");
-
   return {
-    id: numericId,
-    source: "iDrama",
+    id: dramaId,
+    source: "idrama",
     sourceId: "8",
     sourceName: "iDrama",
-    title,
-    episodes: totalEpisodes,
-    badge,
-    tags,
-    posterClass: "from-[#0F172A] via-[#111827] to-[#020617]",
+    title: item.short_play_name || "Untitled",
+    episodes: Number(item.current_count || 0),
+    badge: "iDrama",
+    tags: Array.isArray(item.content_tag)
+      ? item.content_tag.map((x: any) => x?.tag_local).filter(Boolean)
+      : [],
+    posterClass: "",
     slug: `idrama-${dramaId}`,
-    description,
-    coverImage,
-    posterImage: coverImage,
-    category: "Drama",
-    language: "id",
-    country: undefined,
+    description: item.introduction || "",
+    posterImage: item.cover_url || item.compress_cover_url || "",
+    coverImage: item.cover_url || item.compress_cover_url || "",
+    category: "",
     isNew: false,
     isDubbed: false,
-    isTrending: badge === "Hot" || badge === "Populer",
-    sortOrder: index,
-    rating: undefined,
-    releaseYear: undefined,
-    idramaRawId: dramaId,
-    idramaDramaId: dramaId,
-    idramaCode: code || undefined,
+    isTrending: false,
+    sortOrder: idx + 1,
   };
 }
 
-export function adaptIdramaDramaList(
-  items: unknown[],
-  badge = "iDrama",
-): Drama[] {
+export function normalizeDramaList(payload: any): Drama[] {
+  let items: any[] = [];
+
+  if (Array.isArray(payload?.results)) {
+    items = payload.results;
+  } else if (Array.isArray(payload?.short_plays)) {
+    items = payload.short_plays;
+  } else if (Array.isArray(payload?.data?.short_plays)) {
+    items = payload.data.short_plays;
+  } else if (Array.isArray(payload?.data)) {
+    items = payload.data;
+  } else if (Array.isArray(payload)) {
+    items = payload;
+  }
+
   return items
-    .map((item, index) => adaptIdramaDrama(item, index, badge))
-    .filter((item): item is Drama => !!item);
+    .map(toDrama)
+    .filter(Boolean) as Drama[];
 }
 
-export function adaptIdramaEpisodes(
-  rawDrama: unknown,
-  fallbackDramaId?: string,
-  fallbackNumericDramaId?: number,
-  fallbackCode?: string,
-): Episode[] {
-  if (!rawDrama || typeof rawDrama !== "object") return [];
+export function normalizeEpisodes(payload: any, dramaId: string): Episode[] {
+  const list =
+    Array.isArray(payload?.episode_list)
+      ? payload.episode_list
+      : Array.isArray(payload?.data?.episode_list)
+        ? payload.data.episode_list
+        : Array.isArray(payload?.short_play_episodes)
+          ? payload.short_play_episodes
+          : [];
 
-  const raw = rawDrama as JsonRecord;
-  const dramaId =
-    pickString(raw, "id", "drama_id", "short_play_id") || fallbackDramaId || "";
-  const numericDramaId =
-    fallbackNumericDramaId ?? createStableNumericId(dramaId, Date.now());
-
-  const code = fallbackCode || pickString(raw, "code");
-  const episodeList = Array.isArray(raw["episode_list"])
-    ? (raw["episode_list"] as unknown[])
-    : [];
-
-  return episodeList.map((episode, index) => {
-    const epRaw =
-      episode && typeof episode === "object"
-        ? (episode as JsonRecord)
-        : {};
-
-    const epNumber =
-      pickNumber(epRaw, "num", "episode_num", "episode", "sort") || index + 1;
-
-    const epId =
-      pickString(epRaw, "id", "episode_id", "video_id") ||
-      `${dramaId}-${epNumber}`;
-
-    const localTitle =
-      pickString(epRaw, "short_play_name",
-    "shortPlayName",
-    "title", "episode_title") || `Episode ${epNumber}`;
-
-    const streamUrl = `/api/idrama/stream?dramaId=${encodeURIComponent(
-      dramaId,
-    )}&ep=${epNumber}`;
+  return list.map((ep: any) => {
+    const play720 =
+      ep.play_info_list?.find((x: any) => x.definition === "720p" && x.play_url)
+        ?.play_url ||
+      ep.play_info_list?.find((x: any) => x.play_url)?.play_url ||
+      ep.play_url ||
+      "";
 
     return {
-      id: createStableNumericId(epId, numericDramaId * 1000 + epNumber),
-      dramaId: numericDramaId,
-      episodeNumber: epNumber,
-      title: localTitle,
-      duration: "",
-      slug: `idrama-${dramaId}-ep-${epNumber}`,
-      description: "",
-      videoUrl: streamUrl,
-      originalVideoUrl: streamUrl,
-      thumbnail: undefined,
-      isLocked:
-        typeof epRaw["locked"] === "boolean"
-          ? Boolean(epRaw["locked"])
-          : false,
+      id: Number(ep.episode_id),
+      dramaId: Number(dramaId),
+      episodeNumber: Number(ep.episode_order),
+      title: `Episode ${ep.episode_order}`,
+      videoUrl: `/api/idrama/stream?url=${encodeURIComponent(play720)}`,
+      isLocked: false,
       isVipOnly: false,
-      sortOrder: epNumber,
-      subtitleUrl: undefined,
-      subtitleLang: "id-ID",
-      subtitleLabel: "Indonesian",
-      idramaEpisodeId: epId,
-      idramaPlayId: String(epNumber),
+      sortOrder: Number(ep.episode_order),
+      thumbnail: ep.episode_cover || undefined,
     };
   });
-}
-
-function extractPossibleTabModules(payload: unknown): unknown[] {
-  if (Array.isArray(payload)) return payload;
-
-  if (!payload || typeof payload !== "object") return [];
-
-  const raw = payload as JsonRecord;
-
-  const candidates = [
-    raw["list"],
-    raw["items"],
-    raw["data"],
-    raw["modules"],
-    raw["sections"],
-    raw["cards"],
-    raw["rows"],
-  ];
-
-  for (const candidate of candidates) {
-    if (Array.isArray(candidate)) {
-      return candidate;
-    }
-
-    if (candidate && typeof candidate === "object") {
-      const nested = candidate as JsonRecord;
-
-      const nestedCandidates = [
-        nested["list"],
-        nested["items"],
-        nested["data"],
-        nested["modules"],
-        nested["sections"],
-        nested["cards"],
-        nested["rows"],
-      ];
-
-      for (const nestedCandidate of nestedCandidates) {
-        if (Array.isArray(nestedCandidate)) {
-          return nestedCandidate;
-        }
-      }
-    }
-  }
-
-  return [];
-}
-
-export function flattenTabModulesToDramas(
-  payload: unknown,
-  badge = "iDrama",
-): Drama[] {
-  const modules = extractPossibleTabModules(payload);
-  if (modules.length === 0) return [];
-
-  const results: Drama[] = [];
-
-  modules.forEach((module) => {
-    if (!module || typeof module !== "object") return;
-    const rawModule = module as JsonRecord;
-
-    const itemCandidates: unknown[][] = [
-      Array.isArray(rawModule["items"]) ? (rawModule["items"] as unknown[]) : [],
-      Array.isArray(rawModule["list"]) ? (rawModule["list"] as unknown[]) : [],
-      Array.isArray(rawModule["short_plays"])
-        ? (rawModule["short_plays"] as unknown[])
-        : [],
-      Array.isArray(rawModule["data"]) ? (rawModule["data"] as unknown[]) : [],
-    ];
-
-    itemCandidates.forEach((items) => {
-      items.forEach((item) => {
-        const adapted = adaptIdramaDrama(item, results.length, badge);
-        if (adapted) results.push(adapted);
-      });
-    });
-  });
-
-  const deduped = new Map<string, Drama>();
-
-  results.forEach((drama) => {
-    const key =
-      drama.idramaDramaId || drama.idramaRawId || drama.slug || String(drama.id);
-    deduped.set(key, drama);
-  });
-
-  return Array.from(deduped.values());
-}
-
-export function extractHomeChannelKeys(payload: unknown): string[] {
-  if (!payload || typeof payload !== "object") {
-    return [IDRAMA_HOT_TAB_ID];
-  }
-
-  const raw = payload as JsonRecord;
-  const list = Array.isArray(raw["list"]) ? (raw["list"] as unknown[]) : [];
-  const keys: string[] = [];
-
-  list.forEach((entry) => {
-    if (!entry || typeof entry !== "object") return;
-    const rawEntry = entry as JsonRecord;
-
-    const directKey = pickString(rawEntry, "key");
-    if (directKey.startsWith("channel_")) {
-      keys.push(directKey);
-    }
-
-    const subNavs = Array.isArray(rawEntry["sub_navs"])
-      ? (rawEntry["sub_navs"] as unknown[])
-      : [];
-
-    subNavs.forEach((subNav) => {
-      if (!subNav || typeof subNav !== "object") return;
-      const key = pickString(subNav as JsonRecord, "key");
-      if (key.startsWith("channel_")) {
-        keys.push(key);
-      }
-    });
-  });
-
-  const deduped = Array.from(new Set(keys.filter(Boolean)));
-  return deduped.length > 0 ? deduped : [IDRAMA_HOT_TAB_ID];
-}
-
-export function getSearchParam(
-  request: NextRequest,
-  key: string,
-  fallback = "",
-): string {
-  return request.nextUrl.searchParams.get(key)?.trim() || fallback;
-}
-
-function resolveMediaUrl(uri: string, baseUrl: string): string {
-  if (!uri.trim()) return uri;
-  if (uri.startsWith("data:")) return uri;
-
-  try {
-    return new URL(uri, baseUrl).toString();
-  } catch {
-    return uri;
-  }
-}
-
-export function rewriteM3u8Playlist(
-  playlistText: string,
-  proxyBaseUrl: string,
-  playlistUrl: string,
-): string {
-  return playlistText
-    .split("\n")
-    .map((line) => {
-      const trimmed = line.trim();
-
-      if (!trimmed) {
-        return line;
-      }
-
-      if (trimmed.startsWith("#EXT-X-KEY")) {
-        return line.replace(/URI="([^"]+)"/g, (_match, uri: string) => {
-          if (
-            uri.startsWith("data:") ||
-            uri.startsWith(proxyBaseUrl) ||
-            uri.startsWith("/api/idrama/stream")
-          ) {
-            return `URI="${uri}"`;
-          }
-
-          const resolved = resolveMediaUrl(uri, playlistUrl);
-          const proxied = `${proxyBaseUrl}?url=${encodeURIComponent(resolved)}`;
-          return `URI="${proxied}"`;
-        });
-      }
-
-      if (trimmed.startsWith("#")) {
-        return line;
-      }
-
-      if (
-        trimmed.startsWith("data:") ||
-        trimmed.startsWith(proxyBaseUrl) ||
-        trimmed.startsWith("/api/idrama/stream")
-      ) {
-        return line;
-      }
-
-      const resolved = resolveMediaUrl(trimmed, playlistUrl);
-      return `${proxyBaseUrl}?url=${encodeURIComponent(resolved)}`;
-    })
-    .join("\n");
-}
-
-export function buildProxyBaseUrl(request: NextRequest): string {
-  return `${request.nextUrl.origin}/api/idrama/stream`;
-}
-
-
-export function extractIdramaItemsDeep(payload: unknown): unknown[] {
-  const seen = new Set<unknown>();
-
-  const looksLikeItem = (value: unknown): boolean => {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-    const item = value as Record<string, unknown>;
-
-    return Boolean(
-      item.id ||
-        item.dramaId ||
-        item.bookId ||
-        item.seriesId ||
-        item.series_id ||
-        item.route ||
-        item.path ||
-        item.title ||
-        item.name ||
-        item.dramaName ||
-        item.bookName,
-    );
-  };
-
-  const walk = (value: unknown): unknown[] => {
-    if (!value || typeof value !== "object") return [];
-    if (seen.has(value)) return [];
-    seen.add(value);
-
-    if (Array.isArray(value)) {
-      if (value.some(looksLikeItem)) return value.filter(looksLikeItem);
-      return value.flatMap(walk);
-    }
-
-    const record = value as Record<string, unknown>;
-    const priorityKeys = [
-      "items",
-      "list",
-      "records",
-      "rows",
-      "data",
-      "result",
-      "results",
-      "dramas",
-      "books",
-      "series",
-      "videos",
-      "contents",
-      "searchResult",
-    ];
-
-    for (const key of priorityKeys) {
-      const child = record[key];
-      const found = walk(child);
-      if (found.length > 0) return found;
-    }
-
-    return Object.values(record).flatMap(walk);
-  };
-
-  return walk(payload);
-}
-
-export function dedupeIdramaDramas<T extends { idramaDramaId?: string; idramaRawId?: string; slug?: string; id?: number }>(
-  items: T[],
-): T[] {
-  const seen = new Set<string>();
-  const output: T[] = [];
-
-  for (const item of items) {
-    const key =
-      item.idramaDramaId ||
-      item.idramaRawId ||
-      item.slug ||
-      String(item.id || "");
-
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    output.push(item);
-  }
-
-  return output;
 }

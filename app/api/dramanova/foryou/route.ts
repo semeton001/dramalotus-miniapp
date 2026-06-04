@@ -10,7 +10,7 @@ export async function GET() {
   try {
     const payloads = await Promise.all([
       fetchDramaNovaJson("/recommend", {
-        categoryKey: "dramanova_free",
+        categoryKey: "Dramanova_banner",
         page: 1,
         size: 5,
         limit: 6,

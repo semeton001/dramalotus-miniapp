@@ -1,48 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
-import { normalizeNetshortFeed } from "@/lib/adapters/drama/netshort";
+import { NextResponse } from "next/server";
+import { fetchJson, normalize, toErrorResponse } from "../_shared";
 
-const NETSHORT_NEW_BASE_URL =
-  "https://streamapi.web.id/p/netshort/api/v1/new";
-
-const NETSHORT_TOKEN = process.env.NETSHORT_TOKEN?.trim() || "";
-
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const pageParam = request.nextUrl.searchParams.get("page")?.trim() || "1";
-    const page = Math.max(1, Number(pageParam) || 1);
-
-    const upstreamUrl = `${NETSHORT_NEW_BASE_URL}/${page}?lang=id_ID&token=${NETSHORT_TOKEN}`;
-
-    const response = await fetch(upstreamUrl, {
-      method: "GET",
-      cache: "no-store",
-      headers: {
-        Accept: "application/json, text/plain, */*",
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-      },
-    });
-
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: `Failed to load Netshort Terbaru. status=${response.status}` },
-        { status: response.status },
-      );
-    }
-
-    const payload = await response.json();
-    const dramas = normalizeNetshortFeed(payload, "home", "5");
-
-    return NextResponse.json(dramas, { status: 200 });
+    const payload = await fetchJson("/api/v1/new/1?lang=id_ID");
+    return NextResponse.json(normalize(payload, "home"));
   } catch (error) {
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to load Netshort Terbaru.",
-      },
-      { status: 500 },
-    );
+    return toErrorResponse(error, "Failed to load Netshort new.");
   }
 }

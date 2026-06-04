@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
 
     const payload = await fetchDramapopsJson("/search", {
       q: query,
-      limit: 50,
+      limit: 20,
     });
     const items = adaptDramapopsDramaList(extractDramapopsItemsDeep(payload));
 

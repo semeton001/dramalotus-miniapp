@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   type ResolveAdCampaignResponse,
+  type AdCampaign,
+  type ResolvedAdCampaign,
   resolveManualAdCampaign,
 } from "@/types/ad";
 
@@ -50,13 +52,8 @@ export async function GET(request: NextRequest) {
     } satisfies ResolveAdCampaignResponse);
   }
 
-  const campaign = resolveManualAdCampaign({
-    placement: "player_gate_portrait",
-    membership: "free",
-    episodeNumber,
-    sourceName,
-    mediaType,
-  });
+  
+  const campaign: ResolvedAdCampaign | null = null;
 
   return NextResponse.json({
     ok: true,

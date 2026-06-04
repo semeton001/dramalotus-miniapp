@@ -3,7 +3,7 @@ import type { Drama } from "@/types/drama";
 import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
 
 export const DRAMABITE_BASE_URL =
-  "https://streamapi.web.id/p/dramabite/api/v1";
+  "https://captain.sapimu.au/dramabite/api/v1";
 export const DRAMABITE_TOKEN = process.env.DRAMABITE_TOKEN?.trim() || "";
 export const DRAMABITE_LANG = "id";
 export const DRAMABITE_SOURCE_ID = "13";
@@ -70,13 +70,16 @@ export async function fetchDramabiteJson(
     url.searchParams.set("lang", DRAMABITE_LANG);
   }
 
-  if (!url.searchParams.has("token")) {
-    url.searchParams.set("token", DRAMABITE_TOKEN);
-  }
+  
 
   const response = await fetch(url, {
     method: "GET",
-    headers: { Accept: "application/json" },
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${DRAMABITE_TOKEN}`,
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
+    },
     cache: "no-store",
   });
 
@@ -107,43 +110,53 @@ function looksLikeDrama(value: unknown): boolean {
 }
 
 export function extractDramabiteItemsDeep(payload: unknown): JsonRecord[] {
-  const seen = new Set<unknown>();
+  if (Array.isArray(payload)) {
+    const flattened: JsonRecord[] = [];
 
-  const walk = (value: unknown): JsonRecord[] => {
-    if (!value || typeof value !== "object" || seen.has(value)) return [];
-    seen.add(value);
+    for (const item of payload) {
+      if (!item || typeof item !== "object") continue;
 
-    if (Array.isArray(value)) {
-      if (value.some(looksLikeDrama)) {
-        return value.filter(looksLikeDrama) as JsonRecord[];
+      const record = item as JsonRecord;
+
+      if (looksLikeDrama(record)) {
+        flattened.push(record);
+        continue;
       }
-      return value.flatMap(walk);
+
+      if (Array.isArray(record.dramas)) {
+        flattened.push(
+          ...(record.dramas.filter(
+            (x): x is JsonRecord =>
+              !!x && typeof x === "object" && !Array.isArray(x),
+          )),
+        );
+      }
     }
 
-    const record = value as JsonRecord;
-    const priorityKeys = [
-      "items",
-      "list",
-      "records",
-      "rows",
-      "data",
-      "result",
-      "results",
-      "dramas",
-      "series",
-      "videos",
-      "contents",
-    ];
+    return flattened;
+  }
 
-    for (const key of priorityKeys) {
-      const found = walk(record[key]);
-      if (found.length > 0) return found;
+  if (!payload || typeof payload !== "object") {
+    return [];
+  }
+
+  const record = payload as JsonRecord;
+
+  const candidateArrays = [
+    record.items,
+    record.list,
+    record.data,
+    record.results,
+    record.dramas,
+  ];
+
+  for (const candidate of candidateArrays) {
+    if (Array.isArray(candidate)) {
+      return extractDramabiteItemsDeep(candidate);
     }
+  }
 
-    return Object.values(record).flatMap(walk);
-  };
-
-  return walk(payload);
+  return [];
 }
 
 function createStableNumericId(value: string, fallback = 0): number {
@@ -257,15 +270,15 @@ export function adaptDramabiteEpisode(
     dramaId: createStableNumericId(dramaId),
     episodeNumber,
     title,
-    videoUrl: `/api/dramabite/stream?dramaId=${encodeURIComponent(
+    videoUrl: `/api/dramabite/stream?miniapp=1&dramaId=${encodeURIComponent(
       dramaId,
     )}&episode=${encodeURIComponent(String(episodeNumber))}`,
     originalVideoUrl: undefined,
     subtitleUrl: undefined,
     subtitleLang: undefined,
     subtitleLabel: undefined,
-    isLocked: episodeNumber > FREE_EPISODE_LIMIT,
-    isVipOnly: episodeNumber > FREE_EPISODE_LIMIT,
+    isLocked: false,
+    isVipOnly: false,
     sortOrder: episodeNumber,
     thumbnail: undefined,
     dramabiteEpisodeId: episodeId,

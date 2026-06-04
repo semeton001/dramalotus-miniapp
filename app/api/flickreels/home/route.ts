@@ -1,22 +1,26 @@
 import { NextResponse } from "next/server";
 import {
-  buildFlickreelsApiUrl,
   fetchAndNormalizeFeed,
   jsonError,
+  dedupeFlickreelsDramas,
 } from "../_shared";
 
 export async function GET() {
   try {
-    const dramas = await fetchAndNormalizeFeed(
-      buildFlickreelsApiUrl("/category", {
-        navigation_id: 405,
-        page: 1,
-        page_size: 50,
-      }),
-      "home",
-    );
+    const [a, b] = await Promise.all([
+      fetchAndNormalizeFeed(
+        "/category?navigation_id=405&page=1&page_size=20",
+        "home",
+      ),
+      fetchAndNormalizeFeed(
+        "/category?navigation_id=88&page=1&page_size=20",
+        "home",
+      ),
+    ]);
 
-    return NextResponse.json(dramas);
+    return NextResponse.json(
+      dedupeFlickreelsDramas([...a, ...b]),
+    );
   } catch (error) {
     return jsonError(
       error instanceof Error

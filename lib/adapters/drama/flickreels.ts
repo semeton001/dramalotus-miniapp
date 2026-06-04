@@ -85,8 +85,7 @@ export function buildFlickreelsDrama(
 ): Drama | null {
   const raw = asRecord(rawItem);
   const rawId = pickString(raw, "playlet_id", "playletId", "id", "book_id", "bookId");
-  const fallbackNumericId = pickNumber(raw, "playlet_id", "id") || index + 1;
-  const numericId = createStableNumericId(rawId || `flickreels-${variant}-${index}`, fallbackNumericId);
+  const numericId = pickNumber(raw, "playlet_id", "playletId", "id") || index + 1;
 
   const title = stripHtml(
     pickString(raw, "title", "name", "playlet_title", "drama_name") || "Tanpa Judul",

@@ -85,6 +85,8 @@ export async function GET(request: NextRequest) {
       cache: "no-store",
       headers: {
         Accept: "application/json,text/plain,*/*",
+        Authorization: `Bearer ${process.env.FLICKREELS_TOKEN}`,
+        "User-Agent": "Mozilla/5.0",
       },
     });
 
@@ -118,7 +120,7 @@ export async function GET(request: NextRequest) {
           duration: formatDuration(toNumberValue(item.duration)),
           description: "",
           thumbnail: toStringValue(item.chapter_cover) || undefined,
-          videoUrl: `/api/flickreels/stream?dramaId=${encodeURIComponent(
+          videoUrl: `/api/flickreels/stream?miniapp=1&dramaId=${encodeURIComponent(
             dramaId,
           )}&chapterId=${encodeURIComponent(chapterId)}&episodeNumber=${episodeNumber}`,
           isLocked,

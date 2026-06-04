@@ -8,7 +8,7 @@ import {
 
 export async function GET() {
   try {
-    const payload = await fetchFlextvJson("/tabs/1", { page: 1 });
+    const payload = await fetchFlextvJson("/tabs/1", { page: 1, lang: "id" });
     const items = adaptFlextvDramaList(extractFlextvItemsDeep(payload));
     return feedResponse(items, 1);
   } catch (error) {

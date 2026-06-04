@@ -3,12 +3,16 @@ import type { Drama } from "@/types/drama";
 import type { Episode } from "@/types/episode";
 import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
 
-export const REELIFE_BASE = "https://reelife.dramabos.my.id";
+export const REELIFE_BASE =
+  "https://captain.sapimu.au/reelife/api/v1";
 export const REELIFE_LANG = "in";
 export const REELIFE_SOURCE_ID = "10";
 export const REELIFE_SOURCE_NAME = "Reelife";
 export const REELIFE_DEFAULT_PLAY_CODE =
   process.env.REELIFE_PLAY_CODE?.trim() || "";
+
+export const REELIFE_TOKEN =
+  process.env.REELIFE_TOKEN?.trim() || "";
 
 export type ReelifeDramaItem = {
   actor?: string;
@@ -149,6 +153,7 @@ export function pickFirstString(...values: unknown[]): string {
 export function jsonHeaders() {
   return {
     Accept: "application/json, text/plain, */*",
+    Authorization: `Bearer ${REELIFE_TOKEN}`,
     Referer: `${REELIFE_BASE}/`,
     Origin: REELIFE_BASE,
     "User-Agent":
@@ -199,8 +204,23 @@ export function extractFeedItems(payload: unknown): ReelifeDramaItem[] {
     if (nestedDramas.length) return nestedDramas.filter(isValidDramaItem);
     const list = toArray<ReelifeDramaItem>(nested.list);
     if (list.length) return list.filter(isValidDramaItem);
-    const bookList = toArray<ReelifeDramaItem>(nested.bookList);
-    if (bookList.length) return bookList.filter(isValidDramaItem);
+    const columnPageList =
+      toArray<ReelifeDramaItem>(nested.columnPageList);
+    if (columnPageList.length) {
+      return columnPageList.filter(isValidDramaItem);
+    }
+
+    const bookVos =
+      toArray<ReelifeDramaItem>(nested.bookVos);
+    if (bookVos.length) {
+      return bookVos.filter(isValidDramaItem);
+    }
+
+    const bookList =
+      toArray<ReelifeDramaItem>(nested.bookList);
+    if (bookList.length) {
+      return bookList.filter(isValidDramaItem);
+    }
   }
 
   return [];

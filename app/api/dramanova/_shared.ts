@@ -3,13 +3,17 @@ import type { Drama } from "@/types/drama";
 import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
 
 export const DRAMANOVA_BASE_URL =
-  "https://streamapi.web.id/p/dramanova/api/v1";
+  "https://captain.sapimu.au/dramanova/api/v1";
+
 export const DRAMANOVA_VIDEO_BASE_URL =
-  "https://streamapi.web.id/p/dramanova/api/video";
+  "https://captain.sapimu.au/dramanova/api/video";
 export const DRAMANOVA_TOKEN = process.env.DRAMANOVA_TOKEN?.trim() || "";
 export const DRAMANOVA_LANG = "in";
 export const DRAMANOVA_SOURCE_ID = "19";
 export const DRAMANOVA_SOURCE_NAME = "DramaNova";
+
+export const DRAMANOVA_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -83,11 +87,14 @@ export async function fetchDramaNovaJson(
   });
 
   if (!url.searchParams.has("lang")) url.searchParams.set("lang", DRAMANOVA_LANG);
-  if (!url.searchParams.has("token")) url.searchParams.set("token", DRAMANOVA_TOKEN);
-
+  
   const response = await fetch(url, {
     method: "GET",
-    headers: { Accept: "application/json" },
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${DRAMANOVA_TOKEN}`,
+      "User-Agent": DRAMANOVA_USER_AGENT,
+    },
     cache: "no-store",
   });
 
@@ -104,11 +111,14 @@ export async function fetchDramaNovaJson(
 async function fetchDramaNovaVideoJson(fileId: string): Promise<unknown> {
   const url = new URL(DRAMANOVA_VIDEO_BASE_URL);
   url.searchParams.set("id", fileId);
-  url.searchParams.set("token", DRAMANOVA_TOKEN);
 
   const response = await fetch(url, {
     method: "GET",
-    headers: { Accept: "application/json" },
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${DRAMANOVA_TOKEN}`,
+      "User-Agent": DRAMANOVA_USER_AGENT,
+    },
     cache: "no-store",
   });
 
@@ -273,17 +283,26 @@ function pickBestVideoUrl(payload: unknown): string {
       Boolean(item) && typeof item === "object" && !Array.isArray(item),
   );
 
+  const by1080 = items.find((item) =>
+    toStringValue(item.definition).toLowerCase().includes("1080"),
+  );
+
   const by720 = items.find(
     (item) =>
       toStringValue(item.definition).toLowerCase().includes("720") ||
       toStringValue(item.quality).toLowerCase().includes("normal"),
   );
-  const by1080 = items.find((item) =>
-    toStringValue(item.definition).toLowerCase().includes("1080"),
-  );
-  const fallback = items.find((item) => pickString(item, "main_url", "backup_url"));
 
-  return pickString(by720 || by1080 || fallback, "main_url", "backup_url", "url");
+  const fallback = items.find(
+    (item) => pickString(item, "main_url", "backup_url"),
+  );
+
+  return pickString(
+    by1080 || by720 || fallback,
+    "main_url",
+    "backup_url",
+    "url",
+  );
 }
 
 function pickSubtitleFromEpisode(episode: JsonRecord) {
@@ -330,8 +349,7 @@ export async function buildDramaNovaEpisodes(
       const episodeNumber = toNumber(episode.number, index + 1);
       const episodeId = pickString(episode, "id") || `${dramaId}-${episodeNumber}`;
       const fileId = pickString(episode, "fileId");
-      const isVip = episodeNumber > FREE_EPISODE_LIMIT;
-      const subtitle = pickSubtitleFromEpisode(episode);
+            const subtitle = pickSubtitleFromEpisode(episode);
 
       return {
         id: createStableNumericId(episodeId, episodeNumber),
@@ -339,13 +357,13 @@ export async function buildDramaNovaEpisodes(
         episodeNumber,
         title: `Episode ${episodeNumber}`,
         videoUrl: fileId
-          ? `/api/dramanova/stream?fileId=${encodeURIComponent(
+          ? `/api/dramanova/stream?miniapp=1&fileId=${encodeURIComponent(
               fileId,
             )}&episodeNumber=${episodeNumber}`
           : "",
         originalVideoUrl: "",
-        isLocked: isVip,
-        isVipOnly: isVip,
+        isLocked: false,
+        isVipOnly: false,
         sortOrder: episodeNumber,
         thumbnail: pickString(episode, "cover") || undefined,
         ...subtitle,

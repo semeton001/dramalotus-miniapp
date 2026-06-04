@@ -1,390 +1,164 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import type { Drama } from "@/types/drama";
-import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
 
-export const STARDUSTTV_BASE_URL =
-  "https://streamapi.web.id/p/stardusttv/api/v1";
+export const STARDUSTTV_BASE_URL = "https://captain.sapimu.au/stardusttv/api/v1";
 export const STARDUSTTV_TOKEN = process.env.STARDUSTTV_TOKEN?.trim() || "";
-export const STARDUSTTV_LANG = "id";
-export const STARDUSTTV_SOURCE_ID = "15";
-export const STARDUSTTV_SOURCE_NAME = "StardustTV";
+export const STARDUSTTV_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
 
 type JsonRecord = Record<string, unknown>;
-
-type Episode = {
-  id: number;
-  dramaId: number;
-  episodeNumber: number;
-  title: string;
-  videoUrl: string;
-  originalVideoUrl?: string;
-  subtitleUrl?: string;
-  subtitleLang?: string;
-  subtitleLabel?: string;
-  isLocked?: boolean;
-  isVipOnly?: boolean;
-  sortOrder?: number;
-  thumbnail?: string;
-};
 
 function toNumber(value: unknown, fallback = 0): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return parsed;
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
   }
   return fallback;
 }
 
-function toStringValue(value: unknown, fallback = ""): string {
+function toStringValue(value: unknown): string {
   if (typeof value === "string") return value.trim();
-  if (typeof value === "number" && Number.isFinite(value)) return String(value);
-  return fallback;
-}
-
-function pickString(record: JsonRecord | undefined, ...keys: string[]): string {
-  if (!record) return "";
-
-  for (const key of keys) {
-    const picked = toStringValue(record[key]);
-    if (picked) return picked;
-  }
-
+  if (typeof value === "number") return String(value);
   return "";
 }
 
-export function createStableNumericId(value: string, fallback = 0): number {
-  const direct = Number(value);
-  if (Number.isFinite(direct) && direct > 0) return direct;
+export async function fetchStardustJson(path: string): Promise<any> {
+  const url = path.startsWith("http")
+    ? path
+    : `${STARDUSTTV_BASE_URL}${path.startsWith("/") ? path : "/" + path}`;
 
-  let hash = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
-  }
-  return hash || fallback;
-}
-
-export async function fetchStardustJson(
-  path: string,
-  searchParams?: Record<string, string | number | undefined>,
-): Promise<unknown> {
-  const normalizedPath = path.startsWith("/") ? path.slice(1) : path;
-  const baseUrl = STARDUSTTV_BASE_URL.endsWith("/")
-    ? STARDUSTTV_BASE_URL
-    : `${STARDUSTTV_BASE_URL}/`;
-  const url = new URL(normalizedPath, baseUrl);
-
-  Object.entries(searchParams ?? {}).forEach(([key, value]) => {
-    if (value === undefined || value === null || value === "") return;
-    url.searchParams.set(key, String(value));
-  });
-
-  if (!url.searchParams.has("lang")) {
-    url.searchParams.set("lang", STARDUSTTV_LANG);
-  }
-
-  if (!url.searchParams.has("token")) {
-    url.searchParams.set("token", STARDUSTTV_TOKEN);
-  }
-
-  const response = await fetch(url, {
-    method: "GET",
-    headers: { Accept: "application/json" },
+  const res = await fetch(url, {
     cache: "no-store",
-  });
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    throw new Error(
-      `StardustTV upstream ${response.status} for ${url.toString()}: ${body.slice(
-        0,
-        300,
-      )}`,
-    );
-  }
-
-  return response.json();
-}
-
-function looksLikeDrama(value: unknown): boolean {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const item = value as JsonRecord;
-
-  const hasId = Boolean(item.id || item.video_id || item.series_id);
-  const hasTitle = Boolean(item.title || item.name || item.video_title);
-  const hasPoster = Boolean(
-    item.poster ||
-      item.cover ||
-      item.image ||
-      item.thumbnail ||
-      item.posterImage ||
-      item.coverImage,
-  );
-
-  return hasId && hasTitle && hasPoster;
-}
-
-export function extractStardustItemsDeep(payload: unknown): JsonRecord[] {
-  const seen = new Set<unknown>();
-
-  const walk = (value: unknown): JsonRecord[] => {
-    if (!value || typeof value !== "object" || seen.has(value)) return [];
-    seen.add(value);
-
-    if (Array.isArray(value)) {
-      const directItems = value.filter(looksLikeDrama) as JsonRecord[];
-      const nestedItems = value.flatMap(walk);
-      return [...directItems, ...nestedItems];
-    }
-
-    const record = value as JsonRecord;
-    const priorityKeys = [
-      "list",
-      "items",
-      "data",
-      "videos",
-      "records",
-      "rows",
-      "results",
-      "result",
-    ];
-
-    for (const key of priorityKeys) {
-      const found = walk(record[key]);
-      if (found.length > 0) return found;
-    }
-
-    return Object.values(record).flatMap(walk);
-  };
-
-  return walk(payload);
-}
-
-export function adaptStardustDrama(item: JsonRecord, index = 0): Drama {
-  const rawId = pickString(item, "id", "video_id", "series_id", "dramaId");
-  const numericId = createStableNumericId(
-    rawId || `stardusttv-${index}`,
-    index + 1,
-  );
-  const title =
-    pickString(item, "title", "name", "video_title") || `StardustTV ${numericId}`;
-  const posterImage = pickString(
-    item,
-    "poster",
-    "cover",
-    "image",
-    "thumbnail",
-    "posterImage",
-    "coverImage",
-  );
-  const episodes =
-    toNumber(item.totalEpisodes) ||
-    toNumber(item.total_episodes) ||
-    toNumber(item.episodes) ||
-    toNumber(item.episodeCount) ||
-    0;
-
-  return {
-    id: numericId,
-    title,
-    description: pickString(item, "intro", "description", "summary") || title,
-    coverImage: posterImage,
-    posterImage,
-    episodes,
-    tags: ["StardustTV"],
-    source: STARDUSTTV_SOURCE_NAME,
-    sourceId: STARDUSTTV_SOURCE_ID,
-    sourceName: STARDUSTTV_SOURCE_NAME,
-    badge: "StardustTV",
-    slug: `stardusttv-${rawId || numericId}`,
-    stardusttvRawId: rawId || undefined,
-    stardusttvVideoId: rawId || undefined,
-  } as Drama & {
-    stardusttvRawId?: string;
-    stardusttvVideoId?: string;
-  };
-}
-
-export function dedupeStardustDramas(items: Drama[]): Drama[] {
-  const seen = new Set<string>();
-  const output: Drama[] = [];
-
-  items.forEach((drama) => {
-    const meta = drama as Drama & {
-      stardusttvRawId?: string;
-      stardusttvVideoId?: string;
-    };
-
-    const key =
-      meta.stardusttvVideoId ||
-      meta.stardusttvRawId ||
-      drama.slug ||
-      `${drama.sourceName || drama.source || "stardusttv"}::${drama.title}`;
-
-    if (!key || seen.has(key)) return;
-    seen.add(key);
-    output.push(drama);
-  });
-
-  return output;
-}
-
-export function adaptStardustDramaList(items: JsonRecord[]): Drama[] {
-  return dedupeStardustDramas(
-    items.map((item, index) => adaptStardustDrama(item, index)),
-  );
-}
-
-export function feedResponse(
-  items: Drama[],
-  page = 1,
-  hasNextPage = false,
-): NextResponse {
-  return NextResponse.json(
-    {
-      items,
-      hasNextPage,
-      page,
-    },
-    { headers: { "Cache-Control": "no-store" } },
-  );
-}
-
-export function extractStardustEpisodes(payload: unknown): JsonRecord[] {
-  const record = payload as JsonRecord;
-  const data = record?.data as JsonRecord | undefined;
-  const episodes = data?.episodes;
-
-  return Array.isArray(episodes) ? (episodes as JsonRecord[]) : [];
-}
-
-export function adaptStardustEpisode(
-  raw: JsonRecord,
-  videoId: string,
-  numericDramaId: number,
-): Episode {
-  const episodeNumber = toNumber(raw.sort) || toNumber(raw.episode) || 1;
-  const episodeId = pickString(raw, "id") || String(episodeNumber);
-  const h264 = pickString(raw, "h264");
-  const thumbnail = pickString(raw, "snapshot", "thumbnail", "poster", "cover");
-  const isVip = toNumber(raw.is_vip) === 1;
-
-  return {
-    id: createStableNumericId(`${videoId}-${episodeId}`, episodeNumber),
-    dramaId: numericDramaId,
-    episodeNumber,
-    title: `Episode ${episodeNumber}`,
-    videoUrl: `/api/stardusttv/stream?videoId=${encodeURIComponent(
-      videoId,
-    )}&episode=${encodeURIComponent(String(episodeNumber))}&episodeNumber=${episodeNumber}`,
-    originalVideoUrl: undefined,
-    subtitleUrl: undefined,
-    subtitleLang: undefined,
-    subtitleLabel: undefined,
-    isLocked: episodeNumber > FREE_EPISODE_LIMIT || isVip,
-    isVipOnly: episodeNumber > FREE_EPISODE_LIMIT || isVip,
-    sortOrder: episodeNumber,
-    thumbnail: thumbnail || undefined,
-    stardusttvEpisodeId: episodeId,
-    stardusttvPlayId: String(episodeNumber),
-  } as Episode & {
-    stardusttvEpisodeId?: string;
-    stardusttvPlayId?: string;
-  };
-}
-
-export function extractEpisodeStreamUrl(payload: unknown): string {
-  const record = payload as JsonRecord;
-  const data = record?.data as JsonRecord | undefined;
-
-  return pickString(data, "h264", "h265", "video_url", "url");
-}
-
-function buildRelativeProxyUrl(_targetUrl: string): string {
-  return "";
-}
-
-export function rewriteM3u8Playlist(
-  playlistText: string,
-  playlistUrl: string,
-): string {
-  return playlistText
-    .split("\n")
-    .map((line) => {
-      const trimmed = line.trim();
-
-      if (!trimmed || trimmed.startsWith("#")) {
-        return line;
-      }
-
-      try {
-        return buildRelativeProxyUrl(new URL(trimmed, playlistUrl).toString());
-      } catch {
-        return line;
-      }
-    })
-    .join("\n");
-}
-
-function forwardHeaders(contentType: string): Headers {
-  const headers = new Headers();
-
-  headers.set("content-type", contentType || "application/octet-stream");
-  headers.set("cache-control", "no-store");
-  headers.set("access-control-allow-origin", "*");
-
-  return headers;
-}
-
-export async function proxyMedia(
-  request: NextRequest,
-  rawUrl: string,
-): Promise<NextResponse> {
-  const response = await fetch(rawUrl, {
-    method: "GET",
     headers: {
-      Accept: "*/*",
-      ...(request.headers.get("range")
-        ? { Range: request.headers.get("range") as string }
-        : {}),
+      Accept: "application/json,text/plain,*/*",
+      Authorization: `Bearer ${STARDUSTTV_TOKEN}`,
+      "User-Agent": STARDUSTTV_USER_AGENT,
     },
-    cache: "no-store",
   });
 
-  if (!response.ok) {
-    return NextResponse.json(
-      { error: `Failed to load StardustTV media: ${response.status}`, rawUrl },
-      { status: response.status },
-    );
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Stardust upstream ${res.status}: ${body.slice(0, 200)}`);
   }
 
-  const contentType = response.headers.get("content-type") || "";
-  const activeTargetUrl = response.url || rawUrl;
-  const headers = forwardHeaders(contentType);
+  return res.json();
+}
 
-  const contentLength = response.headers.get("content-length");
-  const contentRange = response.headers.get("content-range");
+function collectItems(payload: any): any[] {
+  if (!payload) return [];
 
-  if (contentLength) headers.set("content-length", contentLength);
-  if (contentRange) headers.set("content-range", contentRange);
+  if (Array.isArray(payload)) return payload;
 
-  if (
-    activeTargetUrl.includes(".m3u8") ||
-    contentType.includes("application/vnd.apple.mpegurl") ||
-    contentType.includes("application/x-mpegURL") ||
-    contentType.includes("audio/x-mpegurl")
-  ) {
-    const text = await response.text();
-    const rewritten = rewriteM3u8Playlist(text, activeTargetUrl);
-    headers.delete("content-length");
+  if (Array.isArray(payload.data)) return payload.data;
+  if (Array.isArray(payload.items)) return payload.items;
+  if (Array.isArray(payload.list)) return payload.list;
+  if (Array.isArray(payload.data?.items)) return payload.data.items;
+  if (Array.isArray(payload.data?.list)) return payload.data.list;
+  if (Array.isArray(payload.data?.videos)) return payload.data.videos;
+  if (Array.isArray(payload.data?.data)) return payload.data.data;
 
-    return new NextResponse(rewritten, { status: 200, headers });
+  if (payload.data && typeof payload.data === "object") {
+    return [payload.data];
   }
 
-  const body = await response.arrayBuffer();
+  return [];
+}
 
-  return new NextResponse(body, {
-    status: response.status,
-    headers,
+export function extractStardustItemsDeep(payload: any) {
+  return collectItems(payload);
+}
+
+export function adaptStardustDramaList(items: any[]): Drama[] {
+  const seen = new Set<string>();
+
+  return items
+    .map((item, idx) => {
+      const rawId =
+        toStringValue(item?.id) ||
+        toStringValue(item?.video_id) ||
+        String(idx + 1);
+
+      const title =
+        toStringValue(item?.title) ||
+        toStringValue(item?.name) ||
+        `Stardust ${rawId}`;
+
+      const poster =
+        toStringValue(item?.cover) ||
+        toStringValue(item?.poster) ||
+        toStringValue(item?.thumbnail);
+
+      return {
+        id: Number(rawId) || idx + 1,
+        title,
+        description: title,
+        coverImage: poster,
+        posterImage: poster,
+        source: "StardustTV",
+        sourceName: "StardustTV",
+        sourceId: "15",
+        badge: "StardustTV",
+        stardusttvVideoId: rawId,
+        stardusttvRawId: rawId,
+      } as unknown as Drama;
+    })
+    .filter((item) => {
+      const key = (item as any).stardusttvVideoId;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+export function feedResponse(items: Drama[]) {
+  return NextResponse.json({
+    items,
+    page: 1,
+    hasNextPage: false,
   });
+}
+
+export function extractStardustEpisodes(payload: any): any[] {
+  return (
+    payload?.data?.episodes ||
+    payload?.data?.list ||
+    payload?.episodes ||
+    payload?.list ||
+    []
+  );
+}
+
+export function adaptStardustEpisode(raw: any, videoId: string, numericDramaId: number) {
+  const ep =
+    toNumber(raw?.episode) ||
+    toNumber(raw?.sort) ||
+    toNumber(raw?.number) ||
+    1;
+
+  return {
+    id: Number(raw?.id) || ep,
+    dramaId: numericDramaId,
+    episodeNumber: ep,
+    title: `Episode ${ep}`,
+    duration: "00:00",
+    description: "",
+    thumbnail:
+      toStringValue(raw?.snapshot) ||
+      toStringValue(raw?.thumbnail) ||
+      undefined,
+    videoUrl: `/api/stardusttv/stream?miniapp=1&videoId=${encodeURIComponent(videoId)}&episode=${ep}`,
+    isLocked: false,
+    isVipOnly: false,
+    sortOrder: ep,
+  };
+}
+
+export function extractEpisodeStreamUrl(payload: any): string {
+  return (
+    toStringValue(payload?.data?.h264) ||
+    toStringValue(payload?.data?.h265) ||
+    toStringValue(payload?.data?.url) ||
+    ""
+  );
 }

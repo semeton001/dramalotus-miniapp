@@ -1,18 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth/getCurrentUser";
-import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
-import { createStreamToken, verifyStreamToken } from "@/lib/stream/token";
-import { isMiniappRequest } from "@/lib/auth/isMiniappRequest";
-import { checkStreamRateLimit } from "@/lib/rate-limit/stream";
+import {
+  createStreamToken,
+  verifyStreamToken,
+  isStreamTokenExpired,
+} from "@/lib/stream/token";
+import { fetchJson } from "../_shared";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const ALLOWED_PROTOCOLS = new Set(["http:", "https:"]);
-const DRAMAWAVE_DRAMA_BASE_URL =
-  "https://streamapi.web.id/p/dramawave/api/v1/dramas";
-
-const DRAMAWAVE_TOKEN = process.env.DRAMAWAVE_TOKEN?.trim() || "";
 
 const HOP_BY_HOP_HEADERS = new Set([
   "connection",
@@ -23,495 +18,240 @@ const HOP_BY_HOP_HEADERS = new Set([
   "trailer",
   "transfer-encoding",
   "upgrade",
-  "content-encoding",
-  "content-length",
-  "host",
 ]);
 
-type VerifiedStreamToken = NonNullable<ReturnType<typeof verifyStreamToken>>;
+function copyHeaders(upstream: Headers) {
+  const headers = new Headers();
 
-function buildCorsHeaders(contentType?: string | null) {
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,HEAD,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Range",
-    "Access-Control-Expose-Headers":
-      "Content-Length, Content-Range, Accept-Ranges, Content-Type",
-    ...(contentType ? { "Content-Type": contentType } : {}),
-  };
-}
-
-function isLikelyPlaylist(contentType: string | null, url: URL): boolean {
-  const lowerType = (contentType || "").toLowerCase();
-  const pathname = url.pathname.toLowerCase();
-
-  return (
-    lowerType.includes("application/vnd.apple.mpegurl") ||
-    lowerType.includes("application/x-mpegurl") ||
-    pathname.endsWith(".m3u8")
-  );
-}
-
-function isValidDecodedUrl(value: string): boolean {
-  if (!value || value.trim().length === 0) return false;
-
-  try {
-    const url = new URL(value);
-    return ALLOWED_PROTOCOLS.has(url.protocol) && !!url.hostname;
-  } catch {
-    return false;
-  }
-}
-
-function toProxyUrl(resolved: URL, parentPayload: VerifiedStreamToken): string {
-  const childToken = createStreamToken({
-    provider: parentPayload.provider,
-    userId: parentPayload.userId,
-    episodeKey: parentPayload.episodeKey,
-    url: resolved.toString(),
-  });
-
-  const miniappParam = parentPayload.userId === "miniapp" ? "&miniapp=1" : "";
-
-  return `/api/dramawave/stream?token=${encodeURIComponent(childToken)}${miniappParam}`;
-}
-
-function rewriteDirectiveUris(
-  line: string,
-  upstreamUrl: URL,
-  parentPayload: VerifiedStreamToken,
-): string {
-  return line.replace(/URI="([^"]+)"/g, (_match, uriValue: string) => {
-    try {
-      const resolved = new URL(uriValue, upstreamUrl);
-
-      if (!ALLOWED_PROTOCOLS.has(resolved.protocol)) {
-        return `URI="${uriValue}"`;
-      }
-
-      return `URI="${toProxyUrl(resolved, parentPayload)}"`;
-    } catch {
-      return `URI="${uriValue}"`;
-    }
-  });
-}
-
-function rewritePlaylist(
-  body: string,
-  upstreamUrl: URL,
-  parentPayload: VerifiedStreamToken,
-): string {
-  return body
-    .split(/\r?\n/)
-    .map((line) => {
-      const trimmed = line.trim();
-
-      if (!trimmed) return line;
-
-      if (trimmed.startsWith("#")) {
-        return rewriteDirectiveUris(line, upstreamUrl, parentPayload);
-      }
-
-      try {
-        const resolved = new URL(trimmed, upstreamUrl);
-
-        if (!ALLOWED_PROTOCOLS.has(resolved.protocol)) {
-          return line;
-        }
-
-        return toProxyUrl(resolved, parentPayload);
-      } catch {
-        return line;
-      }
-    })
-    .join("\n");
-}
-
-function copyUpstreamHeaders(
-  upstream: Response,
-  contentType?: string | null,
-): Headers {
-  const headers = new Headers(buildCorsHeaders(contentType));
-
-  upstream.headers.forEach((value, key) => {
+  upstream.forEach((value, key) => {
     const lower = key.toLowerCase();
-
     if (HOP_BY_HOP_HEADERS.has(lower)) return;
-    if (lower === "content-type" && contentType) return;
-    if (lower === "access-control-allow-origin") return;
-    if (lower === "access-control-allow-methods") return;
-    if (lower === "access-control-allow-headers") return;
-    if (lower === "access-control-expose-headers") return;
-
+    if (lower === "content-security-policy") return;
+    if (lower === "content-encoding") return;
+    if (lower === "content-disposition") return;
+    if (lower === "content-length") return;
     headers.set(key, value);
   });
 
-  if (contentType) {
-    headers.set("Content-Type", contentType);
-  }
-
-  headers.set("Cache-Control", "no-store");
-  headers.set("Access-Control-Allow-Origin", "*");
-  headers.set("Access-Control-Allow-Methods", "GET,HEAD,OPTIONS");
-  headers.set("Access-Control-Allow-Headers", "Content-Type, Range");
+  headers.set("cache-control", "no-store");
+  headers.set("access-control-allow-origin", "*");
   headers.set(
-    "Access-Control-Expose-Headers",
+    "access-control-expose-headers",
     "Content-Length, Content-Range, Accept-Ranges, Content-Type",
   );
 
   return headers;
 }
 
-function buildUpstreamHeaders(
-  request: NextRequest,
-  upstreamUrl: URL,
-  options?: { omitRange?: boolean },
-): Headers {
-  const headers = new Headers();
-  const range = request.headers.get("range");
+async function proxy(req: NextRequest) {
+  const st = req.nextUrl.searchParams.get("s") || "";
+  const payload = verifyStreamToken(st);
 
-  if (range && !options?.omitRange) {
-    headers.set("Range", range);
+  if (!payload) {
+    console.error("[DRAMAWAVE TOKEN INVALID]", {
+      stLength: st.length,
+      tokenParts: st.split(".").length,
+      sample: st.slice(0, 120),
+    });
+
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  headers.set(
-    "User-Agent",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-  );
-  headers.set("Accept", "*/*");
-  headers.set("Accept-Language", "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7");
-  headers.set("Origin", upstreamUrl.origin);
-  headers.set("Referer", `${upstreamUrl.origin}/`);
-  headers.set("Sec-Fetch-Dest", "video");
-  headers.set("Sec-Fetch-Mode", "cors");
-  headers.set("Sec-Fetch-Site", "cross-site");
+  if (isStreamTokenExpired(payload)) {
+    const refreshed = createStreamToken({
+      provider: payload.provider,
+      userId: payload.userId,
+      episodeKey: payload.episodeKey,
+      url: payload.url,
+    });
 
-  return headers;
-}
+    return NextResponse.redirect(
+      `/api/dramawave/stream?s=${encodeURIComponent(refreshed)}`,
+      302,
+    );
+  }
 
-async function fetchUpstream(
-  request: NextRequest,
-  upstreamUrl: URL,
-): Promise<Response> {
-  const omitRange = upstreamUrl.pathname.toLowerCase().endsWith(".m3u8");
-  const headers = buildUpstreamHeaders(request, upstreamUrl, { omitRange });
+  const range = req.headers.get("range") || undefined;
 
-  return fetch(upstreamUrl.toString(), {
-    method: request.method === "HEAD" ? "HEAD" : "GET",
-    headers,
+  const upstream = await fetch(payload.url, {
+    method: "GET",
+    headers: {
+      "User-Agent": "Mozilla/5.0",
+      "Accept": "*/*",
+      ...(range ? { Range: range } : {}),
+    },
     cache: "no-store",
     redirect: "follow",
   });
-}
 
-async function resolveDramawavePlayUrl(
-  dramaId: string,
-  episodeNo: string,
-): Promise<string> {
-  const upstreamUrl = `${DRAMAWAVE_DRAMA_BASE_URL}/${encodeURIComponent(
-    dramaId,
-  )}/play/${encodeURIComponent(episodeNo)}?lang=id-ID&token=${encodeURIComponent(
-    DRAMAWAVE_TOKEN,
-  )}`;
+  const contentType =
+    upstream.headers.get("content-type")?.toLowerCase() || "";
 
-  const response = await fetch(upstreamUrl, {
-    method: "GET",
-    cache: "no-store",
-    headers: {
-      Accept: "application/json, text/plain, */*",
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    },
-  });
+  if (
+    contentType.includes("mpegurl") ||
+    payload.url.toLowerCase().includes(".m3u8")
+  ) {
+    const text = await upstream.text();
+    const base = new URL(payload.url);
 
-  if (!response.ok) {
-    throw new Error(`Dramawave play failed: ${response.status}`);
-  }
+    const host =
+      req.headers.get("x-forwarded-host") ||
+      req.headers.get("host") ||
+      "tg.dramalotus.site";
 
-  const payload = await response.json();
-  const data =
-    payload && typeof payload === "object" && "data" in payload
-      ? (payload as { data?: Record<string, unknown> }).data
-      : undefined;
+    const proto =
+      req.headers.get("x-forwarded-proto") || "https";
 
-  const videoUrl =
-    data && typeof data.video_url === "string" && data.video_url.trim()
-      ? data.video_url.trim()
-      : data &&
-          typeof data.external_audio_h264_m3u8 === "string" &&
-          data.external_audio_h264_m3u8.trim()
-        ? data.external_audio_h264_m3u8.trim()
-        : data &&
-            typeof data.m3u8_url === "string" &&
-            data.m3u8_url.trim()
-          ? data.m3u8_url.trim()
-          : "";
+    const rewritten = text
+      .split("\n")
+      .map((line) => {
+        const trimmed = line.trim();
 
-  if (!videoUrl) {
-    throw new Error("Dramawave play URL not found.");
-  }
+        if (!trimmed) {
+          return line;
+        }
 
-  return videoUrl;
-}
+        if (trimmed.startsWith("#")) {
+          return line.replace(/URI="([^"]+)"/g, (_match, uri) => {
+            try {
+              const resolved = new URL(uri, base).toString();
 
-async function requireDramawaveAccess(request: NextRequest) {
-  if (isMiniappRequest(request)) return null;
+              if (
+                resolved.includes("/api/dramawave/stream?s=") &&
+                resolved.includes(host)
+              ) {
+                return `URI="${resolved}"`;
+              }
 
-  const user = await getCurrentUser();
+              const token = createStreamToken({
+                provider: "dramawave",
+                userId: "system",
+                episodeKey: "segment",
+                url: resolved,
+              });
 
-  if (!user) {
-    return NextResponse.json(
-      { ok: false, error: "Unauthorized" },
-      { status: 401, headers: buildCorsHeaders("application/json") },
-    );
-  }
+              return `URI="${proto}://${host}/api/dramawave/stream?s=${encodeURIComponent(token)}"`;
+            } catch {
+              return _match;
+            }
+          });
+        }
 
-  const token = request.nextUrl.searchParams.get("token")?.trim() ?? "";
-  const proxyToken = request.nextUrl.searchParams.get("u")?.trim() ?? "";
-  const legacyUrl = request.nextUrl.searchParams.get("url")?.trim() ?? "";
+        let resolved: string;
 
-  if (token) return null;
+        try {
+          resolved = new URL(trimmed, base).toString();
+        } catch {
+          return line;
+        }
 
-  if (proxyToken || legacyUrl) {
-    return NextResponse.json(
-      { ok: false, error: "Direct URL playback is disabled." },
-      { status: 403, headers: buildCorsHeaders("application/json") },
-    );
-  }
+        if (
+          resolved.includes("/api/dramawave/stream?s=") &&
+          resolved.includes(host)
+        ) {
+          return resolved;
+        }
 
-  const episodeNo = request.nextUrl.searchParams.get("episodeNo")?.trim() || "";
-  const episodeNumber = Number(episodeNo);
+        const token = createStreamToken({
+          provider: "dramawave",
+          userId: "system",
+          episodeKey: "segment",
+          url: resolved,
+        });
 
-  if (!Number.isInteger(episodeNumber) || episodeNumber < 1) {
-    return NextResponse.json(
-      { ok: false, error: "episodeNo tidak valid." },
-      { status: 400, headers: buildCorsHeaders("application/json") },
-    );
-  }
+        return `${proto}://${host}/api/dramawave/stream?s=${encodeURIComponent(token)}`;
+      })
+      .join("\n");
 
-  const isFreeEpisode = episodeNumber <= FREE_EPISODE_LIMIT;
-
-  if (!isFreeEpisode && user.membership_status !== "vip") {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "VIP_REQUIRED",
-        message: "Episode ini hanya untuk VIP.",
-      },
-      { status: 403, headers: buildCorsHeaders("application/json") },
-    );
-  }
-
-  if (user.membership_status === "vip" && user.vip_until) {
-    const expiresAt = new Date(user.vip_until).getTime();
-
-    if (!Number.isNaN(expiresAt) && expiresAt <= Date.now()) {
-      return NextResponse.json(
-        { ok: false, error: "VIP_EXPIRED" },
-        { status: 403, headers: buildCorsHeaders("application/json") },
-      );
-    }
-  }
-
-  return null;
-}
-
-async function handleProxy(request: NextRequest) {
-  const isMiniapp = isMiniappRequest(request);
-  const user = isMiniapp ? null : await getCurrentUser();
-
-  if (!isMiniapp && !user) {
-    return NextResponse.json(
-      { ok: false, error: "Unauthorized" },
-      { status: 401, headers: buildCorsHeaders("application/json") },
-    );
-  }
-
-  const streamToken = request.nextUrl.searchParams.get("token")?.trim() ?? "";
-  const rawToken = request.nextUrl.searchParams.get("u")?.trim();
-  const rawLegacyUrl = request.nextUrl.searchParams.get("url")?.trim();
-  const dramaId = request.nextUrl.searchParams.get("dramaId")?.trim() || "";
-  const episodeNo = request.nextUrl.searchParams.get("episodeNo")?.trim() || "";
-
-  let rawUrl = "";
-  let parentPayload: VerifiedStreamToken | null = null;
-
-  if (streamToken) {
-    const tokenPayload = verifyStreamToken(streamToken);
-
-    if (
-      !tokenPayload ||
-      tokenPayload.provider !== "dramawave" ||
-      !isMiniapp &&
-      user &&
-      tokenPayload.userId !== user.id
-    ) {
-      return NextResponse.json(
-        { ok: false, error: "Invalid or expired stream token" },
-        { status: 403, headers: buildCorsHeaders("application/json") },
-      );
-    }
-
-    rawUrl = tokenPayload.url;
-    parentPayload = tokenPayload;
-  } else if (rawToken || rawLegacyUrl) {
-    return NextResponse.json(
-      { ok: false, error: "Direct URL playback is disabled." },
-      { status: 403, headers: buildCorsHeaders("application/json") },
-    );
-  } else if (dramaId && episodeNo) {
-    try {
-      rawUrl = await resolveDramawavePlayUrl(dramaId, episodeNo);
-    } catch (error) {
-      return NextResponse.json(
-        {
-          error:
-            error instanceof Error
-              ? error.message
-              : "Failed to resolve Dramawave play URL.",
-        },
-        { status: 500, headers: buildCorsHeaders("application/json") },
-      );
-    }
-
-    const initialPayload: VerifiedStreamToken = {
-      provider: "dramawave",
-      userId: isMiniapp ? "miniapp" : user!.id,
-      episodeKey: `${dramaId}:${episodeNo}`,
-      url: rawUrl,
-      exp: Math.floor(Date.now() / 1000) + 180,
-    };
-
-    const isMiniappParam = request.nextUrl.searchParams.get("miniapp") === "1";
-
-    if (isMiniappParam) {
-      parentPayload = initialPayload;
-    } else {
-      const initialToken = createStreamToken({
-        provider: initialPayload.provider,
-        userId: initialPayload.userId,
-        episodeKey: initialPayload.episodeKey,
-        url: initialPayload.url,
-      });
-
-      const tokenUrl = `/api/dramawave/stream?token=${encodeURIComponent(
-        initialToken,
-      )}`;
-
-      return new NextResponse(null, {
-        status: 307,
-        headers: {
-          Location: tokenUrl,
-          ...buildCorsHeaders(),
-        },
-      });
-    }
-  }
-
-  if (!rawUrl || !parentPayload) {
-    return NextResponse.json(
-      { error: "Missing required query parameter: token or dramaId+episodeNo" },
-      { status: 400, headers: buildCorsHeaders("application/json") },
-    );
-  }
-
-  if (!isValidDecodedUrl(rawUrl)) {
-    return NextResponse.json(
-      { error: "Decoded URL is invalid or incomplete." },
-      { status: 400, headers: buildCorsHeaders("application/json") },
-    );
-  }
-
-  let upstreamUrl: URL;
-
-  try {
-    upstreamUrl = new URL(rawUrl);
-  } catch {
-    return NextResponse.json(
-      { error: "Invalid upstream URL." },
-      { status: 400, headers: buildCorsHeaders("application/json") },
-    );
-  }
-
-  if (!ALLOWED_PROTOCOLS.has(upstreamUrl.protocol)) {
-    return NextResponse.json(
-      { error: "Unsupported protocol." },
-      { status: 400, headers: buildCorsHeaders("application/json") },
-    );
-  }
-
-  const upstreamResponse = await fetchUpstream(request, upstreamUrl);
-  const contentType = upstreamResponse.headers.get("content-type");
-
-  if (!upstreamResponse.ok) {
-    const text = await upstreamResponse.text().catch(() => "");
-
-    return new NextResponse(text || "Upstream request failed.", {
-      status: upstreamResponse.status,
-      headers: copyUpstreamHeaders(upstreamResponse, contentType),
-    });
-  }
-
-  if (request.method === "HEAD") {
-    const responseHeaders = copyUpstreamHeaders(
-      upstreamResponse,
-      isLikelyPlaylist(contentType, upstreamUrl)
-        ? "application/vnd.apple.mpegurl; charset=utf-8"
-        : contentType,
-    );
-    responseHeaders.delete("Content-Disposition");
-    responseHeaders.delete("content-disposition");
-
-    return new NextResponse(null, {
-      status: upstreamResponse.status,
-      headers: responseHeaders,
-    });
-  }
-
-  if (isLikelyPlaylist(contentType, upstreamUrl)) {
-    const playlistText = await upstreamResponse.text();
-    const rewritten = rewritePlaylist(playlistText, upstreamUrl, parentPayload);
-
-    const responseHeaders = copyUpstreamHeaders(
-      upstreamResponse,
-      "application/vnd.apple.mpegurl; charset=utf-8",
-    );
-    responseHeaders.delete("Content-Disposition");
-    responseHeaders.delete("content-disposition");
+    const headers = copyHeaders(upstream.headers);
+    headers.set("content-type", "application/vnd.apple.mpegurl");
 
     return new NextResponse(rewritten, {
-      status: upstreamResponse.status,
-      headers: responseHeaders,
+      status: upstream.status,
+      headers,
     });
   }
 
-  const responseHeaders = copyUpstreamHeaders(upstreamResponse, contentType);
-  responseHeaders.delete("Content-Disposition");
-  responseHeaders.delete("content-disposition");
-
-  return new NextResponse(upstreamResponse.body, {
-    status: upstreamResponse.status,
-    headers: responseHeaders,
+  return new Response(upstream.body, {
+    status: upstream.status,
+    headers: copyHeaders(upstream.headers),
   });
-}
-
-export async function GET(request: NextRequest) {
-  const accessError = await requireDramawaveAccess(request);
-  if (accessError) return accessError;
-
-  return handleProxy(request);
-}
-
-export async function HEAD(request: NextRequest) {
-  const accessError = await requireDramawaveAccess(request);
-  if (accessError) return accessError;
-
-  return handleProxy(request);
 }
 
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 204,
-    headers: buildCorsHeaders(),
+    headers: {
+      "access-control-allow-origin": "*",
+      "access-control-allow-methods": "GET,HEAD,OPTIONS",
+      "access-control-allow-headers": "Content-Type, Range",
+    },
   });
+}
+
+export async function GET(req: NextRequest) {
+  const st = req.nextUrl.searchParams.get("s");
+
+  if (st) {
+    return proxy(req);
+  }
+
+  try {
+    const dramaId = req.nextUrl.searchParams.get("dramaId")?.trim() || "";
+
+    if (!dramaId) {
+      return NextResponse.json({ error: "Missing dramaId" }, { status: 400 });
+    }
+
+    const episodeNo =
+      req.nextUrl.searchParams.get("episode")?.trim() || "1";
+
+    const payload = await fetchJson(
+      `/api/v1/dramas/${encodeURIComponent(dramaId)}/play/${encodeURIComponent(episodeNo)}?lang=id-ID`
+    );
+
+    const episode = payload?.data || null;
+
+    if (!episode) {
+      return NextResponse.json({ error: "Episode not found" }, { status: 404 });
+    }
+
+    const streamUrl =
+      episode.external_audio_h265_m3u8 ||
+      episode.external_audio_h264_m3u8 ||
+      episode.m3u8_url ||
+      episode.video_url ||
+      "";
+
+    if (!streamUrl) {
+      return NextResponse.json({ error: "No stream found" }, { status: 404 });
+    }
+
+    const token = createStreamToken({
+      provider: "dramawave",
+      userId: "system",
+      episodeKey: dramaId,
+      url: streamUrl,
+    });
+
+    const host =
+      req.headers.get("x-forwarded-host") ||
+      req.headers.get("host") ||
+      "tg.dramalotus.site";
+
+    const proto =
+      req.headers.get("x-forwarded-proto") || "https";
+
+    return NextResponse.redirect(
+      `${proto}://${host}/api/dramawave/stream?s=${encodeURIComponent(token)}`,
+      302,
+    );
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : "Stream failed",
+      },
+      { status: 500 },
+    );
+  }
 }

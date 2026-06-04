@@ -1,78 +1,59 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth/getCurrentUser";
-import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
-import { isMiniappRequest } from "@/lib/auth/isMiniappRequest";
-import { respondStream } from "../_shared";
-import { checkStreamRateLimit } from "@/lib/rate-limit/stream";
+import { createStreamToken } from "@/lib/stream-token";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+function headers(token: string) {
+  return {
+    Authorization: `Bearer ${token}`,
+    "User-Agent": "Mozilla/5.0",
+    Referer: "https://captain.sapimu.au/",
+    Origin: "https://captain.sapimu.au",
+    Accept: "application/json, text/plain, */*",
+  };
+}
+
 export async function GET(request: NextRequest) {
-  const isMiniapp = isMiniappRequest(request);
-  const user = isMiniapp ? null : await getCurrentUser();
+  const base = process.env.REELSHORT_API_BASE!;
+  const token = process.env.REELSHORT_BEARER_TOKEN!;
 
-  if (!isMiniapp && !user) {
-    return NextResponse.json(
-      { ok: false, error: "Unauthorized" },
-      { status: 401 },
-    );
+  const id = request.nextUrl.searchParams.get("id")?.trim() || "";
+  const episodeId = request.nextUrl.searchParams.get("episodeId")?.trim() || "";
+
+  if (!id || !episodeId) {
+    return NextResponse.json({ ok: false }, { status: 400 });
   }
 
-  if (!isMiniapp) {
-    const rateLimitError = checkStreamRateLimit({
-      request,
-      provider: "reelshort",
-      userId: user!.id,
-    });
-    if (rateLimitError) return rateLimitError;
+  const res = await fetch(
+    `${base}/book/${encodeURIComponent(id)}/chapter/${encodeURIComponent(episodeId)}/video`,
+    {
+      headers: headers(token),
+      cache: "no-store",
+    },
+  );
+
+  const json = await res.json().catch(() => null);
+
+  const videos = json?.data?.videos || [];
+
+  const preferred =
+    videos.find((v: any) => v?.Encode === "H264" && Number(v?.Dpi) === 1080 && v?.PlayURL) ||
+    videos.find((v: any) => v?.Encode === "H264" && v?.PlayURL) ||
+    videos.find((v: any) => v?.PlayURL);
+
+  if (!preferred?.PlayURL) {
+    return NextResponse.json({ ok: false }, { status: 404 });
   }
 
-  const directUrl = request.nextUrl.searchParams.get("url")?.trim() ?? "";
-  const token = request.nextUrl.searchParams.get("token")?.trim() ?? "";
+  const st = createStreamToken({
+    u: preferred.PlayURL,
+    exp: Date.now() + 120000,
+    src: "reelshort",
+  });
 
-  if (!directUrl && !token) {
-    const episodeId =
-      request.nextUrl.searchParams.get("episodeId")?.trim() ?? "";
-
-    const episodeNumberParam =
-      request.nextUrl.searchParams.get("episodeNumber")?.trim() ||
-      request.nextUrl.searchParams.get("ep")?.trim() ||
-      "";
-
-    const episodeNumber = Number(episodeNumberParam || episodeId);
-
-    if (!Number.isInteger(episodeNumber) || episodeNumber < 1) {
-      return NextResponse.json(
-        { ok: false, error: "episodeNumber tidak valid." },
-        { status: 400 },
-      );
-    }
-
-    const isFreeEpisode = episodeNumber <= FREE_EPISODE_LIMIT;
-
-    if (!isMiniapp && !isFreeEpisode && user!.membership_status !== "vip") {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "VIP_REQUIRED",
-          message: "Episode ini hanya untuk VIP.",
-        },
-        { status: 403 },
-      );
-    }
-
-    if (!isMiniapp && user!.membership_status === "vip" && user!.vip_until) {
-      const expiresAt = new Date(user!.vip_until).getTime();
-
-      if (!Number.isNaN(expiresAt) && expiresAt <= Date.now()) {
-        return NextResponse.json(
-          { ok: false, error: "VIP_EXPIRED" },
-          { status: 403 },
-        );
-      }
-    }
-  }
-
-  return respondStream(request, isMiniapp ? "miniapp" : user!.id);
+  return NextResponse.json({
+    ok: true,
+    url: `/api/reelshort/play?st=${encodeURIComponent(st)}`,
+  });
 }

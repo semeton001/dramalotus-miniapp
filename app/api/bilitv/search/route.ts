@@ -17,9 +17,12 @@ export async function GET(request: NextRequest) {
     if (!query) return feedResponse([], 1, false);
 
     const payload = await fetchBiliTVJson("/search", { q: query });
-    const items = await enrichBiliTVSubtitleAvailability(
-      adaptBiliTVDramaList(extractBiliTVItemsDeep(payload)),
-    );
+
+    const normalized = Array.isArray(payload)
+      ? payload
+      : extractBiliTVItemsDeep(payload);
+
+    const items = adaptBiliTVDramaList(normalized);
 
     return feedResponse(items, 1, false);
   } catch (error) {

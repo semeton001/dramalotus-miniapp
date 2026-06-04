@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/getCurrentUser";
-import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
 import { createStreamToken, verifyStreamToken } from "@/lib/stream/token";
 import { checkStreamRateLimit } from "@/lib/rate-limit/stream";
 import { isMiniappRequest } from "@/lib/auth/isMiniappRequest";
@@ -213,13 +212,6 @@ export async function GET(request: NextRequest) {
   const isMiniapp = isMiniappRequest(request);
   const user = isMiniapp ? null : await getCurrentUser();
 
-  if (!isMiniapp && !user) {
-    return NextResponse.json(
-      { ok: false, error: "Unauthorized" },
-      { status: 401 },
-    );
-  }
-
   try {
     const passthroughUrl = request.nextUrl.searchParams.get("url") || "";
     const token = request.nextUrl.searchParams.get("token") || "";
@@ -321,30 +313,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const isFreeEpisode = episodeNumber <= FREE_EPISODE_LIMIT;
-
-    if (!isMiniapp && !isFreeEpisode && user!.membership_status !== "vip") {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "VIP_REQUIRED",
-          message: "Episode ini hanya untuk VIP.",
-        },
-        { status: 403 },
-      );
-    }
-
-    if (!isMiniapp && user!.membership_status === "vip" && user!.vip_until) {
-      const expiresAt = new Date(user!.vip_until).getTime();
-
-      if (!Number.isNaN(expiresAt) && expiresAt <= Date.now()) {
-        return NextResponse.json(
-          { ok: false, error: "VIP_EXPIRED" },
-          { status: 403 },
-        );
-      }
-    }
-
     const payload = await resolvePlayData(
       dramaId.trim(),
       episodeId.trim(),
@@ -361,7 +329,7 @@ export async function GET(request: NextRequest) {
 
     const streamToken = createStreamToken({
       provider: "freereels",
-      userId: isMiniapp ? "miniapp" : user!.id,
+      userId: isMiniapp ? "miniapp" : (user?.id || "public"),
       episodeKey: `${dramaId.trim()}:${episodeId.trim()}`,
       url: playableUrl,
     });

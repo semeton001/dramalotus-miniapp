@@ -36,7 +36,7 @@ export default function FavoritesBottomSheet({
         aria-modal="true"
       >
         <div className="flex justify-center pt-3">
-          <div className="h-1.5 w-14 rounded-full bg-white/20" />
+          <div className="h-1.5 w-20 rounded-full bg-white/20" />
         </div>
 
         <div className="flex items-center justify-between border-b border-white/8 px-4 py-4">
@@ -48,9 +48,9 @@ export default function FavoritesBottomSheet({
           </div>
         </div>
 
-        <div className="max-h-[65vh] overflow-y-auto px-4 py-4">
+        <div className="max-h-[80vh] overflow-y-auto px-4 py-4">
           {favoriteDramas.length === 0 ? (
-            <div className="flex min-h-[240px] items-center justify-center text-center text-[#8F887C]">
+            <div className="flex min-h-[120px] items-center justify-center text-center text-[#8F887C]">
               <div>
                 <p className="text-base font-medium text-[#DDD4C4]">
                   Belum ada favorit.
@@ -61,7 +61,7 @@ export default function FavoritesBottomSheet({
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-4 gap-4 md:grid-cols-6 lg:grid-cols-8">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
               {favoriteDramas.map((drama, index) => (
                 <div
                   key={drama.id}

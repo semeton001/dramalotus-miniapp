@@ -1,10 +1,18 @@
 import type { Drama } from "@/types/drama";
 import type { Episode } from "@/types/episode";
 
-const API_BASE = "https://streamapi.web.id/p/freereels/api/v1";
+const FREE_REELS_HEADERS = {
+  Accept: "application/json",
+  Origin: "https://captain.sapimu.au",
+  Referer: "https://captain.sapimu.au/",
+  "User-Agent":
+    "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+};
+
+const API_BASE = process.env.FREEREELS_API_BASE || "https://captain.sapimu.au/freereels/api/v1";
 const DEFAULT_LANG = "id-ID";
 const DEFAULT_TOKEN =
-  "KFKiMIbY3Np8kbimDo7lJDNSVslwF3Fn64cI0TOtqpOP373n58ca6BKzbDsLb7qB";
+  process.env.FREEREELS_API_TOKEN?.trim() || "";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -99,6 +107,12 @@ export function getFreeReelsLang(): string {
 }
 
 export function getFreeReelsCode(): string {
+  if (!DEFAULT_TOKEN) {
+    throw new Error(
+      "FREEREELS_API_TOKEN is not configured",
+    );
+  }
+
   return DEFAULT_TOKEN;
 }
 
@@ -117,7 +131,6 @@ export function buildApiUrl(
 ): string {
   const url = new URL(`${getFreeReelsApiBase()}${path}`);
   url.searchParams.set("lang", getFreeReelsLang());
-  url.searchParams.set("token", ensureFreeReelsCode());
 
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
@@ -133,7 +146,9 @@ export async function fetchFreeReelsJson<T = unknown>(url: string): Promise<T> {
   const response = await fetch(url, {
     cache: "no-store",
     headers: {
-      Accept: "application/json",
+      ...FREE_REELS_HEADERS,
+      Authorization:
+        `Bearer ${process.env.FREEREELS_API_TOKEN || ""}`,
     },
   });
 
@@ -332,7 +347,6 @@ export function toDrama(item: unknown, index = 0, badge = "FreeReels"): Drama {
     releaseYear: undefined,
     freereelsRawId: dramaId || undefined,
     freereelsDramaId: dramaId || undefined,
-    freereelsCode: getFreeReelsCode() || undefined,
   };
 }
 
@@ -384,13 +398,22 @@ export function toEpisode(
   item: unknown,
   numericDramaId: number,
   dramaId: string,
-  code?: string,
 ): Episode {
   const raw = isRecord(item) ? item : {};
 
   const episodeId = pickString(raw, "id", "episodeId", "episode_id");
   const epNumber =
-    pickNumber(raw, "episode", "episodeNumber", "ep", "sort", "seq") || 1;
+    pickNumber(
+      raw,
+      "episode",
+      "episodeNumber",
+      "ep",
+      "sort",
+      "seq",
+      "index",
+      "play_id",
+      "playId",
+    ) || 1;
   const title = pickString(raw, "name", "title") || `Episode ${epNumber}`;
   const subtitleEntry = resolveSubtitleEntry(
     Array.isArray(raw.subtitles) ? raw.subtitles : raw.subtitle_list,
@@ -428,15 +451,14 @@ export function toEpisode(
       pickString(raw, "cover", "coverImage", "cover_image") || undefined,
     videoUrl: streamResolver,
     originalVideoUrl: "",
-    isLocked: !Boolean(raw.free),
-    isVipOnly: !Boolean(raw.free),
+    isLocked: false,
+    isVipOnly: false,
     sortOrder: epNumber,
     subtitleUrl: subtitleProxy || undefined,
     subtitleLang: subtitleLanguage || "id-ID",
     subtitleLabel: subtitleLabel || "Indonesia",
     freereelsEpisodeId: episodeId || undefined,
     freereelsPlayId: String(epNumber),
-    freereelsCode: code || getFreeReelsCode() || undefined,
   };
 }
 
@@ -444,17 +466,22 @@ export function toEpisodes(
   data: unknown,
   numericDramaId: number,
   dramaId: string,
-  code?: string,
 ): Episode[] {
   const root = isRecord(data) ? data : {};
-  const rawEpisodes = Array.isArray(root.episodes)
-    ? root.episodes
-    : Array.isArray(root.data)
-      ? root.data
-      : extractList(data);
+  const rawEpisodes = Array.isArray(root.episode_list)
+    ? root.episode_list
+    : Array.isArray(root.episodes)
+      ? root.episodes
+      : Array.isArray(root.data)
+        ? root.data
+        : extractList(data);
+
+  if (rawEpisodes.length) {
+    console.warn("FREE_REELS RAW EPISODE", JSON.stringify(rawEpisodes[0], null, 2));
+  }
 
   return rawEpisodes
-    .map((item) => toEpisode(item, numericDramaId, dramaId, code))
+    .map((item) => toEpisode(item, numericDramaId, dramaId))
     .sort((a, b) => (a.episodeNumber || 0) - (b.episodeNumber || 0));
 }
 
@@ -482,14 +509,14 @@ export async function resolvePlayData(
 }
 
 export function resolvePlayableUrl(payload: JsonRecord): string {
-  const direct = pickString(payload, "video_url", "m3u8_url", "m3u8");
-  if (direct) return direct;
+  const externalH265 = pickString(payload, "external_audio_h265_m3u8");
+  if (externalH265) return externalH265;
 
   const externalH264 = pickString(payload, "external_audio_h264_m3u8");
   if (externalH264) return externalH264;
 
-  const externalH265 = pickString(payload, "external_audio_h265_m3u8");
-  if (externalH265) return externalH265;
+  const direct = pickString(payload, "video_url", "m3u8_url", "m3u8");
+  if (direct) return direct;
 
   const external = pickString(payload, "external_audio_url");
   if (external) return external;

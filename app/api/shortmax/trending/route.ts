@@ -7,7 +7,7 @@ import {
 
 export async function GET(_request: NextRequest) {
   try {
-    const payload = await fetchShortmaxJson(buildShortmaxFeedUrl("trending"));
+    const payload = await fetchShortmaxJson("https://captain.sapimu.au/shortmax/api/v1/feed/ranked?lang=id");
     const items = normalizeShortmaxFeed(payload, "trending", "7");
 
     return NextResponse.json(

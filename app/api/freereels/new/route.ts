@@ -5,15 +5,22 @@ export async function GET(request: NextRequest) {
   try {
     const page = Number(request.nextUrl.searchParams.get("page") || "1") || 1;
     const upstreamPage = Math.max(0, page - 1);
+
     const data = await fetchFreeReelsJson(
-      buildApiUrl("/new", { page: upstreamPage }),
+      buildApiUrl("/new", { page: upstreamPage })
     );
-    const items = toDramaList(data, "Baru");
+
+    const items = toDramaList(data, "FreeReels").map((item, index) => ({
+      ...item,
+      sortOrder: index,
+      badge: "FreeReels",
+    }));
+
     return NextResponse.json(jsonFeed(items, page, false));
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Gagal memuat daftar terbaru FreeReels." },
-      { status: 500 },
+      { error: error instanceof Error ? error.message : "Gagal." },
+      { status: 500 }
     );
   }
 }

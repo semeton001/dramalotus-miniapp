@@ -243,18 +243,7 @@ function canAccessEpisodeByMembership(
   episode: Episode | null | undefined,
   membershipStatus: "free" | "vip",
 ): boolean {
-  if (!episode) return false;
-  if (membershipStatus === "vip") return true;
-
-  const episodeNumber =
-    typeof episode.episodeNumber === "number" ? episode.episodeNumber : 0;
-
-  return (
-    episodeNumber > 0 &&
-    episodeNumber <= FREE_EPISODE_LIMIT &&
-    !Boolean(episode.isLocked) &&
-    !Boolean(episode.isVipOnly)
-  );
+  return Boolean(episode);
 }
 
 function isEpisodeLockedByMembership(
@@ -302,8 +291,26 @@ function DramawaveSubtitleOverlay({
           throw new Error(`Dramawave subtitle fetch failed: ${response.status}`);
         }
 
-        const text = await response.text();
+        let text = await response.text();
         if (cancelled) return;
+
+        try {
+          const json = JSON.parse(text);
+
+          if (json?.subtitleUrl) {
+            const subtitleResponse = await fetch(json.subtitleUrl, {
+              cache: "no-store",
+            });
+
+            if (!subtitleResponse.ok) {
+              throw new Error("Failed to fetch Dramawave SRT");
+            }
+
+            text = await subtitleResponse.text();
+          }
+        } catch {
+          // raw subtitle text
+        }
 
         const parsedCues = mergeFastSubtitleCues(parseSubtitleText(text), {
           maxGap: 0.18,
@@ -381,7 +388,7 @@ function DramawaveSubtitleOverlay({
 
   return (
     <div className="pointer-events-none absolute left-1/2 top-[72%] z-20 w-[82%] -translate-x-1/2 -translate-y-1/2 text-center">
-      <div className="mx-auto whitespace-pre-line break-words text-center text-[18px] font-bold leading-6 text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.95),0_0_4px_rgba(0,0,0,0.9)]">
+      <div className="mx-auto whitespace-pre-line break-words text-center text-[24px] font-bold leading-8 text-white [text-shadow:0_2px_6px_rgba(0,0,0,0.98),0_0_10px_rgba(0,0,0,0.9)]">
         {activeText}
       </div>
     </div>
@@ -423,7 +430,8 @@ function DramaBoxSubtitleOverlay({
         });
 
         if (!response.ok) {
-          throw new Error(`DramaBox subtitle fetch failed: ${response.status}`);
+          setCues([]);
+          return;
         }
 
         const text = await response.text();
@@ -544,15 +552,20 @@ export default function PlayerScreen({
   }, []);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const adContainerRef = useRef<HTMLDivElement | null>(null);
+  const imaContainerRef = useRef<HTMLDivElement | null>(null);
+  const warmAdsLoaderRef = useRef<any>(null);
+  const imaWarmedRef = useRef(false);
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const adsLoaderRef = useRef<any>(null);
+  const adsManagerRef = useRef<any>(null);
   const pendingAutoplayRef = useRef(false);
   const overlayHideTimerRef = useRef<number | null>(null);
   const freeReelsSubtitleRequestIdRef = useRef(0);
   const isSeekingRef = useRef(false);
 
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -561,10 +574,15 @@ export default function PlayerScreen({
     useState(false);
   const [shouldAutoplayNext, setShouldAutoplayNext] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isDesktopViewport, setIsDesktopViewport] = useState(false);
   const [showFullscreenControls, setShowFullscreenControls] = useState(true);
   const [hasPassedAdGate, setHasPassedAdGate] = useState(false);
-  const [adCountdown, setAdCountdown] = useState(5);
+  const [rewardedUnlockedEpisodeKey, setRewardedUnlockedEpisodeKey] = useState<string | null>(null);
+  const [manualEpisodePrerollPending, setManualEpisodePrerollPending] = useState(false);
+  const [adCountdown, setAdCountdown] = useState(10);
   const [canSkipAd, setCanSkipAd] = useState(false);
+  const [isPlayingVastAd, setIsPlayingVastAd] = useState(false);
+  const [hilltopAdUrl, setHilltopAdUrl] = useState("");
 
   const [resolvedReelifeUrl, setResolvedReelifeUrl] = useState("");
   const [isResolvingReelife, setIsResolvingReelife] = useState(false);
@@ -599,6 +617,20 @@ export default function PlayerScreen({
     SubtitleCue[]
   >([]);
   const [activeBilitvSubtitle, setActiveBilitvSubtitle] = useState("");
+
+  useEffect(() => {
+    const updateViewport = () => {
+      setIsDesktopViewport(window.innerWidth >= 768);
+    };
+
+    updateViewport();
+
+    window.addEventListener("resize", updateViewport);
+
+    return () => {
+      window.removeEventListener("resize", updateViewport);
+    };
+  }, []);
 
   const isNetshortDrama = useMemo(() => {
     return (
@@ -685,7 +717,7 @@ export default function PlayerScreen({
   const isVideoAd = adCampaign?.mediaType === "video";
 
   const AD_SKIP_DELAY_SECONDS = hasActiveAdCampaign
-    ? (adCampaign?.skipAfterSeconds ?? 5)
+    ? (adCampaign?.skipAfterSeconds ?? 10)
     : 5;
 
   const AD_TOTAL_DURATION_SECONDS = hasActiveAdCampaign
@@ -709,13 +741,19 @@ export default function PlayerScreen({
       ? rawSelectedEpisodeNumber
       : 1;
 
-  const selectedEpisodeLockedForMembership = useMemo(
-    () => isEpisodeLockedByMembership(selectedEpisode, membershipStatus),
-    [selectedEpisode, membershipStatus],
-  );
+  const selectedEpisodeLockedForMembership = useMemo(() => {
+    if (!selectedEpisode) return false;
 
-  const shouldGateThisEpisode =
-    !selectedEpisodeLockedForMembership && shouldPrepareAds && hasActiveAdCampaign;
+    const unlockedKey = buildEpisodeIdentity(selectedEpisode);
+
+    if (rewardedUnlockedEpisodeKey === unlockedKey) {
+      return false;
+    }
+
+    return isEpisodeLockedByMembership(selectedEpisode, membershipStatus);
+  }, [selectedEpisode, membershipStatus, rewardedUnlockedEpisodeKey]);
+
+  const shouldGateThisEpisode = shouldPrepareAds && hasActiveAdCampaign;
 
   const adProgressPercent =
     AD_SKIP_DELAY_SECONDS > 0
@@ -741,7 +779,7 @@ export default function PlayerScreen({
   );
 
   const videoSrc = useMemo(() => {
-    if (isReelifeDrama) {
+if (isReelifeDrama) {
       return resolvedReelifeUrl;
     }
 
@@ -750,7 +788,51 @@ export default function PlayerScreen({
     }
 
     if (isFreeReelsDrama) {
-      return resolvedFreeReelsUrl;
+      return resolvedFreeReelsUrl || rawVideoSrc;
+    }
+
+    if (isDramaboxDrama) {
+      const dramaBoxEpisode = selectedEpisode as any;
+
+      const bookId =
+        dramaBoxEpisode?.bookId ||
+        dramaBoxEpisode?.dramaboxBookId ||
+        (selectedDrama as any)?.dramaboxBookId ||
+        (selectedDrama as any)?.dramaboxRawId;
+
+      const episodeNo =
+        dramaBoxEpisode?.episodeNo ||
+        dramaBoxEpisode?.episodeNumber;
+
+      if (bookId && episodeNo) {
+        return `/api/dramabox/stream?bookId=${bookId}&episode=${episodeNo}`;
+      }
+
+      return rawVideoSrc;
+    }
+
+    if (selectedDrama?.sourceName === "Dramawave") {
+      if (!selectedEpisode) {
+        return "";
+      }
+
+      const dramawaveEpisode = selectedEpisode as any;
+      const dramaId =
+        dramawaveEpisode?.dramaId ||
+        selectedDrama?.dramawaveDramaId ||
+        selectedDrama?.dramawaveRawId;
+
+      const ep =
+        dramawaveEpisode?.episodeNo ||
+        dramawaveEpisode?.episode ||
+        dramawaveEpisode?.sortOrder ||
+        1;
+
+      if (!dramaId) {
+        return "";
+      }
+
+      return `/api/dramawave/stream?dramaId=${encodeURIComponent(dramaId)}&episode=${encodeURIComponent(String(ep))}`;
     }
 
     return rawVideoSrc;
@@ -758,6 +840,9 @@ export default function PlayerScreen({
     isReelifeDrama,
     isReelShortDrama,
     isFreeReelsDrama,
+    isDramaboxDrama,
+    selectedDrama,
+    selectedEpisode,
     rawVideoSrc,
     resolvedReelifeUrl,
     resolvedReelShortUrl,
@@ -804,7 +889,8 @@ export default function PlayerScreen({
     if (videoSrc) {
       setIsPreparingVideoPlayback(true);
     } else {
-      setIsPreparingVideoPlayback(false);
+      
+                        setIsPreparingVideoPlayback(false);
     }
   }, [videoSrc, selectedEpisodeIdentity]);
 
@@ -865,10 +951,7 @@ export default function PlayerScreen({
     if (!video || !videoSrc) return false;
 
     try {
-      video.muted = false;
-      video.defaultMuted = false;
       await video.play();
-      setIsMuted(false);
       setIsPlaying(true);
       setVideoError(null);
       return true;
@@ -919,79 +1002,57 @@ export default function PlayerScreen({
     scheduleOverlayHide();
   };
 
-  const goToEpisode = (episode: Episode, autoplay = false) => {
-    pendingAutoplayRef.current = autoplay;
-    setShouldAutoplayNext(autoplay);
-    setVideoError(null);
+  const uiEpisodeLabel = selectedEpisode
+    ? `EP ${selectedEpisodeNumber}`
+    : "NO EP";
 
-    revealFullscreenControls();
-    onSelectEpisode(episode);
-  };
+  const uiDramaTitle =
+    selectedDrama.title?.trim() || "DramaLotus";
 
-  useEffect(() => {
-    let cancelled = false;
+  const uiEpisodeTitle =
+    selectedEpisode?.title?.trim() || "Episode";
 
-    async function resolveReelifeStream() {
-      if (!isReelifeDrama) {
-        setResolvedReelifeUrl("");
-        setIsResolvingReelife(false);
-        return;
-      }
+  const uiVipBadge = isVip ? "VIP" : "FREE";
 
-      if (!rawVideoSrc) {
-        setResolvedReelifeUrl("");
-        setIsResolvingReelife(false);
-        return;
-      }
+  const iconButtonClass =
+    "flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/45 text-white backdrop-blur transition hover:scale-105";
+
+  const sideActionClass =
+    "flex flex-col items-center gap-1 rounded-2xl border border-white/10 bg-black/45 px-3 py-3 text-white backdrop-blur transition hover:scale-105";
 
 
-      setIsResolvingReelife(true);
-      setResolvedReelifeUrl("");
+  const goToEpisode = async (episode: Episode, autoplay = false) => {
+    const continueNavigation = () => {
+      pendingAutoplayRef.current = autoplay;
+      setShouldAutoplayNext(autoplay);
       setVideoError(null);
 
-      try {
-        const response = await fetch(rawVideoSrc, {
-          cache: "no-store",
-        });
+      revealFullscreenControls();
+      onSelectEpisode(episode);
+    };
 
-        const contentType = response.headers.get("content-type") || "";
+    const targetEpisodeNumber = Number(episode?.episodeNumber || 0);
 
-        if (contentType.includes("video/")) {
-          if (cancelled) return;
-          setResolvedReelifeUrl(rawVideoSrc);
-          return;
-        }
-
-        const json = await response.json();
-
-        if (cancelled) return;
-
-        if (!response.ok || !json?.url) {
-          throw new Error(json?.error || "Gagal resolve stream Reelife");
-        }
-
-        setResolvedReelifeUrl(json.url);
-      } catch (error) {
-        if (cancelled) return;
-
-        setResolvedReelifeUrl("");
-        setVideoError(
-          error instanceof Error
-            ? error.message
-            : "Gagal resolve stream Reelife",
-        );
-      } finally {
-        if (!cancelled) {
-          setIsResolvingReelife(false);
-        }
-      }
+    if (
+      !isVip &&
+      shouldShowAds &&
+      targetEpisodeNumber > 0 &&
+      targetEpisodeNumber % 2 === 0
+    ) {
+      await showEpisodeGateAd();
     }
 
-    void resolveReelifeStream();
+    continueNavigation();
+  };
+  useEffect(() => {
+    if (!isReelifeDrama) {
+      setResolvedReelifeUrl("");
+      setIsResolvingReelife(false);
+      return;
+    }
 
-    return () => {
-      cancelled = true;
-    };
+    setResolvedReelifeUrl(rawVideoSrc);
+    setIsResolvingReelife(false);
   }, [isReelifeDrama, rawVideoSrc]);
 
   useEffect(() => {
@@ -1035,7 +1096,7 @@ export default function PlayerScreen({
 
       try {
         const response = await fetch(
-          `/api/reelshort/stream?id=${encodeURIComponent(reelShortId)}&episodeId=${encodeURIComponent(episodeId)}&episodeNumber=${encodeURIComponent(String(episodeNumber))}`,
+          `/api/reelshort/stream?id=${encodeURIComponent(reelShortId)}&episodeId=${encodeURIComponent(episodeId)}`,
           { cache: "no-store" },
         );
 
@@ -1044,7 +1105,7 @@ export default function PlayerScreen({
         if (cancelled) return;
 
         if (!response.ok || !json?.url) {
-          throw new Error(json?.error || "Gagal resolve stream ReelShort");
+          throw new Error("Video episode belum tersedia");
         }
 
         setResolvedReelShortUrl(json.url);
@@ -1077,6 +1138,7 @@ export default function PlayerScreen({
     selectedEpisode?.reelShortEpisodeId,
     selectedEpisode?.reelShortVideoId,
   ]);
+
 
   useEffect(() => {
     let cancelled = false;
@@ -1303,18 +1365,17 @@ export default function PlayerScreen({
       videoRef.current.defaultMuted = false;
     }
 
-    setIsMuted(false);
   }, [
     usesSourceSpecificEpisodeIdentity,
     selectedEpisode?.id,
     selectedEpisode?.episodeNumber,
     selectedEpisodeIdentity,
-    AD_SKIP_DELAY_SECONDS,
   ]);
 
+
   useEffect(() => {
-    if (hasPassedAdGate) return;
     if (!shouldGateThisEpisode) return;
+    if (hasPassedAdGate) return;
     if (canSkipAd) return;
 
     const timer = window.setInterval(() => {
@@ -1324,7 +1385,6 @@ export default function PlayerScreen({
           setCanSkipAd(true);
           return 0;
         }
-
         return current - 1;
       });
     }, 1000);
@@ -1332,7 +1392,8 @@ export default function PlayerScreen({
     return () => {
       window.clearInterval(timer);
     };
-  }, [hasPassedAdGate, shouldGateThisEpisode, canSkipAd]);
+  }, [shouldGateThisEpisode, hasPassedAdGate, canSkipAd]);
+
 
   useEffect(() => {
     if (hasPassedAdGate) return;
@@ -1372,23 +1433,34 @@ export default function PlayerScreen({
       videoSrc.includes("application/vnd.apple.mpegurl") ||
       videoSrc.includes("/api/dramawave/stream") ||
       videoSrc.includes("/api/freereels/stream") ||
-      videoSrc.includes("/api/reelshort/stream");
+      videoSrc.includes("/api/reelshort/stream") ||
+      videoSrc.includes("/api/goodshort/stream");
 
     if (!isHlsStream) {
       video.src = videoSrc;
       video.load();
+
+      const shouldAutoPlayMp4 =
+        videoSrc.includes("/api/flextv/stream");
+
+      if (shouldAutoPlayMp4) {
+        queueMicrotask(() => {
+          tryAutoplay().catch(console.error);
+        });
+      }
+
       return;
     }
 
-    video.pause();
+    video?.pause();
     video.removeAttribute("src");
     video.load();
 
-    const canUseNativeHls = !!video.canPlayType(
-      "application/vnd.apple.mpegurl",
-    );
+    const canUseNativeHls =
+      selectedDrama?.sourceName !== "Dramawave" &&
+      !!video.canPlayType("application/vnd.apple.mpegurl");
 
-    if (canUseNativeHls && !isReelShortDrama) {
+    if (canUseNativeHls) {
       video.src = videoSrc;
       video.load();
       return;
@@ -1405,27 +1477,31 @@ export default function PlayerScreen({
       return;
     }
 
+    const isIdrama = selectedDrama?.sourceName === "iDrama";
+
     const hls = new Hls({
-      enableWorker: true,
-      lowLatencyMode: false,
-      backBufferLength: 90,
-      maxBufferLength: 60,
-      maxMaxBufferLength: 120,
-      startFragPrefetch: true,
+      enableWorker: false,
+      lowLatencyMode: isIdrama,
+      backBufferLength: isIdrama ? 20 : 90,
+      maxBufferLength: isIdrama ? 15 : 60,
+      maxMaxBufferLength: isIdrama ? 30 : 120,
+      startFragPrefetch: !isIdrama,
+      xhrSetup: (xhr) => {
+        xhr.withCredentials = false;
+
+        if (selectedDrama?.sourceName === "iDrama") {
+          xhr.setRequestHeader("Referer", "https://www.idrama.video/");
+          xhr.setRequestHeader("Origin", "https://www.idrama.video");
+        }
+      },
     });
 
     hlsRef.current = hls;
 
     const handleManifestParsed = async () => {
-      const preferredLevelIndex = hls.levels.findIndex((level) => {
-        return level.height === 720;
-      });
-
-      if (preferredLevelIndex >= 0) {
-        hls.currentLevel = preferredLevelIndex;
-        hls.loadLevel = preferredLevelIndex;
-        hls.nextLevel = preferredLevelIndex;
-      }
+      hls.currentLevel = -1;
+      hls.loadLevel = -1;
+      hls.nextLevel = -1;
 
       if (shouldAutoplayNext && videoSrc) {
         await tryAutoplay();
@@ -1485,7 +1561,7 @@ export default function PlayerScreen({
       hls.destroy();
       hlsRef.current = null;
     };
-  }, [videoSrc, shouldAutoplayNext, isReelShortDrama, hasPassedAdGate]);
+  }, [videoSrc, shouldAutoplayNext, isReelShortDrama, hasPassedAdGate, selectedDrama]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -1493,7 +1569,7 @@ export default function PlayerScreen({
     if (!video) return;
 
     if (!hasPassedAdGate && shouldGateThisEpisode) {
-      video.pause();
+      video?.pause();
       setIsPlaying(false);
     }
   }, [hasPassedAdGate, shouldGateThisEpisode]);
@@ -1862,9 +1938,18 @@ export default function PlayerScreen({
       videoSrc.includes("application/vnd.apple.mpegurl") ||
       videoSrc.includes("/api/dramawave/stream") ||
       videoSrc.includes("/api/freereels/stream") ||
-      videoSrc.includes("/api/reelshort/stream");
+      videoSrc.includes("/api/reelshort/stream") ||
+      videoSrc.includes("/api/goodshort/stream");
 
-    if (!isHlsStream && pendingAutoplayRef.current && videoSrc) {
+    const shouldForceAutoplay =
+      videoSrc.includes("/api/flextv/stream");
+
+    if (
+      !isHlsStream &&
+      videoSrc &&
+      !isDramaboxDrama &&
+      (pendingAutoplayRef.current || shouldForceAutoplay)
+    ) {
       await tryAutoplay();
     }
   };
@@ -1899,7 +1984,7 @@ export default function PlayerScreen({
         await video.play();
         setIsPlaying(true);
       } else {
-        video.pause();
+        video?.pause();
         setIsPlaying(false);
       }
     } catch (error) {
@@ -1915,22 +2000,18 @@ export default function PlayerScreen({
     }
   };
 
-  const handleToggleMute = () => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    revealFullscreenControls();
-
-    const nextMuted = !video.muted;
-    video.muted = nextMuted;
-    video.defaultMuted = nextMuted;
-    setIsMuted(nextMuted);
-  };
-
   const handleToggleFullscreen = async () => {
     setShowFullscreenControls(true);
     setIsFullscreen((current) => !current);
     scheduleOverlayHide();
+  };
+
+  const formatPlayerTime = (seconds: number) => {
+    if (!Number.isFinite(seconds) || seconds <= 0) return "00:00";
+    const total = Math.floor(seconds);
+    const mins = Math.floor(total / 60);
+    const secs = total % 60;
+    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
   };
 
   const seekBy = (seconds: number) => {
@@ -1979,47 +2060,241 @@ export default function PlayerScreen({
     onClickAdCta?.();
 
     if (adCampaign?.ctaUrl) {
-      window.open(adCampaign.ctaUrl, "_blank", "noopener,noreferrer");
+      console.log("CTA disabled for Hilltop preroll");
     }
   };
 
-  const renderAdMedia = () => {
-    if (hasActiveAdCampaign && isImageAd && adMediaUrl) {
-      return (
-        <img
-          src={adMediaUrl}
-          alt={adHeadline}
-          className="mt-3 h-[190px] w-full rounded-[16px] object-cover"
-        />
-      );
+
+
+  const EXOCLICK_VAST_TAG =
+    "https://s.magsrv.com/v1/vast.php?idzone=5928194";
+
+  const ADCASH_VAST_TAG =
+    "https://youradexchange.com/video/select.php?r=11324182";
+
+
+  const VAST_WATERFALL = [
+    EXOCLICK_VAST_TAG,
+    ADCASH_VAST_TAG,
+  ];
+
+  const playImaPreroll = async (): Promise<boolean> => {
+    const video = videoRef.current;
+    const adContainer = imaContainerRef.current;
+    const google = window.google;
+
+    if (!video || !adContainer || !google?.ima) {
+      console.warn("IMA not ready");
+      return false;
     }
 
-    if (hasActiveAdCampaign && isVideoAd) {
-      if (adMediaUrl) {
-        return (
-          <video
-            src={adMediaUrl}
-            poster={adCampaign?.posterUrl}
-            className="mt-3 h-[190px] w-full rounded-[16px] bg-black object-cover"
-            playsInline
-            muted
-            autoPlay
-            preload="auto"
-            controls={false}
-            onError={() => console.error("Video ad gagal dimuat:", adMediaUrl)}
-            onEnded={() => {
-              onCompleteAd?.();
-              setHasPassedAdGate(true);
-              pendingAutoplayRef.current = true;
-              setShouldAutoplayNext(true);
-            }}
-          />
-        );
-      }
+    return new Promise<boolean>((resolve) => {
+      let settled = false;
 
+      const finish = (result: boolean) => {
+        if (settled) return;
+        settled = true;
+        setIsPlayingVastAd(false);
+        setHasPassedAdGate(true);
+        resolve(result);
+      };
+
+      let watchdog = 0;
+
+      try {
+        setIsPlaying(false);
+        setHasPassedAdGate(false);
+        setIsPlayingVastAd(true);
+
+        const adDisplayContainer =
+          new google.ima.AdDisplayContainer(adContainer, video);
+
+        adDisplayContainer.initialize();
+
+        const adsLoader = new google.ima.AdsLoader(adDisplayContainer);
+        adsLoaderRef.current = adsLoader;
+
+        adsLoader.addEventListener(
+          google.ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED,
+          (event: any) => {
+            try {
+              const adsManager = event.getAdsManager(video);
+              adsManagerRef.current = adsManager;
+
+              adsManager.addEventListener(
+                google.ima.AdErrorEvent.Type.AD_ERROR,
+                () => {
+                  console.warn("IMA adsManager AD_ERROR");
+                  clearTimeout(watchdog);
+                  finish(false);
+                }
+              );
+
+              adsManager.addEventListener(
+                google.ima.AdEvent.Type.CONTENT_RESUME_REQUESTED,
+                () => {
+                  console.log("IMA CONTENT_RESUME_REQUESTED");
+                  clearTimeout(watchdog);
+                  finish(true);
+                }
+              );
+
+              adsManager.init(
+                video.offsetWidth || 360,
+                video.offsetHeight || 640,
+                google.ima.ViewMode.NORMAL
+              );
+
+              console.log("IMA adsManager.start()");
+              adsManager.start();
+            } catch (e) {
+              console.error("IMA start failed", e);
+              clearTimeout(watchdog);
+              finish(false);
+            }
+          }
+        );
+
+
+
+        const tryTag = (index: number) => {
+          if (index >= VAST_WATERFALL.length) {
+            console.warn("IMA all VAST sources exhausted");
+            clearTimeout(watchdog);
+            finish(false);
+            return;
+          }
+
+          const tag = VAST_WATERFALL[index];
+
+          clearTimeout(watchdog);
+
+          watchdog = window.setTimeout(() => {
+            currentVastIndex += 1;
+            console.warn("IMA watchdog timeout, next VAST", currentVastIndex);
+            tryTag(currentVastIndex);
+          }, 2500);
+
+          console.log("IMA trying VAST:", tag);
+
+          const adsRequest = new google.ima.AdsRequest();
+          adsRequest.adTagUrl = tag;
+          adsRequest.linearAdSlotWidth = video.offsetWidth || 360;
+          adsRequest.linearAdSlotHeight = video.offsetHeight || 640;
+          adsRequest.nonLinearAdSlotWidth = video.offsetWidth || 360;
+          adsRequest.nonLinearAdSlotHeight = 150;
+
+          adsLoader.requestAds(adsRequest);
+        };
+
+        let currentVastIndex = 0;
+
+
+        adsLoader.addEventListener(
+          google.ima.AdErrorEvent.Type.AD_ERROR,
+          () => {
+            currentVastIndex += 1;
+            console.warn("IMA loader AD_ERROR, next VAST", currentVastIndex);
+            tryTag(currentVastIndex);
+          }
+        );
+
+        tryTag(0);
+      } catch (e) {
+        console.error("IMA setup failed", e);
+        clearTimeout(watchdog);
+        finish(false);
+      }
+    });
+  };
+
+
+  const showEpisodeGateAd = async (): Promise<void> => {
+    return new Promise((resolve) => {
+      const overlay = document.createElement("div");
+      overlay.style.position = "fixed";
+      overlay.style.inset = "0";
+      overlay.style.background = "#000";
+      overlay.style.zIndex = "999999";
+
+      const iframe = document.createElement("iframe");
+      iframe.src = "/episode-ad";
+      iframe.style.position = "absolute";
+      iframe.style.inset = "0";
+      iframe.style.width = "100%";
+      iframe.style.height = "100%";
+      iframe.style.border = "none";
+
+      const closeButton = document.createElement("button");
+      closeButton.disabled = true;
+      closeButton.textContent = "Tutup (5)";
+      closeButton.style.position = "fixed";
+      closeButton.style.top = "16px";
+      closeButton.style.right = "16px";
+      closeButton.style.zIndex = "1000000";
+      closeButton.style.padding = "12px 16px";
+      closeButton.style.border = "none";
+      closeButton.style.borderRadius = "10px";
+      closeButton.style.background = "rgba(0,0,0,0.85)";
+      closeButton.style.color = "#fff";
+      closeButton.style.fontWeight = "800";
+
+      let seconds = 5;
+
+      const interval = window.setInterval(() => {
+        seconds -= 1;
+
+        if (seconds > 0) {
+          closeButton.textContent = `Tutup (${seconds})`;
+          return;
+        }
+
+        window.clearInterval(interval);
+        closeButton.disabled = false;
+        closeButton.textContent = "Tutup";
+      }, 1000);
+
+      const messageHandler = (event: MessageEvent) => {
+        if (event?.data?.type !== "OPEN_VIP") {
+          return;
+        }
+
+        const tg = (window as any).Telegram?.WebApp;
+
+        if (tg?.openTelegramLink) {
+          tg.openTelegramLink("https://t.me/Dramalotusviewer_bot?start=vip");
+        } else {
+          window.open("https://t.me/Dramalotusviewer_bot?start=vip", "_blank");
+        }
+      };
+
+      window.addEventListener("message", messageHandler);
+
+      const cleanup = () => {
+        window.clearInterval(interval);
+        window.removeEventListener("message", messageHandler);
+
+        if (overlay.parentNode) {
+          overlay.parentNode.removeChild(overlay);
+        }
+
+        resolve();
+      };
+
+      closeButton.onclick = cleanup;
+
+      overlay.appendChild(iframe);
+      overlay.appendChild(closeButton);
+
+      document.body.appendChild(overlay);
+    });
+  };
+
+  const renderAdMedia = () => {
+    if (hasActiveAdCampaign && isVideoAd) {
       return (
         <div className="mt-3 flex h-[190px] w-full items-center justify-center rounded-[16px] border border-white/10 bg-black/30 text-sm text-[#B8AA8A]">
-          Video ad belum tersedia
+          Hilltop preroll sedang diputar...
         </div>
       );
     }
@@ -2040,7 +2315,7 @@ export default function PlayerScreen({
       <main className="min-h-screen bg-black text-white">
         <div className="mx-auto flex min-h-screen w-full max-w-md items-center justify-center px-6">
           <div className="w-full rounded-[28px] border border-white/10 bg-[#12131A] px-6 py-6 text-center">
-            <p className="text-base font-semibold text-white">
+            <p className="text-sm font-medium text-white">
               {selectedDrama.title}
             </p>
             <p className="mt-2 text-sm leading-6 text-[#8F887C]">
@@ -2063,7 +2338,7 @@ export default function PlayerScreen({
       <main className="min-h-screen bg-black text-white">
         <div className="mx-auto flex min-h-screen w-full max-w-md items-center justify-center px-6">
           <div className="w-full rounded-[28px] border border-white/10 bg-[#12131A] px-6 py-6 text-center">
-            <p className="text-base font-semibold text-white">
+            <p className="text-sm font-medium text-white">
               {selectedDrama.title}
             </p>
             <p className="mt-2 text-sm leading-6 text-[#8F887C]">
@@ -2083,118 +2358,40 @@ export default function PlayerScreen({
 
   return (
     <main
-      className={`min-h-screen bg-black text-white ${isFullscreen ? "fixed inset-0 z-[120] overflow-hidden" : ""}`}
+      className={`bg-black text-white ${isFullscreen ? "fixed inset-0 z-[120] overflow-hidden" : ""}`}
     >
-      {!hasPassedAdGate ? (
+      {!hasPassedAdGate || isPlayingVastAd ? (
         <div className="fixed inset-0 z-[140] bg-transparent" />
       ) : null}
       <div
-        className={`mx-auto min-h-screen w-full ${isFullscreen ? "max-w-none px-0 pb-0 pt-0" : "max-w-md px-4 pb-32 pt-3"}`}
+        className={`mx-auto w-full ${isFullscreen ? "max-w-none px-0 pb-0 pt-0" : "max-w-full px-0 pb-0 pt-0"}`}
       >
         <div
-          className={`mb-3 ${isFullscreen ? "hidden" : ""}`}
-        >
-          <button
-            onClick={onBack}
-            className="rounded-[18px] border border-white/10 bg-[#14151C]/90 px-4 py-2.5 text-sm font-medium text-[#E6D3A3] shadow-[0_6px_18px_rgba(0,0,0,0.22)] backdrop-blur"
-          >
-            ← Kembali
-          </button>
-        </div>
-
-        <div
-          className={`${isFullscreen ? "h-screen w-screen rounded-none border-0 bg-black shadow-none" : "rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,#171822_0%,#101117_100%)] shadow-[0_24px_60px_rgba(0,0,0,0.32)]"}`}
+          className={`${isFullscreen ? "h-screen w-screen rounded-none border-0 bg-black shadow-none" : "overflow-hidden bg-black"}`}
         >
           <div
-            className={`${isFullscreen ? "flex h-full w-full flex-col p-0" : "p-4"}`}
+            className={`${isFullscreen ? "flex h-full w-full flex-col p-0" : "p-0"}`}
           >
             <div
-              className={`${isFullscreen ? "hidden" : "flex items-start justify-between gap-3"}`}
-            >
-              <div className="min-w-0">
-                <div className="flex items-center">
-                  <p className="text-xs uppercase tracking-[0.16em] text-[#B8AA8A]">
-                    Sedang memutar
-                  </p>
-
-                  <div className="ml-auto inline-flex rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-0.5 text-[10px] font-semibold text-[#E6D3A3]">
-                    {isVip ? "VIP · Tanpa iklan" : "FREE · Dengan Iklan"}
-                  </div>
-                </div>
-
-                <h1 className="mt-2 line-clamp-2 text-[22px] font-bold leading-7 text-white">
-                  {selectedDrama.title}
-                </h1>
-                <p className="mt-1 line-clamp-1 text-sm text-[#8F887C]">
-                  {selectedEpisode
-                    ? selectedEpisode.title
-                    : "Episode belum dipilih"}
-                </p>
-              </div>
-            </div>
-
-            <div
               ref={playerContainerRef}
-              className={`${isFullscreen ? "relative flex flex-1 items-center justify-center overflow-hidden bg-black" : "mt-4 overflow-hidden rounded-[22px] border border-white/10 bg-black"}`}
+              className={`${isFullscreen ? "relative flex flex-1 items-center justify-center overflow-hidden bg-black" : isDesktopViewport ? "flex min-h-[100vh] items-end justify-center overflow-hidden bg-black" : "overflow-hidden bg-black"}`}
             >
               <div
-                className={`${isFullscreen ? "relative h-screen max-h-screen aspect-[9/16] bg-black" : "relative aspect-[9/16] w-full bg-black"}`}
+                className={`${
+                  isFullscreen
+                    ? "relative h-screen max-h-screen aspect-[9/16] bg-black"
+                    : isDesktopViewport
+                      ? "relative aspect-[9/16] max-w-[420px] mx-auto bg-black"
+                      : "relative h-[100dvh] w-full bg-black"
+                }`}
                 onClick={revealFullscreenControls}
               >
-                {!hasPassedAdGate ? (
-                  <div className="absolute inset-0 z-[150] bg-black/80 p-4">
-                    <div className="flex h-full w-full flex-col rounded-[22px] border border-white/10 bg-[#12131A]/95 px-5 py-5 text-center shadow-[0_20px_50px_rgba(0,0,0,0.35)] backdrop-blur">
-                      <div>
-                        <p className="text-base font-semibold text-white">
-                          Iklan sedang diputar
-                        </p>
-                        <p className="mt-2 text-xs text-[#B8AA8A]">
-                          Episode {selectedEpisodeNumber}
-                        </p>
-                      </div>
-
-                      <div className="mt-6 text-center">
-                        <p className="mx-auto max-w-[260px] text-sm leading-7 text-[#8F887C]">
-                          Member Free hanya bisa menonton episode 1-10.
-                          Episode 11 ke atas khusus VIP, dan beberapa episode
-                          yang terbuka dapat menampilkan iklan singkat.
-                        </p>
-                      </div>
-
-                      <div className="mt-6 flex flex-1 items-start">
-                        <div className="h-[320px] w-full overflow-hidden rounded-[20px] border border-white/10 bg-white/[0.03]">
-                          <div className="flex h-full flex-col p-4 text-left">
-                            <p className="text-sm font-semibold text-white">
-                              {adHeadline}
-                            </p>
-
-                            {adBody ? (
-                              <p className="mt-2 text-xs leading-5 text-[#B8AA8A]">
-                                {adBody}
-                              </p>
-                            ) : null}
-
-                            {renderAdMedia()}
-                            {adCampaign?.ctaUrl ? (
-                              <button
-                                onClick={handleClickAdCta}
-                                className="mt-3 w-full rounded-[16px] border border-white/10 bg-white/10 px-4 py-3 text-sm font-semibold text-white"
-                              >
-                                {adCampaign?.ctaLabel || "Lihat Promo"}
-                              </button>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div>
-                        <p className="text-xs text-[#B8AA8A]">
-                          {canSkipAd
-                            ? "Anda dapat melewati iklan sekarang."
-                            : `Lewati iklan dalam ${Math.max(0, adCountdown)} detik`}
-                        </p>
-
-                        <div className="mt-3 h-1.5 w-full rounded-full bg-white/10">
+                {(!hasPassedAdGate || isPlayingVastAd) ? (
+                  <div className="pointer-events-none absolute inset-0 z-[150] bg-black/45">
+                    {false ? (
+                    <div className="pointer-events-auto absolute bottom-8 left-4 right-4">
+                      <div className="rounded-2xl bg-black/60 p-3 backdrop-blur">
+                        <div className="mb-2 h-1.5 w-full rounded-full bg-white/10">
                           <div
                             className="h-full rounded-full bg-[linear-gradient(90deg,#B76E79,#C9A45C,#E6D3A3)] transition-all"
                             style={{
@@ -2203,85 +2400,160 @@ export default function PlayerScreen({
                           />
                         </div>
 
-                        {canSkipAd ? (
-                          <button
-                            onClick={() => {
-                              onSkipAd?.();
-                              setHasPassedAdGate(true);
-                            }}
-                            className="mt-5 w-full rounded-[18px] bg-[#E6D3A3] px-4 py-3 text-sm font-semibold text-black"
-                          >
-                            Lewati Iklan
-                          </button>
-                        ) : null}
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-white/75">
+                            {canSkipAd
+                              ? "Iklan dapat dilewati"
+                              : `Skip dalam ${Math.max(0, adCountdown)} detik`}
+                          </p>
+
+                          {canSkipAd ? (
+                            <button
+                              onClick={() => {
+                                onSkipAd?.();
+                                if (adContainerRef.current) {
+                                  adContainerRef.current.innerHTML = "";
+                                }
+                                setIsPlayingVastAd(false);
+                                setHasPassedAdGate(true);
+                              }}
+                              className="rounded-xl bg-white px-4 py-2 text-xs font-semibold text-black"
+                            >
+                              Skip Ad
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
+                    ) : null}
                   </div>
                 ) : null}
                 {!hasPassedAdGate ? null : selectedEpisodeLockedForMembership ? (
                   <div className="flex h-full items-center justify-center px-6 text-center">
-                    <div className="w-full max-w-[320px] rounded-[22px] border border-[#C9A45C]/20 bg-[#12131A]/95 px-5 py-6 shadow-[0_20px_50px_rgba(0,0,0,0.35)] backdrop-blur">
-                      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#C9A45C]/12 text-2xl text-[#E6D3A3]">
-                        🔒
-                      </div>
-                      <p className="mt-4 text-base font-semibold text-white">
-                        Episode VIP Only
-                      </p>
-                      <p className="mt-2 text-sm leading-7 text-[#8F887C]">
-                        Member Free hanya bisa menonton episode 1-{FREE_EPISODE_LIMIT}.
-                        Upgrade ke VIP untuk membuka episode ini dan semua episode berikutnya.
-                      </p>
-                      <div className="mt-5 flex flex-col gap-2">
-                        <span className="rounded-[16px] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-[#E6D3A3]">
-                          Episode {selectedEpisodeNumber}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={onBack}
-                          className="rounded-[16px] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white"
-                        >
-                          Kembali ke daftar drama
-                        </button>
+                    <div className="w-full max-w-[360px] overflow-hidden rounded-[30px] border border-[#E6D3A3]/15 bg-black/90 shadow-[0_35px_90px_rgba(0,0,0,0.8)] backdrop-blur-xl">
+                      <div className="h-28 bg-gradient-to-b from-[#C9A45C]/25 via-[#B76E79]/10 to-transparent" />
+
+                      <div className="-mt-10 px-6 pb-7">
+                        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-[#E6D3A3]/20 bg-black text-3xl text-[#E6D3A3] shadow-[0_0_40px_rgba(201,164,92,0.18)]">
+                          🔒
+                        </div>
+
+                        <p className="mt-5 text-lg font-semibold tracking-wide text-white">
+                          VIP EPISODE
+                        </p>
+
+                        <p className="mt-3 text-sm leading-7 text-[#B8AA8A]">
+                          Member Free hanya bisa menonton episode 1-{FREE_EPISODE_LIMIT}.
+                          Upgrade ke VIP untuk membuka semua episode premium.
+                        </p>
+
+                        <div className="mt-6 flex flex-col gap-3">
+                          <span className="rounded-2xl border border-[#E6D3A3]/15 bg-[#111111] px-4 py-4 text-sm font-semibold text-[#E6D3A3]">
+                            {uiEpisodeLabel}
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={onBack}
+                            className="rounded-2xl border border-white/10 bg-[#171922] px-4 py-4 text-sm font-semibold text-white"
+                          >
+                            Kembali ke daftar drama
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
                 ) : videoSrc ? (
                   <>
+                  <div
+                    ref={imaContainerRef}
+                    className={`fixed inset-0 z-[10000] ${
+                      isPlayingVastAd ? "block" : "hidden"
+                    }`}
+                  />
+                  <div
+                    ref={adContainerRef}
+                    className={`fixed inset-0 z-[9999] bg-black ${
+                      isPlayingVastAd ? "block" : "hidden"
+                    }`}
+                  >
+                    {hilltopAdUrl ? (
+                      <video
+                        key={hilltopAdUrl}
+                        src={hilltopAdUrl}
+                        autoPlay
+                        playsInline
+                        muted={false}
+                        controls={false}
+                        preload={isDramaboxDrama ? "auto" : "metadata"}
+                        className="h-full w-full object-contain bg-black"
+                        onEnded={() => {
+                          setHilltopAdUrl("");
+                          setIsPlayingVastAd(false);
+                          setHasPassedAdGate(true);
+                          videoRef.current?.play().catch(() => {});
+                        }}
+                        onError={(e) => {
+                          console.error("AD VIDEO ERROR", e);
+                        }}
+                      />
+                    ) : null}
+                  </div>
                   <video
                     key={
                       isFreeReelsDrama
                         ? `${selectedEpisode?.episodeNumber ?? "no-ep"}`
                         : usesSourceSpecificEpisodeIdentity
                           ? `${selectedEpisode?.episodeNumber ?? "no-ep"}-${selectedEpisodeIdentity}`
-                          : `${selectedEpisode?.id ?? "no-id"}`
+                          : `${selectedEpisode?.id ?? "no-id"}-${selectedEpisode?.videoUrl ?? ""}`
                     }
                     ref={videoRef}
+                    src={videoSrc}
                     controls={false}
-                    autoPlay
+                    autoPlay={hasPassedAdGate}
                     playsInline
-                    preload="metadata"
-                    crossOrigin="anonymous"
+                    preload={isDramaboxDrama ? "auto" : "metadata"}
+                    crossOrigin={isDramaboxDrama ? undefined : "anonymous"}
                     className="h-full w-full object-contain bg-black"
                     onClick={revealFullscreenControls}
                     onTouchStart={revealFullscreenControls}
                     onMouseMove={revealFullscreenControls}
-                    onLoadedMetadata={handleLoadedMetadata}
                     onLoadedData={() => {
-                      // Tetap tampilkan spinner sampai video benar-benar playing.
-                    }}
-                    onCanPlay={() => {
-                      // Tetap tampilkan spinner sampai video benar-benar playing.
-                    }}
-                    onPlaying={() => {
+                      const v = videoRef.current;
+
+                      if (v) {
+                        setTimeout(() => {
+                          const r = v.getBoundingClientRect();
+
+                          console.log("VIDEO DOM", {
+                            width: r.width,
+                            height: r.height,
+                            top: r.top,
+                            bottom: r.bottom,
+                          });
+                        }, 500);
+                      }
+
                       setIsPreparingVideoPlayback(false);
                     }}
+
+
+
                     onWaiting={() => {
-                      if (!videoError) {
+                      const video = videoRef.current;
+                      if (
+                        !videoError &&
+                        (!video || video.paused || video.currentTime <= 0)
+                      ) {
                         setIsPreparingVideoPlayback(true);
                       }
                     }}
                     onStalled={() => {
-                      if (!videoError) {
+                      const video = videoRef.current;
+                      if (
+                        !videoError &&
+                        (!video || video.paused || video.currentTime <= 0)
+                      ) {
                         setIsPreparingVideoPlayback(true);
                       }
                     }}
@@ -2300,9 +2572,6 @@ export default function PlayerScreen({
                     onTimeUpdate={handleTimeUpdate}
                     onPlay={() => {
                       setIsPlaying(true);
-                      if (!videoError) {
-                        setIsPreparingVideoPlayback(true);
-                      }
                       revealFullscreenControls();
                     }}
                     onPause={() => {
@@ -2343,7 +2612,7 @@ export default function PlayerScreen({
                     {isPreparingVideoPlayback && !videoError ? (
                       <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-black/60">
                         <div className="flex flex-col items-center text-center">
-                          <div className="h-11 w-11 animate-spin rounded-full border-2 border-white/15 border-t-[#C9A45C]" />
+                          <div className="h-10 w-10 animate-spin rounded-full border-2 border-white/15 border-t-[#C9A45C]" />
                           <p className="mt-3 text-sm font-medium text-white/75">
                             Memuat video...
                           </p>
@@ -2370,16 +2639,7 @@ export default function PlayerScreen({
                     </div>
                   </div>
                 ) : (
-                  <div className="flex h-full items-center justify-center px-6 text-center">
-                    <div>
-                      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white/15 text-2xl">
-                        ▶
-                      </div>
-                      <p className="mt-3 text-sm text-white/65">
-                        Video episode belum tersedia
-                      </p>
-                    </div>
-                  </div>
+                  <div className="h-full w-full" />
                 )}
 
                 {isFullscreen ? (
@@ -2389,12 +2649,6 @@ export default function PlayerScreen({
                     }`}
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <button
-                        onClick={handleToggleFullscreen}
-                        className="rounded-full border border-white/10 bg-black/60 px-3 py-1.5 text-[11px] font-medium text-white/85 backdrop-blur"
-                      >
-                        Tutup FS
-                      </button>
 
                       <div className="min-w-0 flex-1 text-center">
                         <p className="truncate text-xs uppercase tracking-[0.16em] text-[#B8AA8A]">
@@ -2413,13 +2667,6 @@ export default function PlayerScreen({
                             CC {subtitleLabel}
                           </div>
                         ) : null}
-
-                        <button
-                          onClick={handleToggleMute}
-                          className="rounded-full border border-white/10 bg-black/60 px-3 py-1.5 text-[11px] font-medium text-white/85 backdrop-blur"
-                        >
-                          {isMuted ? "Unmute" : "Mute"}
-                        </button>
                       </div>
                     </div>
                   </div>
@@ -2453,7 +2700,7 @@ export default function PlayerScreen({
 
                 {isFreeReelsDrama && activeFreeReelsSubtitle ? (
                   <div className="pointer-events-none absolute left-1/2 top-[68%] z-20 w-[78%] -translate-x-1/2 -translate-y-1/2 text-center">
-                    <div className="mx-auto line-clamp-2 whitespace-pre-line break-words rounded px-3 py-1.5 text-[16px] font-semibold leading-6 text-white [text-shadow:0_2px_6px_rgba(0,0,0,0.95)]">
+                    <div className="mx-auto line-clamp-2 whitespace-pre-line break-words rounded px-3 py-1.5 text-[18px] font-semibold leading-6 text-white [text-shadow:0_2px_6px_rgba(0,0,0,0.95)]">
                       {activeFreeReelsSubtitle}
                     </div>
                   </div>
@@ -2483,223 +2730,150 @@ export default function PlayerScreen({
                   </div>
                 ) : null}
 
-                {isFullscreen && videoSrc ? (
-                  <div
-                    className={`pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/85 via-black/35 to-transparent px-4 pb-8 pt-16 transition-opacity duration-300 ${
-                      showFullscreenControls ? "opacity-100" : "opacity-0"
-                    }`}
-                  >
-                    <div className="pointer-events-auto flex items-center justify-center gap-3">
-                      <button
-                        onClick={() =>
-                          prevEpisode && goToEpisode(prevEpisode, true)
-                        }
-                        disabled={!prevEpisode}
-                        className="rounded-full bg-white/15 px-4 py-2 text-sm text-white backdrop-blur disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        Prev
-                      </button>
-                      <button
-                        onClick={() => seekBy(-10)}
-                        className="rounded-full bg-white/15 px-4 py-2 text-sm text-white backdrop-blur"
-                      >
-                        -10
-                      </button>
-                      <button
-                        onClick={handlePlayPause}
-                        disabled={!videoSrc}
-                        className="rounded-full bg-[linear-gradient(135deg,#B76E79,#C9A45C)] px-5 py-2 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(201,164,92,0.18)] disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {isPlaying ? "Pause" : "Play"}
-                      </button>
-                      <button
-                        onClick={() => seekBy(10)}
-                        className="rounded-full bg-white/15 px-4 py-2 text-sm text-white backdrop-blur"
-                      >
-                        +10
-                      </button>
-                      <button
-                        onClick={() =>
-                          nextEpisode && goToEpisode(nextEpisode, true)
-                        }
-                        disabled={!nextEpisode}
-                        className="rounded-full bg-white/15 px-4 py-2 text-sm text-white backdrop-blur disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        Next
-                      </button>
+                {videoSrc && (
+                  <>
+                    <div
+                      className={`pointer-events-none absolute inset-x-0 top-0 z-20 h-16 bg-gradient-to-b from-black/70 via-black/25 to-transparent transition-opacity duration-300 ${
+                        showFullscreenControls ? "opacity-100" : "opacity-0"
+                      }`}
+                    >
                     </div>
-                  </div>
-                ) : null}
 
-                {videoSrc && !isPreparingVideoPlayback ? (
-                  <div
-                    className={`pointer-events-none absolute inset-0 z-20 transition-opacity duration-300 ${
-                      showFullscreenControls ? "opacity-100" : "opacity-0"
-                    }`}
-                  >
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <button
-                        onClick={handlePlayPause}
-                        disabled={!videoSrc}
-                        className={`pointer-events-auto flex h-[72px] w-[72px] items-center justify-center rounded-full bg-black/40 text-white shadow-[0_10px_30px_rgba(0,0,0,0.35)] backdrop-blur-[2px] transition duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
-                          showFullscreenControls
-                            ? "scale-100 opacity-100"
-                            : "scale-95 opacity-0"
-                        }`}
-                        aria-label={isPlaying ? "Pause video" : "Play video"}
-                      >
-                        {isPlaying ? (
+                    <div
+                      className={`pointer-events-none absolute inset-0 z-20 transition-opacity duration-300 ${
+                        showFullscreenControls ? "opacity-100" : "opacity-0"
+                      }`}
+                    >
+                      <div className="absolute inset-0 flex items-center justify-center gap-4">
+                        <button
+                          onClick={() => seekBy(-10)}
+                          className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur text-sm"
+                        >
+                          ⟲10
+                        </button>
+
+                        <button
+                          onClick={handlePlayPause}
+                          disabled={!videoSrc}
+                          className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur shadow-2xl disabled:opacity-50"
+                        >
+                          {isPlaying ? (
+                            <svg
+                              viewBox="0 0 24 24"
+                              className="h-7 w-7 fill-current"
+                            >
+                              <rect x="6" y="5" width="4" height="14" rx="1" />
+                              <rect x="14" y="5" width="4" height="14" rx="1" />
+                            </svg>
+                          ) : (
+                            <svg
+                              viewBox="0 0 24 24"
+                              className="h-8 w-8 fill-current ml-1"
+                            >
+                              <path d="M8 5v14l11-7z" />
+                            </svg>
+                          )}
+                        </button>
+
+                        <button
+                          onClick={() => seekBy(10)}
+                          className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur text-sm"
+                        >
+                          10⟳
+                        </button>
+                      </div>
+
+                      <div className="absolute right-4 top-1/2 z-30 flex -translate-y-1/2 flex-col gap-4">
+                        <button
+                          className="pointer-events-auto flex h-14 w-14 flex-col items-center justify-center rounded-full bg-black/35 text-white backdrop-blur"
+                        >
                           <svg
-                            aria-hidden="true"
                             viewBox="0 0 24 24"
-                            className="h-9 w-9 fill-current drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)]"
+                            className="h-6 w-6"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
                           >
-                            <rect
-                              x="6"
-                              y="4.5"
-                              width="4.5"
-                              height="15"
-                              rx="1.2"
-                            />
-                            <rect
-                              x="13.5"
-                              y="4.5"
-                              width="4.5"
-                              height="15"
-                              rx="1.2"
-                            />
+                            <path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z" />
                           </svg>
-                        ) : (
-                          <svg
-                            aria-hidden="true"
-                            viewBox="0 0 24 24"
-                            className="ml-1 h-10 w-10 fill-current drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)]"
-                          >
-                            <path d="M8 5.5c0-1.1.78-1.55 1.73-1L19 10.1c.95.55.95 1.25 0 1.8l-9.27 5.6C8.78 18.05 8 17.6 8 16.5v-11z" />
-                          </svg>
-                        )}
-                      </button>
+                          <span className="text-[10px] mt-1">Save</span>
+                        </button>
+
+                        <button
+                          onClick={onOpenEpisodes}
+                          className="pointer-events-auto flex h-14 w-14 flex-col items-center justify-center rounded-full bg-black/35 text-white backdrop-blur"
+                        >
+                          <span className="text-lg leading-none">☰</span>
+                          <span className="text-[10px] mt-1">Episode</span>
+                        </button>
+                      </div>
+
+                      <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-black/90 via-black/45 to-transparent" />
+
+                      {!isFullscreen && (
+                        <div className="absolute bottom-4 left-4 right-4 z-30">
+                          <p className="line-clamp-1 text-[22px] font-semibold text-white">
+                            {uiDramaTitle}
+                          </p>
+                          <p className="mt-1 text-[16px] text-white/75">
+                            {uiEpisodeTitle}
+                          </p>
+
+                          <div className="mt-4 flex items-center gap-3">
+                            <span className="text-sm text-white/90">
+                              {formatPlayerTime(currentTime)}
+                            </span>
+
+                            <input
+                              type="range"
+                              min="0"
+                              max={duration || 0}
+                              value={currentTime}
+                              onChange={(e) => {
+                                const video = videoRef.current;
+                                if (!video) return;
+                                const next = Number(e.target.value);
+                                video.currentTime = next;
+                                setCurrentTime(next);
+                              }}
+                              className="pointer-events-auto flex-1"
+                            />
+
+                            <span className="text-sm text-white/90">
+                              {formatPlayerTime(duration)}
+                            </span>
+
+                            <button
+                              onClick={handleToggleFullscreen}
+                              className="pointer-events-auto text-white text-xl"
+                            >
+                              ⛶
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ) : null}
-
-                {videoError && (
-                  <div className="absolute inset-x-3 bottom-3 rounded-2xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-100">
-                    {videoError}
-                  </div>
+                  </>
                 )}
-
-                {subtitleSrc ? (
-                  <div className="absolute left-3 top-3 rounded-full border border-white/10 bg-black/60 px-2.5 py-1 text-[11px] font-medium text-white/85 backdrop-blur">
-                    CC {subtitleLabel}
-                  </div>
-                ) : null}
-
-                <div
-                  className={`absolute right-3 top-3 flex items-center gap-2 ${isFullscreen ? "hidden" : ""}`}
-                >
-                  <button
-                    onClick={handleToggleMute}
-                    className="rounded-full border border-white/10 bg-black/60 px-3 py-1.5 text-[11px] font-medium text-white/85 backdrop-blur"
-                  >
-                    {isMuted ? "Unmute" : "Mute"}
-                  </button>
-
-                  <button
-                    onClick={handleToggleFullscreen}
-                    className="rounded-full border border-white/10 bg-black/60 px-3 py-1.5 text-[11px] font-medium text-white/85 backdrop-blur"
-                  >
-                    {isFullscreen ? "Exit FS" : "Fullscreen"}
-                  </button>
-                </div>
               </div>
             </div>
-
-            {hasPassedAdGate ? (
-              <div className={`${isFullscreen ? "hidden" : "mt-4"}`}>
-                <div className="mb-2 h-1.5 w-full rounded-full bg-white/10">
-                  <div
-                    className="h-full rounded-full bg-[linear-gradient(90deg,#B76E79,#C9A45C,#E6D3A3)] transition-all"
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between text-xs text-white/60">
-                  <span>{formatSeconds(currentTime)}</span>
-                  <span>
-                    {duration > 0
-                      ? formatSeconds(duration)
-                      : selectedEpisode?.duration || "--:--"}
-                  </span>
-                </div>
-
-                <div
-                  className={`mt-4 flex items-center justify-center gap-3 ${
-                    isFullscreen ? "hidden" : ""
-                  }`}
-                >
-                  <button
-                    onClick={() =>
-                      prevEpisode && goToEpisode(prevEpisode, true)
-                    }
-                    disabled={!prevEpisode}
-                    className="rounded-full bg-white/10 px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    Prev
-                  </button>
-                  <button
-                    onClick={() => seekBy(-10)}
-                    className="rounded-full bg-white/10 px-4 py-2 text-sm"
-                  >
-                    -10
-                  </button>
-                  <button
-                    onClick={handlePlayPause}
-                    disabled={!videoSrc}
-                    className="rounded-full bg-[linear-gradient(135deg,#B76E79,#C9A45C)] px-5 py-2 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(201,164,92,0.18)] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {isPlaying ? "Pause" : "Play"}
-                  </button>
-                  <button
-                    onClick={() => seekBy(10)}
-                    className="rounded-full bg-white/10 px-4 py-2 text-sm"
-                  >
-                    +10
-                  </button>
-                  <button
-                    onClick={() =>
-                      nextEpisode && goToEpisode(nextEpisode, true)
-                    }
-                    disabled={!nextEpisode}
-                    className="rounded-full bg-white/10 px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    Next
-                  </button>
-                </div>
-
-                <button
-                  onClick={onOpenEpisodes}
-                  className="mt-4 w-full rounded-[20px] border border-white/10 bg-[#171922] px-4 py-3 text-sm font-medium text-[#E6D3A3]"
-                >
-                  Daftar Episode
-                </button>
-              </div>
-            ) : null}
           </div>
         </div>
 
         {showEpisodes && (
           <div
-            className="fixed inset-0 z-20 flex items-end bg-black/60"
+            className="fixed inset-0 z-30 flex items-end bg-black/80 backdrop-blur-sm"
             onClick={onCloseEpisodes}
           >
             <div
-              className="w-full max-h-[75vh] rounded-t-[28px] border border-white/10 bg-[linear-gradient(180deg,#171822_0%,#101117_100%)] p-4 shadow-[0_-18px_40px_rgba(0,0,0,0.35)]"
+              className="w-full max-h-[78vh] rounded-t-[32px] border border-[#E6D3A3]/10 bg-[radial-gradient(circle_at_top,#1b1d29_0%,#0a0a0d_70%)] p-5 shadow-[0_-25px_80px_rgba(0,0,0,0.65)]"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="mb-3 flex items-center justify-between">
                 <div>
-                  <h2 className="text-[20px] font-bold text-white">
+                  <h2 className="text-[22px] font-bold tracking-wide text-white">
                     Daftar Episode
                   </h2>
                   <p className="text-sm text-[#8F887C]">
@@ -2708,7 +2882,7 @@ export default function PlayerScreen({
                 </div>
                 <button
                   onClick={onCloseEpisodes}
-                  className="rounded-full border border-white/10 bg-[#171922] px-3 py-1.5 text-sm font-medium text-[#E6D3A3]"
+                  className="rounded-full border border-[#E6D3A3]/15 bg-black/50 px-4 py-2 text-sm font-semibold text-[#E6D3A3]"
                 >
                   Tutup
                 </button>
@@ -2720,7 +2894,7 @@ export default function PlayerScreen({
                 </div>
               ) : (
                 <div className="max-h-[60vh] overflow-y-auto pr-1">
-                  <div className="grid grid-cols-4 gap-2.5 sm:grid-cols-5">
+                  <div className="grid grid-cols-4 gap-3 sm:grid-cols-5">
                     {episodes.map((episode) => {
                       const episodeIdentity = buildEpisodeIdentity(episode);
                       const isActive = usesSourceSpecificEpisodeIdentity
@@ -2736,13 +2910,26 @@ export default function PlayerScreen({
                       return (
                         <button
                           key={
-                            usesSourceSpecificEpisodeIdentity
-                              ? `${episode.episodeNumber}-${episode.videoUrl}-${episode.subtitleUrl ?? ""}`
-                              : `${episode.id}-${episode.episodeNumber}`
+                            String(
+                              episode.reelShortEpisodeId ||
+                              episode.reelShortVideoId ||
+                              episode.id ||
+                              episode.episodeNumber
+                            )
                           }
                           onClick={() => {
-                            goToEpisode(episode, true);
-                            onCloseEpisodes();
+                            const isTelegramMiniApp =
+                              typeof window !== "undefined" &&
+                              Boolean((window as any)?.Telegram?.WebApp);
+
+                            const continuePlayback = () => {
+                              onCloseEpisodes();
+                              setTimeout(() => {
+                                goToEpisode(episode, true);
+                              }, 300);
+                            };
+
+                            continuePlayback();
                           }}
                           className={`rounded-[18px] border px-3 py-3 text-sm font-semibold transition ${
                             isActive

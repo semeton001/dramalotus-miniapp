@@ -1,50 +1,21 @@
-import { NextRequest, NextResponse } from "next/server";
-import { adaptDramaBoxDramaList } from "@/lib/adapters/drama";
-import {
-  dedupeDramaBoxItems,
-  enrichDramaBoxDramaMeta,
-  extractDramaBoxItemsDeep,
-  fetchDramaBoxRanking,
-  getLang,
-  getPage,
-} from "../_shared";
+import { NextResponse } from "next/server";
+import { fetchDramaBoxRanking } from "../_shared";
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const lang = getLang(request);
-    const page = getPage(request, 1);
+    const data = await fetchDramaBoxRanking();
 
-    const payload = await fetchDramaBoxRanking(lang);
-    const rawItems = dedupeDramaBoxItems(extractDramaBoxItemsDeep(payload));
+    const items =
+      data?.data?.data?.rankList ?? [];
 
-    const adapted = adaptDramaBoxDramaList(rawItems).filter(
-      (item) => item.id > 0 && item.title.trim().length > 0,
-    );
-
-    const items = enrichDramaBoxDramaMeta(adapted, rawItems).map(
-      (item, index) => ({
-        ...item,
-        badge: "Ranking",
-        isTrending: true,
-        sortOrder: index,
-      }),
-    );
-
-    return NextResponse.json(
-      {
-        items,
-        hasNextPage: false,
-        page,
-      },
-      { status: 200 },
-    );
+    return NextResponse.json({
+      items,
+      hasNextPage: false,
+    });
   } catch (error) {
-    console.error("Failed to fetch DramaBox ranking:", error);
-
     return NextResponse.json(
       {
-        error: "Failed to fetch DramaBox ranking",
-        details: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : "Ranking failed",
       },
       { status: 500 },
     );

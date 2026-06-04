@@ -9,9 +9,9 @@ import {
 export async function GET() {
   try {
     const payloads = await Promise.all([
-      fetchFlextvJson("/tabs/7", { page: 1 }),
-      fetchFlextvJson("/search", { q: "ceo", page: 1 }),
-      fetchFlextvJson("/tabs/11", { page: 2 }),
+      fetchFlextvJson("/tabs/7", { page: 1, lang: "id" }),
+      fetchFlextvJson("/tabs/8", { page: 1, lang: "id" }),
+      fetchFlextvJson("/tabs/11", { page: 1, lang: "id" }),
     ]);
 
     const items = adaptFlextvDramaList(

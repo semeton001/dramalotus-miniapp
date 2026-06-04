@@ -3,9 +3,13 @@ import type { Drama } from "@/types/drama";
 import type { Episode } from "@/types/episode";
 import type { DramaBoxDramaResponse } from "@/lib/adapters/drama/dramabox";
 
-export const DRAMABOX_BASE_URL = "https://streamapi.web.id/p/dramaboxv4/api";
+export const DRAMABOX_BASE_URL =
+  "https://captain.sapimu.au/dramaboxv4/api";
 export const DRAMABOX_LANG = "in";
 export const DRAMABOX_TOKEN = process.env.DRAMABOX_TOKEN?.trim() || "";
+
+export const DRAMABOX_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
 export const DRAMABOX_EPISODE_CODE =
   process.env.DRAMABOX_EPISODE_CODE?.trim() ||
   "4D96F22760EA30FB0FFBA9AA87A979A6";
@@ -31,7 +35,6 @@ export function buildDramaBoxApiUrl(
 ): string {
   const url = new URL(`${DRAMABOX_BASE_URL}${path}`);
   url.searchParams.set("lang", DRAMABOX_LANG);
-  url.searchParams.set("token", DRAMABOX_TOKEN);
 
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
@@ -85,8 +88,8 @@ export async function fetchJson(url: string) {
     method: "GET",
     headers: {
       Accept: "application/json",
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      Authorization: `Bearer ${DRAMABOX_TOKEN}`,
+      "User-Agent": DRAMABOX_USER_AGENT,
     },
     cache: "no-store",
   });
@@ -172,6 +175,11 @@ export async function fetchDramaBoxRanking(lang = DRAMABOX_LANG) {
   return fetchJson(buildDramaBoxApiUrl("/rank", { lang }));
 }
 
+export async function fetchDramaBoxVip(lang = DRAMABOX_LANG) {
+  return fetchJson(
+    buildDramaBoxApiUrl("/recommend/book", { lang }),
+  );
+}
 
 export async function fetchDramaBoxSearch(
   keyword: string,
@@ -188,7 +196,7 @@ export async function fetchDramaBoxSearch(
 }
 
 export async function fetchDramaBoxLatest(lang = DRAMABOX_LANG) {
-  return fetchDramaBoxRanking(lang);
+  return fetchDramaBoxVip(lang);
 }
 
 export async function fetchDramaBoxDubbed(_page: number, lang = DRAMABOX_LANG) {
@@ -218,34 +226,44 @@ export async function fetchDramaBoxPlay(
   );
 }
 
+
+export async function fetchDramaBoxDetail(
+  bookId: string,
+  lang = DRAMABOX_LANG,
+) {
+  return fetchJson(
+    buildDramaBoxApiUrl(
+      `/drama/${encodeURIComponent(bookId)}`,
+      { lang },
+    ),
+  );
+}
+
 export async function fetchDramaBoxEpisodeList(
   bookId: string,
   lang = DRAMABOX_LANG,
-  code = DRAMABOX_EPISODE_CODE,
 ) {
-  const response = await fetch(
-    buildDramaBoxApiUrl(`/drama/${encodeURIComponent(bookId)}/episodes`, {
-      quality: 720,
-      lang,
-    }),
-    {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-      },
-      cache: "no-store",
-    },
+  const detail = await fetchDramaBoxDetail(bookId, lang);
+
+  const chapterCount = Number(
+    detail?.data?.chapterCount ||
+    detail?.data?.data?.chapterCount ||
+    0,
   );
 
-  if (!response.ok) {
-    throw new Error(
-      `DramaBox episodes request failed with status ${response.status}`,
-    );
+  if (!chapterCount || chapterCount < 1) {
+    throw new Error("DramaBox chapterCount not found");
   }
 
-  return response.json();
+  return Array.from(
+    { length: chapterCount },
+    (_, index) => ({
+      chapterId: String(index + 1),
+      episode: index + 1,
+      chapterIndex: index,
+      chapterName: `Episode ${index + 1}`,
+    }),
+  );
 }
 
 export function encodeUrlToken(value: string): string {
@@ -293,7 +311,7 @@ export function adaptDramaBoxEpisode(
     `/api/dramabox/stream?bookId=${encodeURIComponent(bookId)}&episode=${episodeNumber}`;
 
   const title = getString(item.chapterName) || `Episode ${episodeNumber}`;
-  const isPaid = Boolean(item.isCharge) || Boolean(item.isPay);
+  const isPaid = false;
 
   return {
     id:
@@ -311,8 +329,8 @@ export function adaptDramaBoxEpisode(
     subtitleLabel: "Indonesia",
     videoUrl: proxiedVideoUrl,
     originalVideoUrl: undefined,
-    isLocked: isPaid,
-    isVipOnly: isPaid,
+    isLocked: false,
+    isVipOnly: false,
     sortOrder: episodeNumber,
     dramaboxChapterId: chapterId || undefined,
     dramaboxBookId: bookId || undefined,

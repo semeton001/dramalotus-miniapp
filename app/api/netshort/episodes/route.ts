@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { Episode } from "@/types/episode";
 
 const NETSHORT_DETAIL_BASE_URL =
-  "https://streamapi.web.id/p/netshort/api/v1/detail";
+  "https://captain.sapimu.au/netshort/api/v1/detail";
 
 const NETSHORT_TOKEN = process.env.NETSHORT_TOKEN?.trim() || "";
 
@@ -58,15 +58,15 @@ export async function GET(request: NextRequest) {
   try {
     const upstreamUrl = `${NETSHORT_DETAIL_BASE_URL}/${encodeURIComponent(
       dramaId,
-    )}?lang=id_ID&token=${NETSHORT_TOKEN}`;
+    )}?lang=id_ID`;
 
     const response = await fetch(upstreamUrl, {
       method: "GET",
       cache: "no-store",
       headers: {
         Accept: "application/json, text/plain, */*",
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        Authorization: `Bearer ${NETSHORT_TOKEN}`,
+        "User-Agent": "Mozilla/5.0",
       },
     });
 
@@ -138,8 +138,8 @@ export async function GET(request: NextRequest) {
             typeof episode.cover === "string" && episode.cover.length > 0
               ? episode.cover
               : undefined,
-          isLocked: Boolean(episode.isLocked),
-          isVipOnly: Boolean(episode.isLocked),
+          isLocked: false,
+          isVipOnly: false,
           subtitleUrl: `/api/netshort/subtitle?dramaId=${encodeURIComponent(rawDramaId)}&episodeNo=${episodeNumber}`,
           subtitleLang: "id",
           subtitleLabel: "Indonesia",

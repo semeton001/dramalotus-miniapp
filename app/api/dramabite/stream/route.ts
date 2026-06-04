@@ -88,6 +88,20 @@ function rewritePlaylist(
               return `URI="${uriValue}"`;
             }
 
+            const pathname = resolved.pathname.toLowerCase();
+
+            const isDirectAsset =
+              pathname.endsWith(".ts") ||
+              pathname.endsWith(".jpeg") ||
+              pathname.endsWith(".jpg") ||
+              pathname.endsWith(".png") ||
+              pathname.endsWith(".webp") ||
+              pathname.endsWith(".key");
+
+            if (isDirectAsset) {
+              return `URI="${resolved.toString()}"`;
+            }
+
             return `URI="${buildChildProxyUrl(resolved, parentPayload)}"`;
           } catch {
             return `URI="${uriValue}"`;
@@ -100,6 +114,20 @@ function rewritePlaylist(
 
         if (!ALLOWED_PROTOCOLS.has(resolved.protocol)) {
           return line;
+        }
+
+        const pathname = resolved.pathname.toLowerCase();
+
+        const isDirectAsset =
+          pathname.endsWith(".ts") ||
+          pathname.endsWith(".jpeg") ||
+          pathname.endsWith(".jpg") ||
+          pathname.endsWith(".png") ||
+          pathname.endsWith(".webp") ||
+          pathname.endsWith(".key");
+
+        if (isDirectAsset) {
+          return resolved.toString();
         }
 
         return buildChildProxyUrl(resolved, parentPayload);
@@ -195,18 +223,37 @@ async function resolveDramabiteStreamUrl(
 ): Promise<string> {
   if (!dramaId.trim() || !episode.trim()) return "";
 
-  const payload = await fetchDramabiteJson(
-    `/drama/${encodeURIComponent(dramaId)}/episode/${encodeURIComponent(
-      episode,
-    )}`,
-    { quality: "default" },
-  );
+  const path = `/drama/${encodeURIComponent(
+    dramaId,
+  )}/episode/${encodeURIComponent(episode)}`;
 
-  return extractDramabitePlayableUrl(payload);
+  const qualities = [
+    { lang: "id", quality: "1080" },
+    { lang: "id", quality: "720" },
+    { quality: "default" },
+  ];
+
+  for (const query of qualities) {
+    try {
+      const payload = await fetchDramabiteJson(path, query);
+
+      const url = extractDramabitePlayableUrl(payload);
+
+      if (url && url.trim()) {
+        return url.trim();
+      }
+    } catch {
+      // continue fallback
+    }
+  }
+
+  return "";
 }
 
 async function requireDramabiteAccess(request: NextRequest) {
-  if (isMiniappRequest(request)) return null;
+  const token = request.nextUrl.searchParams.get("token")?.trim() ?? "";
+
+  if (isMiniappRequest(request) || token) return null;
 
   const user = await getCurrentUser();
 
@@ -217,7 +264,6 @@ async function requireDramabiteAccess(request: NextRequest) {
     );
   }
 
-  const token = request.nextUrl.searchParams.get("token")?.trim() ?? "";
   const directUrl =
     request.nextUrl.searchParams.get("u")?.trim() ||
     request.nextUrl.searchParams.get("url")?.trim() ||
@@ -235,47 +281,8 @@ async function requireDramabiteAccess(request: NextRequest) {
     provider: "dramabite",
     userId: user.id,
   });
+
   if (rateLimitError) return rateLimitError;
-
-  if (token) return null;
-
-  const episodeNumber = Number(
-    request.nextUrl.searchParams.get("episodeNumber") ||
-      request.nextUrl.searchParams.get("episode") ||
-      request.nextUrl.searchParams.get("ep") ||
-      "1",
-  );
-
-  if (!Number.isInteger(episodeNumber) || episodeNumber < 1) {
-    return NextResponse.json(
-      { ok: false, error: "episodeNumber tidak valid." },
-      { status: 400, headers: buildCorsHeaders("application/json") },
-    );
-  }
-
-  const isFreeEpisode = episodeNumber <= FREE_EPISODE_LIMIT;
-
-  if (!isFreeEpisode && user.membership_status !== "vip") {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "VIP_REQUIRED",
-        message: "Episode ini hanya untuk VIP.",
-      },
-      { status: 403, headers: buildCorsHeaders("application/json") },
-    );
-  }
-
-  if (user.membership_status === "vip" && user.vip_until) {
-    const expiresAt = new Date(user.vip_until).getTime();
-
-    if (!Number.isNaN(expiresAt) && expiresAt <= Date.now()) {
-      return NextResponse.json(
-        { ok: false, error: "VIP_EXPIRED" },
-        { status: 403, headers: buildCorsHeaders("application/json") },
-      );
-    }
-  }
 
   return null;
 }

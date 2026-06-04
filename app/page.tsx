@@ -4,9 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import HomeScreen from "@/components/HomeScreen";
 import SourceScreen from "@/components/SourceScreen";
 import PlayerScreen from "@/components/PlayerScreen";
-import HistoryScreen from "@/components/HistoryScreen";
-import FavoritesScreen from "@/components/FavoritesScreen";
-import ProfileScreen from "@/components/ProfileScreen";
+import ProfileBottomSheet from "@/components/ProfileBottomSheet";
+import HistoryBottomSheet from "@/components/HistoryBottomSheet";
+import FavoritesBottomSheet from "@/components/FavoritesBottomSheet";
 import type { Drama } from "@/types/drama";
 import type { Episode } from "@/types/episode";
 import type { Source } from "@/types/source";
@@ -135,7 +135,7 @@ const REELIFE_HOME_URL = "/api/reelife/home";
 const REELIFE_SEARCH_BASE_URL = "/api/reelife/search";
 const REELIFE_TRENDING_URL = "/api/reelife/trending";
 const REELIFE_HOT_URL = "/api/reelife/hot";
-const REELIFE_RANDOM_URL = "/api/reelife/random";
+const REELIFE_FORYOU_URL = "/api/reelife/foryou";
 const FREEREELS_HOME_URL = "/api/freereels/home";
 const FREEREELS_POPULAR_URL = "/api/freereels/popular";
 const FREEREELS_NEW_URL = "/api/freereels/new";
@@ -157,7 +157,7 @@ type HistoryItem = {
 
 type DramaBoxTab = "Beranda" | "Ranking" | "VIP";
 type ReelShortTab = "Beranda" | "For You" | "Trending" | "Romance";
-type MeloloTab = "Beranda" | "Romance" | "ForYou" | "Pewaris";
+type MeloloTab = "Beranda";
 type DramawaveTab =
   | "Beranda"
   | "ForYou"
@@ -170,8 +170,8 @@ type NetshortTab = "Beranda" | "ForYou" | "Terbaru" | "VIP";
 type FlickreelsTab = "Beranda" | "Terbaru" | "ForYou" | "Acak";
 type ShortmaxTab = "Beranda" | "Terbaru" | "Trending" | "ForYou";
 type GoodshortTab = "Beranda" | "Populer" | "Trending" | "Acak";
-type ReelifeTab = "Beranda" | "Trending" | "Pewaris" | "ForYou";
-type DramabiteTab = "Beranda" | "ForYou" | "Ranking" | "VIP";
+type ReelifeTab = "Beranda" | "Trending" | "ForYou";
+type DramabiteTab = "Beranda" | "ForYou" | "Ranking";
 type FlextvTab = "Beranda" | "Populer" | "Terbaru" | "VIP";
 type BilitvTab = "Beranda" | "ForYou" | "VIP";
 type DramanovaTab = "Beranda" | "Terbaru" | "ForYou" | "VIP";
@@ -261,6 +261,11 @@ type ReelifeDramaMeta = {
   reelifeCode?: string;
 };
 
+type PineDramaMeta = {
+  pinedramaRawId?: string;
+  pinedramaCollectionId?: string;
+};
+
 type DramabiteDramaMeta = {
   dramabiteRawId?: string;
   dramabiteDramaId?: string;
@@ -306,6 +311,7 @@ type FreeReelsDramaMeta = {
   freereelsDramaId?: string;
   freereelsCode?: string;
 };
+
 
 function getValidatedTelegramUser(): SafeTelegramUser | null {
   if (typeof window === "undefined") return null;
@@ -665,6 +671,23 @@ function isFreeReelsSource(source: Source | null): boolean {
   );
 }
 
+
+function isPineDramaDrama(drama: Drama | null): boolean {
+  return (
+    !!drama &&
+    (drama.sourceName === "PineDrama" ||
+      drama.source?.toLowerCase() === "pinedrama")
+  );
+}
+
+function isPineDramaSource(source: Source | null): boolean {
+  return (
+    !!source &&
+    (source.slug?.toLowerCase() === "pinedrama" ||
+      source.name?.toLowerCase() === "pinedrama")
+  );
+}
+
 function getDramaBoxTabEndpoint(
   tab: DramaBoxTab,
   _page = 1,
@@ -682,6 +705,30 @@ function getDramaBoxTabEndpoint(
 
 function getDramaBoxSearchEndpoint(query: string): string {
   return `${DRAMABOX_SEARCH_BASE_URL}?query=${encodeURIComponent(query)}`;
+}
+
+
+function getPineDramaFeedEndpoint(
+  scene = "1",
+  categoryId = "0",
+  nextCursor = "",
+): string {
+  const qs = new URLSearchParams({
+    scene,
+    category_id: categoryId,
+  });
+
+  if (nextCursor) {
+    qs.set("nextCursor", nextCursor);
+  }
+
+  return `/api/pinedrama/center?${qs.toString()}`;
+}
+
+function getPineDramaSearchEndpoint(
+  query: string,
+): string {
+  return `/api/pinedrama/search?keyword=${encodeURIComponent(query)}`;
 }
 
 function getReelShortTabEndpoint(
@@ -707,21 +754,10 @@ function getReelShortSearchEndpoint(query: string): string {
 }
 
 function getMeloloTabEndpoint(
-  tab: "Beranda" | "Romance" | "ForYou" | "Pewaris",
+  tab: "Beranda",
   offset = 0,
 ): string {
-  switch (tab) {
-    case "Beranda":
-      return `${MELOLO_HOME_URL}?offset=${offset}`;
-    case "Romance":
-      return MELOLO_ROMANCE_URL;
-    case "ForYou":
-      return MELOLO_FORYOU_URL;
-    case "Pewaris":
-      return MELOLO_PEWARIS_URL;
-    default:
-      return `${MELOLO_HOME_URL}?offset=${offset}`;
-  }
+  return `${MELOLO_HOME_URL}?offset=${offset}`;
 }
 
 function getMeloloSearchEndpoint(query: string): string {
@@ -1007,15 +1043,14 @@ function getFlextvFeedEndpoint(query: string, tab: FlextvTab): string {
 }
 
 function getDramabiteTabEndpoint(
-  tab: "Beranda" | "ForYou" | "Ranking" | "VIP",
+  tab: "Beranda" | "ForYou" | "Ranking",
 ): string {
   switch (tab) {
     case "ForYou":
       return DRAMABITE_FORYOU_URL;
     case "Ranking":
       return DRAMABITE_RANKING_URL;
-    case "VIP":
-      return DRAMABITE_VIP_URL;
+
     case "Beranda":
     default:
       return DRAMABITE_HOME_URL;
@@ -1024,7 +1059,7 @@ function getDramabiteTabEndpoint(
 
 function getDramabiteFeedEndpoint(
   query: string,
-  tab: "Beranda" | "ForYou" | "Ranking" | "VIP",
+  tab: "Beranda" | "ForYou" | "Ranking",
 ): string {
   const keyword = query.trim();
   return keyword.length > 0
@@ -1033,16 +1068,14 @@ function getDramabiteFeedEndpoint(
 }
 
 function getReelifeTabEndpoint(
-  tab: "Beranda" | "Trending" | "Pewaris" | "ForYou",
+  tab: "Beranda" | "Trending" | "ForYou",
   page = 1,
 ): string {
   switch (tab) {
     case "Trending":
       return `${REELIFE_TRENDING_URL}?page=${page}`;
-    case "Pewaris":
-      return `${REELIFE_HOT_URL}?page=${page}`;
-    case "ForYou":
-      return `${REELIFE_RANDOM_URL}?page=${page}`;
+case "ForYou":
+      return `${REELIFE_FORYOU_URL}?page=${page}`;
     case "Beranda":
     default:
       return `${REELIFE_HOME_URL}?page=${page}`;
@@ -1051,7 +1084,7 @@ function getReelifeTabEndpoint(
 
 function getReelifeFeedEndpoint(
   query: string,
-  tab: "Beranda" | "Trending" | "Pewaris" | "ForYou",
+  tab: "Beranda" | "Trending" | "ForYou",
   page = 1,
 ): string {
   const keyword = query.trim();
@@ -1391,6 +1424,15 @@ function extractIdramaDramaId(drama: Drama | null): string {
   if (meta.idramaDramaId) return meta.idramaDramaId;
   if (meta.idramaRawId) return meta.idramaRawId;
 
+  if (drama?.slug) {
+    const match = drama.slug.match(/idrama-(\d+)/i);
+    if (match?.[1]) return match[1];
+  }
+
+  if (drama?.id) {
+    return String(drama.id);
+  }
+
   return "";
 }
 
@@ -1646,6 +1688,51 @@ function extractReelifeDramaId(drama: Drama | null): string {
   return "";
 }
 
+function getPineDramaMeta(
+  drama: Drama | null,
+): PineDramaMeta {
+  if (!drama) return {};
+
+  const meta = drama as Drama & PineDramaMeta;
+
+  return {
+    pinedramaRawId:
+      typeof meta.pinedramaRawId === "string"
+        ? meta.pinedramaRawId.trim()
+        : "",
+    pinedramaCollectionId:
+      typeof meta.pinedramaCollectionId === "string"
+        ? meta.pinedramaCollectionId.trim()
+        : "",
+  };
+}
+
+function extractPineDramaCollectionId(
+  drama: Drama | null,
+): string {
+  const meta = getPineDramaMeta(drama);
+
+  if (meta.pinedramaCollectionId) {
+    return meta.pinedramaCollectionId;
+  }
+
+  if (meta.pinedramaRawId) {
+    return meta.pinedramaRawId;
+  }
+
+  if (drama?.slug) {
+    const match = drama.slug.match(
+      /pinedrama-(\d+)/i,
+    );
+
+    if (match?.[1]) {
+      return match[1];
+    }
+  }
+
+  return "";
+}
+
 function getFreeReelsMeta(drama: Drama | null): FreeReelsDramaMeta {
   if (!drama) return {};
 
@@ -1749,6 +1836,7 @@ const ENABLED_HOME_SOURCE_SLUGS = new Set([
   "dramabite",
   "flextv",
   "freereels",
+  "pinedrama",
 ]);
 
 function isSourceVisibleOnHome(source: Source): boolean {
@@ -1772,101 +1860,17 @@ const EMPTY_RESOLVED_AD_RESPONSE: ResolveAdCampaignResponse = {
 };
 
 
-type WebMeResponse = {
-  ok?: boolean;
-  user?: {
-    membership_status?: "free" | "vip";
-    telegram_username?: string | null;
-    telegram_user_id?: number | null;
-    first_name?: string | null;
-    last_name?: string | null;
-  } | null;
-};
-
 async function loadMembershipFromWebSession(): Promise<"free" | "vip"> {
-  const response = await fetch("/api/me", {
-    method: "GET",
-    cache: "no-store",
-    credentials: "include",
-  });
-
-  if (response.status === 401) {
-    return "free";
-  }
-
-  if (!response.ok) {
-    throw new Error("Gagal memuat membership dari web session.");
-  }
-
-  const data = (await response.json()) as WebMeResponse;
-  return data?.user?.membership_status === "vip" ? "vip" : "free";
+  return "free";
 }
 
 export default function Home() {
   const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function checkAuth() {
-      try {
-        const response = await fetch("/api/me", {
-          cache: "no-store",
-          credentials: "include",
-        });
-
-        if (!response.ok) {
-          if (!getValidatedTelegramUser()) {
-            window.location.replace("/login");
-            return;
-          }
-
-          if (!cancelled) {
-            setAuthChecked(true);
-          }
-          return;
-        }
-
-        const data = (await response.json()) as WebMeResponse;
-        const user = data?.user ?? null;
-
-        if (!cancelled) {
-          const username =
-            typeof user?.telegram_username === "string" &&
-            user.telegram_username.trim().length > 0
-              ? user.telegram_username.trim()
-              : null;
-
-          const fullName = [user?.first_name, user?.last_name]
-            .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-            .join(" ")
-            .trim();
-
-          setWebProfileUsername(username);
-          setWebProfileUserId(
-            typeof user?.telegram_user_id === "number" ? user.telegram_user_id : null,
-          );
-          setWebProfileName(fullName || username || null);
-          setAuthChecked(true);
-        }
-      } catch {
-        if (!getValidatedTelegramUser()) {
-          window.location.replace("/login");
-          return;
-        }
-
-        if (!cancelled) {
-          setAuthChecked(true);
-        }
-      }
-    }
-
-    void checkAuth();
-
-    return () => {
-      cancelled = true;
-    };
+    setAuthChecked(true);
   }, []);
+
 
   const FAVORITES_STORAGE_KEY = "dramalotus.favoriteIds";
   const HISTORY_STORAGE_KEY = "dramalotus.historyItems";
@@ -1891,9 +1895,6 @@ export default function Home() {
   const [hasLoadedServerFavorites, setHasLoadedServerFavorites] =
     useState(false);
   const [hasLoadedServerHistory, setHasLoadedServerHistory] = useState(false);
-  const [webProfileName, setWebProfileName] = useState<string | null>(null);
-  const [webProfileUsername, setWebProfileUsername] = useState<string | null>(null);
-  const [webProfileUserId, setWebProfileUserId] = useState<number | null>(null);
 
   const [sources, setSources] = useState<Source[]>([]);
   const [dramas, setDramas] = useState<Drama[]>([]);
@@ -1917,10 +1918,48 @@ export default function Home() {
   const [selectedDrama, setSelectedDrama] = useState<Drama | null>(null);
   const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(null);
   const [showEpisodes, setShowEpisodes] = useState(false);
+
+  useEffect(() => {
+    const tg = (window as any)?.Telegram?.WebApp;
+
+    if (!tg?.BackButton) {
+      return;
+    }
+
+      const handleBack = () => {
+        if (selectedDrama) {
+          setSelectedDrama(null);
+          setSelectedEpisode(null);
+          setShowEpisodes(false);
+          return;
+        }
+
+        if (selectedSource) {
+          setSelectedSource(null);
+          return;
+        }
+      };
+
+      if (selectedSource) {
+        tg.BackButton.show();
+        tg.BackButton.onClick(handleBack);
+      } else {
+        tg.BackButton.hide();
+      }
+
+    return () => {
+      try {
+        tg.BackButton.offClick(handleBack);
+      } catch {}
+    };
+  }, [selectedSource, selectedDrama]);
   const [activeTab, setActiveTab] = useState<
     "home" | "history" | "favorites" | "profile"
   >("home");
   const [showPaymentSuccessNotice, setShowPaymentSuccessNotice] = useState(false);
+const [isProfileSheetOpen, setIsProfileSheetOpen] = useState(false);
+const [isHistorySheetOpen, setIsHistorySheetOpen] = useState(false);
+const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
   const [dramaBoxTab, setDramaBoxTab] = useState<DramaBoxTab>("Beranda");
   const [reelShortTab, setReelShortTab] = useState<ReelShortTab>("Beranda");
   const [meloloTab, setMeloloTab] = useState<MeloloTab>("Beranda");
@@ -1928,14 +1967,14 @@ export default function Home() {
   const [dramaBoxPage, setDramaBoxPage] = useState(1);
   const [reelShortPage, setReelShortPage] = useState(1);
   const [dramawavePage, setDramawavePage] = useState(1);
-  const [dramawaveHasNextPage, setDramawaveHasNextPage] = useState(false);
+  const [, setDramawaveHasNextPage] = useState(false);
   const [netshortPage, setNetshortPage] = useState(1);
   const [flickreelsPage, setFlickreelsPage] = useState(1);
   const [shortmaxPage, setShortmaxPage] = useState(1);
   const [shortmaxHasMorePages, setShortmaxHasMorePages] = useState(true);
 
   const [goodshortPage, setGoodshortPage] = useState(1);
-  const [goodshortHasNextPage, setGoodshortHasNextPage] = useState(false);
+  const [, setGoodshortHasNextPage] = useState(false);
   const [idramaPage, setIdramaPage] = useState(1);
   const [reelifePage, setReelifePage] = useState(1);
   const [freeReelsPage, setFreeReelsPage] = useState(1);
@@ -1975,9 +2014,9 @@ export default function Home() {
 
     try {
       await fetch("/api/ad-events", {
-        method: "POST",
+            method: "POST",
         headers: {
-          "Content-Type": "application/json",
+                    "Content-Type": "application/json",
         },
         body: JSON.stringify({
           requestId: resolvedAdResponse.requestId,
@@ -2000,9 +2039,9 @@ export default function Home() {
 
     try {
       await fetch("/api/ad-events", {
-        method: "POST",
+            method: "POST",
         headers: {
-          "Content-Type": "application/json",
+                    "Content-Type": "application/json",
         },
         body: JSON.stringify({
           requestId: resolvedAdResponse.requestId,
@@ -2025,9 +2064,9 @@ export default function Home() {
 
     try {
       await fetch("/api/ad-events", {
-        method: "POST",
+            method: "POST",
         headers: {
-          "Content-Type": "application/json",
+                    "Content-Type": "application/json",
         },
         body: JSON.stringify({
           requestId: resolvedAdResponse.requestId,
@@ -2050,9 +2089,9 @@ export default function Home() {
 
     try {
       await fetch("/api/ad-events", {
-        method: "POST",
+            method: "POST",
         headers: {
-          "Content-Type": "application/json",
+                    "Content-Type": "application/json",
         },
         body: JSON.stringify({
           requestId: resolvedAdResponse.requestId,
@@ -2136,7 +2175,7 @@ export default function Home() {
 
       try {
         const response = await fetch(resolveUrl, {
-          method: "GET",
+                      method: "GET",
           cache: "no-store",
         });
 
@@ -2175,9 +2214,9 @@ export default function Home() {
     null,
   );
   const [dramaBoxDramaCache, setDramaBoxDramaCache] = useState<Drama[]>([]);
-  const [dramaBoxHasNextPage, setDramaBoxHasNextPage] = useState(false);
-  const [reelShortHasNextPage, setReelShortHasNextPage] = useState(false);
-  const [meloloHasNextPage, setMeloloHasNextPage] = useState(false);
+  const [, setDramaBoxHasNextPage] = useState(false);
+  const [, setReelShortHasNextPage] = useState(false);
+  const [, setMeloloHasNextPage] = useState(false);
 
   const [liveReelShortDramas, setLiveReelShortDramas] = useState<Drama[]>([]);
   const [isLoadingReelShortFeed, setIsLoadingReelShortFeed] = useState(false);
@@ -2305,7 +2344,7 @@ export default function Home() {
   const [stardusttvTab, setStardusttvTab] =
     useState<StardusttvTab>("Beranda");
   const [stardusttvPage, setStardusttvPage] = useState(1);
-  const [stardusttvHasNextPage, setStardusttvHasNextPage] = useState(false);
+  const [, setStardusttvHasNextPage] = useState(false);
 
   const [fundramaEpisodes, setFundramaEpisodes] = useState<Episode[]>([]);
   const [isLoadingFundramaEpisodes, setIsLoadingFundramaEpisodes] =
@@ -2347,7 +2386,7 @@ export default function Home() {
   );
   const [bilitvTab, setBilitvTab] = useState<BilitvTab>("Beranda");
   const [bilitvPage, setBilitvPage] = useState(1);
-  const [bilitvHasNextPage, setBilitvHasNextPage] = useState(false);
+  const [, setBilitvHasNextPage] = useState(false);
 
   const [dramanovaEpisodes, setDramanovaEpisodes] = useState<Episode[]>([]);
   const [isLoadingDramanovaEpisodes, setIsLoadingDramanovaEpisodes] =
@@ -2389,7 +2428,43 @@ export default function Home() {
   const [isLoadingReelifeFeed, setIsLoadingReelifeFeed] = useState(false);
   const [reelifeFeedError, setReelifeFeedError] = useState<string | null>(null);
   const [reelifeDramaCache, setReelifeDramaCache] = useState<Drama[]>([]);
-  const [reelifeHasNextPage, setReelifeHasNextPage] = useState(false);
+  const [, setReelifeHasNextPage] = useState(false);
+
+  const [pinedramaEpisodes, setPinedramaEpisodes] = useState<Episode[]>([]);
+  const [isLoadingPinedramaEpisodes, setIsLoadingPinedramaEpisodes] =
+    useState(false);
+  const [pinedramaEpisodesError, setPinedramaEpisodesError] = useState<
+    string | null
+  >(null);
+
+  const [livePinedramaDramas, setLivePinedramaDramas] = useState<Drama[]>([]);
+
+  const [isLoadingPinedramaFeed, setIsLoadingPinedramaFeed] = useState(false);
+  const [pinedramaFeedError, setPinedramaFeedError] = useState<string | null>(
+    null,
+  );
+
+  const [pinedramaDramaCache, setPinedramaDramaCache] = useState<Drama[]>([]);
+  const [pinedramaHasMore, setPinedramaHasMore] = useState(false);
+  const [pinedramaNextCursor, setPinedramaNextCursor] = useState("");
+
+  const [pinedramaCategories, setPinedramaCategories] = useState<any[]>([]);
+  const [selectedPinedramaCategory, setSelectedPinedramaCategory] =
+    useState("0");
+
+
+  const selectedPinedramaScene = useMemo(() => {
+    const match = pinedramaCategories.find(
+      (item) =>
+        String(item.categoryId) ===
+        String(selectedPinedramaCategory),
+    );
+
+    return String(match?.sceneId ?? 1);
+  }, [
+    pinedramaCategories,
+    selectedPinedramaCategory,
+  ]);
 
   const [freeReelsEpisodes, setFreeReelsEpisodes] = useState<Episode[]>([]);
   const [isLoadingFreeReelsEpisodes, setIsLoadingFreeReelsEpisodes] =
@@ -2403,9 +2478,16 @@ export default function Home() {
     null,
   );
   const [freeReelsDramaCache, setFreeReelsDramaCache] = useState<Drama[]>([]);
-  const [freeReelsHasNextPage, setFreeReelsHasNextPage] = useState(false);
+  const [, setFreeReelsHasNextPage] = useState(false);
 
   const canUseTelegramSync = isTelegramWebAppReady && isTelegramUserValid;
+
+  const effectiveTelegramUserId =
+    telegramUserId ??
+    (typeof window !== "undefined"
+      ? window.Telegram?.WebApp?.initDataUnsafe?.user?.id ?? null
+      : null);
+
 
   const favoriteIdSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
 
@@ -2430,6 +2512,9 @@ export default function Home() {
     if (isGoodshortSource(selectedSource)) return goodshortTab;
     if (isIdramaSource(selectedSource)) return idramaTab;
     if (isReelifeSource(selectedSource)) return reelifeTab;
+    if (isPineDramaSource(selectedSource)) {
+      return selectedPinedramaCategory as SourceTab;
+    }
     if (isDramabiteSource(selectedSource)) return dramabiteTab;
     if (isFlextvSource(selectedSource)) return flextvTab;
     if (isBilitvSource(selectedSource)) return bilitvTab;
@@ -2494,18 +2579,8 @@ export default function Home() {
       }
 
       if (isMeloloSource(selectedSource)) {
-        if (
-          tab === "Beranda" ||
-          tab === "Romance" ||
-          tab === "ForYou" ||
-          tab === "Pewaris"
-        ) {
-          setMeloloTab(tab);
-          setMeloloOffset(0);
-        } else {
-          setMeloloTab("Beranda");
-          setMeloloOffset(0);
-        }
+        setMeloloTab("Beranda");
+        setMeloloOffset(0);
         return;
       }
 
@@ -2610,6 +2685,19 @@ export default function Home() {
         return;
       }
 
+
+      if (isPineDramaSource(selectedSource)) {
+        const categoryId = String(tab);
+
+        setSelectedPinedramaCategory(categoryId);
+        setLivePinedramaDramas([]);
+        setPinedramaHasMore(false);
+        setPinedramaNextCursor("");
+        setPinedramaFeedError(null);
+
+        return;
+      }
+
       if (isBilitvSource(selectedSource)) {
         if (tab === "Beranda" || tab === "ForYou" || tab === "VIP") {
           setBilitvTab(tab);
@@ -2692,12 +2780,15 @@ export default function Home() {
         return;
       }
 
+      if (isPineDramaSource(selectedSource)) {
+        return;
+      }
+
       if (isDramabiteSource(selectedSource)) {
         if (
           tab === "Beranda" ||
           tab === "ForYou" ||
-          tab === "Ranking" ||
-          tab === "VIP"
+          tab === "Ranking"
         ) {
           setDramabiteTab(tab);
         } else {
@@ -2712,7 +2803,6 @@ export default function Home() {
         if (
           tab === "Beranda" ||
           tab === "Trending" ||
-          tab === "Pewaris" ||
           tab === "ForYou"
         ) {
           setReelifeTab(tab);
@@ -2764,7 +2854,9 @@ export default function Home() {
                       ? idramaEpisodes
                       : isReelifeDrama(selectedDrama)
                         ? reelifeEpisodes
-                        : isDramabiteDrama(selectedDrama)
+                        : isPineDramaDrama(selectedDrama)
+                          ? pinedramaEpisodes
+                          : isDramabiteDrama(selectedDrama)
                           ? dramabiteEpisodes
                           : isFlextvDrama(selectedDrama)
                             ? flextvEpisodes
@@ -2792,11 +2884,58 @@ export default function Home() {
     setSubmittedSearchQuery("");
   }, []);
 
-  const handleSubmitSearch = useCallback(() => {
-    setSubmittedSearchQuery(searchQuery.trim());
+  const handleSubmitSearch = useCallback(async () => {
+    const q = searchQuery.trim();
+    setSubmittedSearchQuery(q);
 
     if (isDramaBoxSource(selectedSource)) {
       setDramaBoxPage(1);
+
+      try {
+        if (!q) {
+          setLiveDramaBoxDramas([]);
+          return;
+        }
+
+        const res = await fetch(
+          `/api/dramabox/search?keyword=${encodeURIComponent(q)}&page=1`, {
+            cache: "no-store" }
+        );
+
+        if (!res.ok) {
+          throw new Error(`DramaBox search failed ${res.status}`);
+        }
+
+        const payload = await res.json();
+        const items = payload?.data?.data?.searchList ?? [];
+
+        const mapped = items.map((item: any) => ({
+          id: Number(item.bookId),
+          source: "DramaBox",
+          sourceId: "1",
+          sourceName: "DramaBox",
+          title: item.bookName || "Untitled",
+          episodes: Number(item.chapterCount || 0),
+          badge: "",
+          tags: Array.isArray(item.tagNames) ? item.tagNames : [],
+          posterClass: "",
+          slug: `dramabox-${item.bookId}`,
+          description: item.introduction || "",
+          category: "",
+          isNew: false,
+          isDubbed: false,
+          isTrending: false,
+          sortOrder: 9999,
+          posterImage: item.cover || "",
+        }));
+
+        setLiveDramaBoxDramas(mapped);
+        return;
+      } catch (err) {
+        console.error("DramaBox search failed:", err);
+        setLiveDramaBoxDramas([]);
+        return;
+      }
     }
 
     if (isReelShortSource(selectedSource)) {
@@ -2822,15 +2961,96 @@ export default function Home() {
     if (isShortmaxSource(selectedSource)) {
       setShortmaxPage(1);
       setShortmaxHasMorePages(true);
+
+      try {
+        if (!q) {
+          setLiveShortmaxDramas([]);
+          return;
+        }
+
+        const res = await fetch(
+          `/api/shortmax/search?q=${encodeURIComponent(q)}`, {
+                        cache: "no-store",
+          },
+        );
+
+        if (!res.ok) {
+          throw new Error(`ShortMax search failed ${res.status}`);
+        }
+
+        const payload = await res.json();
+        const items = Array.isArray(payload?.items) ? payload.items : [];
+
+        setLiveShortmaxDramas(dedupeShortmaxDramas(items));
+        return;
+      } catch (err) {
+        console.error("ShortMax search failed:", err);
+        setLiveShortmaxDramas([]);
+        return;
+      }
     }
 
     if (isGoodshortSource(selectedSource)) {
       setGoodshortPage(1);
       setGoodshortHasNextPage(false);
+
+      try {
+        if (!q) {
+          setLiveGoodshortDramas([]);
+          return;
+        }
+
+        const res = await fetch(
+          `/api/goodshort/search?q=${encodeURIComponent(q)}`, {
+                        cache: "no-store",
+          },
+        );
+
+        if (!res.ok) {
+          throw new Error(`GoodShort search failed ${res.status}`);
+        }
+
+        const payload = await res.json();
+        const items = Array.isArray(payload?.items) ? payload.items : [];
+
+        setLiveGoodshortDramas(items);
+        return;
+      } catch (err) {
+        console.error("GoodShort search failed:", err);
+        setLiveGoodshortDramas([]);
+        return;
+      }
     }
 
     if (isIdramaSource(selectedSource)) {
       setIdramaPage(1);
+
+      try {
+        if (!q) {
+          setLiveIdramaDramas([]);
+          return;
+        }
+
+        const res = await fetch(
+          `/api/idrama/search?q=${encodeURIComponent(q)}`, {
+                        cache: "no-store",
+          },
+        );
+
+        if (!res.ok) {
+          throw new Error(`iDrama search failed ${res.status}`);
+        }
+
+        const payload = await res.json();
+        const items = Array.isArray(payload?.items) ? payload.items : [];
+
+        setLiveIdramaDramas(items);
+        return;
+      } catch (err) {
+        console.error("iDrama search failed:", err);
+        setLiveIdramaDramas([]);
+        return;
+      }
     }
 
     if (isReelifeSource(selectedSource)) {
@@ -2919,17 +3139,6 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (canUseTelegramSync) return;
-
-    setTelegramUserId(null);
-    setTelegramUserName(null);
-    setIsTelegramUserValid(false);
-    setHasSyncedProfile(false);
-    setHasLoadedServerFavorites(false);
-    setHasLoadedServerHistory(false);
-  }, [canUseTelegramSync]);
-
-  useEffect(() => {
     let isMounted = true;
 
     const loadMembershipStatus = async () => {
@@ -2938,9 +3147,8 @@ export default function Home() {
 
         if (isTelegramWebAppReady && canUseTelegramSync && telegramUserId) {
           const response = await fetch(
-            `/api/user-membership?telegram_user_id=${telegramUserId}`,
-            {
-              method: "GET",
+            `/api/user-membership?telegram_user_id=${effectiveTelegramUserId}`, {
+                          method: "GET",
               cache: "no-store",
             },
           );
@@ -2968,10 +3176,9 @@ export default function Home() {
           return;
         }
 
-        const nextStatus = await loadMembershipFromWebSession();
-
         if (!isMounted) return;
-        setMembershipStatus(nextStatus);
+        setMembershipStatus("free");
+        setMembershipVipUntil(null);
       } catch (error) {
         console.error("Gagal memuat membership:", error);
 
@@ -3331,12 +3538,12 @@ export default function Home() {
     const syncProfile = async () => {
       try {
         const response = await fetch("/api/user-profile", {
-          method: "POST",
+            method: "POST",
           headers: {
-            "Content-Type": "application/json",
+                        "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            telegram_user_id: telegramUserId,
+            telegram_user_id: effectiveTelegramUserId,
             telegram_username: telegramUserName,
           }),
         });
@@ -3363,7 +3570,7 @@ export default function Home() {
     const loadFavoriteDataFromServer = async () => {
       try {
         const response = await fetch(
-          `/api/user-favorites?telegram_user_id=${telegramUserId}`,
+          `/api/user-favorites?telegram_user_id=${effectiveTelegramUserId}`,
         );
 
         if (!response.ok) {
@@ -3405,7 +3612,7 @@ export default function Home() {
     const loadHistoryDataFromServer = async () => {
       try {
         const response = await fetch(
-          `/api/user-history?telegram_user_id=${telegramUserId}`,
+          `/api/user-history?telegram_user_id=${effectiveTelegramUserId}`,
         );
 
         if (!response.ok) {
@@ -3536,16 +3743,16 @@ export default function Home() {
         : [...currentFavoriteIds, dramaId],
     );
 
-    if (!canUseTelegramSync || !telegramUserId) return;
+    if (!effectiveTelegramUserId) return;
 
     try {
       const response = await fetch("/api/user-favorites", {
-        method: isFavorited ? "DELETE" : "POST",
+            method: isFavorited ? "DELETE" : "POST",
         headers: {
-          "Content-Type": "application/json",
+                    "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          telegram_user_id: telegramUserId,
+          telegram_user_id: effectiveTelegramUserId,
           drama_id: dramaId,
         }),
       });
@@ -3568,7 +3775,7 @@ export default function Home() {
     const favoriteIdsToDelete = [...favoriteIds];
     setFavoriteIds([]);
 
-    if (!canUseTelegramSync || !telegramUserId) return;
+    if (!effectiveTelegramUserId) return;
 
     try {
       await Promise.all(
@@ -3576,10 +3783,10 @@ export default function Home() {
           fetch("/api/user-favorites", {
             method: "DELETE",
             headers: {
-              "Content-Type": "application/json",
+                            "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              telegram_user_id: telegramUserId,
+              telegram_user_id: effectiveTelegramUserId,
               drama_id: dramaId,
             }),
           }),
@@ -3594,7 +3801,7 @@ export default function Home() {
     const historyItemsToDelete = [...historyItems];
     setHistoryItems([]);
 
-    if (!canUseTelegramSync || !telegramUserId) return;
+    if (!effectiveTelegramUserId) return;
 
     try {
       await Promise.all(
@@ -3602,10 +3809,10 @@ export default function Home() {
           fetch("/api/user-history", {
             method: "DELETE",
             headers: {
-              "Content-Type": "application/json",
+                            "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              telegram_user_id: telegramUserId,
+              telegram_user_id: effectiveTelegramUserId,
               drama_id: item.dramaId,
             }),
           }),
@@ -3629,16 +3836,16 @@ export default function Home() {
         return [{ dramaId, episodeId }, ...otherHistoryItems];
       });
 
-      if (!canUseTelegramSync || !telegramUserId) return;
+      if (!effectiveTelegramUserId) return;
 
       try {
         const response = await fetch("/api/user-history", {
-          method: "POST",
+            method: "POST",
           headers: {
-            "Content-Type": "application/json",
+                        "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            telegram_user_id: telegramUserId,
+            telegram_user_id: effectiveTelegramUserId,
             drama_id: dramaId,
             episode_id: episodeId,
           }),
@@ -3903,6 +4110,45 @@ export default function Home() {
     });
   }, []);
 
+  const cachePinedramaDrama = useCallback((drama: Drama) => {
+    if (!isPineDramaDrama(drama)) return;
+
+    const meta = drama as Drama & PineDramaMeta;
+
+    const code =
+      (typeof meta.pinedramaCollectionId === "string" &&
+      meta.pinedramaCollectionId.trim().length > 0
+        ? meta.pinedramaCollectionId.trim()
+        : "") ||
+      (typeof meta.pinedramaRawId === "string" &&
+      meta.pinedramaRawId.trim().length > 0
+        ? meta.pinedramaRawId.trim()
+        : "");
+
+    const normalizedDrama =
+      code.length > 0
+        ? ({
+            ...drama,
+            id: createStableNumericId(code, drama.id),
+            slug: drama.slug || `pinedrama-${code}`,
+            pinedramaCollectionId: code,
+            pinedramaRawId: code,
+          } as Drama)
+        : drama;
+
+    setPinedramaDramaCache((currentCache) => {
+      const map = new Map<number, Drama>();
+
+      currentCache.forEach((item) => {
+        map.set(item.id, item);
+      });
+
+      map.set(normalizedDrama.id, normalizedDrama);
+
+      return Array.from(map.values());
+    });
+  }, []);
+
   const cacheFreeReelsDrama = useCallback((drama: Drama) => {
     if (!isFreeReelsDrama(drama)) return;
 
@@ -4100,6 +4346,11 @@ export default function Home() {
       return;
     }
 
+    if (isPineDramaDrama(selectedDrama)) {
+      cachePinedramaDrama(selectedDrama);
+      return;
+    }
+
     if (isFreeReelsDrama(selectedDrama)) {
       cacheFreeReelsDrama(selectedDrama);
     }
@@ -4115,6 +4366,7 @@ export default function Home() {
     cacheGoodshortDrama,
     cacheIdramaDrama,
     cacheReelifeDrama,
+    cachePinedramaDrama,
     cacheFreeReelsDrama,
   ]);
 
@@ -4134,6 +4386,7 @@ export default function Home() {
 
     if (!targetEpisode) return;
 
+    setShowEpisodes(false);
     setSelectedEpisode(targetEpisode);
     handleSaveToHistory(selectedDrama.id, targetEpisode.id);
   }, [
@@ -4232,7 +4485,7 @@ export default function Home() {
           : getDramaBoxTabEndpoint(dramaBoxTab, dramaBoxPage);
 
         const response = await fetch(endpoint, {
-          method: "GET",
+                      method: "GET",
           cache: "no-store",
         });
 
@@ -4367,7 +4620,7 @@ export default function Home() {
             ).slice(0, 8);
 
             const normalizedDrama: Drama = {
-              id: normalizedId,
+              id: normalizedId as any,
               source: "DramaBox",
               sourceId: "1",
               sourceName: "DramaBox",
@@ -4476,65 +4729,6 @@ export default function Home() {
     });
   }, [liveDramaBoxDramas]);
 
-  const handleDramaBoxPrevPage = useCallback(() => {
-    setDramaBoxPage((currentPage) => Math.max(1, currentPage - 1));
-  }, []);
-
-  const handleDramaBoxNextPage = useCallback(() => {
-    setDramaBoxPage((currentPage) => {
-      if (!dramaBoxHasNextPage) {
-        return currentPage;
-      }
-      return currentPage + 1;
-    });
-  }, [dramaBoxHasNextPage]);
-
-  const handleReelShortPrevPage = useCallback(() => {
-    setReelShortPage((currentPage) => Math.max(1, currentPage - 1));
-  }, []);
-
-  const handleReelShortNextPage = useCallback(() => {
-    setReelShortPage((currentPage) => {
-      if (!reelShortHasNextPage) {
-        return currentPage;
-      }
-      return currentPage + 1;
-    });
-  }, [reelShortHasNextPage]);
-
-  const handleGoodshortPrevPage = useCallback(() => {
-    setGoodshortPage((currentPage) => Math.max(1, currentPage - 1));
-  }, []);
-
-  const handleGoodshortNextPage = useCallback(() => {
-    setGoodshortPage((currentPage) => {
-      if (!goodshortHasNextPage) {
-        return currentPage;
-      }
-      return currentPage + 1;
-    });
-  }, [goodshortHasNextPage]);
-
-  const handleReelifePrevPage = useCallback(() => {
-    return;
-  }, []);
-
-  const handleReelifeNextPage = useCallback(() => {
-    return;
-  }, []);
-
-  const handleFreeReelsPrevPage = useCallback(() => {
-    setFreeReelsPage((currentPage) => Math.max(1, currentPage - 1));
-  }, []);
-
-  const handleFreeReelsNextPage = useCallback(() => {
-    setFreeReelsPage((currentPage) => {
-      if (!freeReelsHasNextPage) {
-        return currentPage;
-      }
-      return currentPage + 1;
-    });
-  }, [freeReelsHasNextPage]);
 
   useEffect(() => {
     if (!isReelShortSource(selectedSource)) {
@@ -4560,7 +4754,7 @@ export default function Home() {
           : getReelShortTabEndpoint(reelShortTab, reelShortPage);
 
         const response = await fetch(endpoint, {
-          method: "GET",
+                      method: "GET",
           cache: "no-store",
         });
 
@@ -4580,17 +4774,31 @@ export default function Home() {
           typeof data === "object" &&
           Array.isArray((data as { items?: unknown[] }).items);
 
-        const rawList = Array.isArray(data)
-          ? data
-          : Array.isArray((data as { results?: unknown[] })?.results)
-            ? (data as { results: unknown[] }).results
-            : Array.isArray((data as { books?: unknown[] })?.books)
-              ? (data as { books: unknown[] }).books
-              : Array.isArray((data as { data?: unknown[] })?.data)
-                ? (data as { data: unknown[] }).data
-                : Array.isArray((data as { items?: unknown[] })?.items)
-                  ? (data as { items: unknown[] }).items
-                  : [];
+        const containerLists = Array.isArray(
+          (data as { data?: { lists?: unknown[] } })?.data?.lists,
+        )
+          ? (data as { data: { lists: unknown[] } }).data.lists
+          : null;
+
+        const rawList = containerLists
+          ? containerLists.flatMap((section) => {
+              const record =
+                section && typeof section === "object"
+                  ? (section as Record<string, unknown>)
+                  : {};
+              return Array.isArray(record.books) ? record.books : [];
+            })
+          : Array.isArray(data)
+            ? data
+            : Array.isArray((data as { results?: unknown[] })?.results)
+              ? (data as { results: unknown[] }).results
+              : Array.isArray((data as { books?: unknown[] })?.books)
+                ? (data as { books: unknown[] }).books
+                : Array.isArray((data as { data?: unknown[] })?.data)
+                  ? (data as { data: unknown[] }).data
+                  : Array.isArray((data as { items?: unknown[] })?.items)
+                    ? (data as { items: unknown[] }).items
+                    : [];
 
         const looksAdaptedDrama = (value: unknown): value is Drama => {
           if (!value || typeof value !== "object") return false;
@@ -4714,14 +4922,12 @@ export default function Home() {
               "drama_id",
             ) || Date.now() + index;
 
-          const normalizedId = createStableNumericId(
-            reelShortRawId || `reelshort-${index}`,
-            fallbackNumericId,
-          );
+          const normalizedId = reelShortRawId || String(fallbackNumericId);
 
           const normalizedTitle =
             pickString(
               "title",
+              "book_title",
               "name",
               "bookName",
               "book_name",
@@ -4731,6 +4937,7 @@ export default function Home() {
             ) || "Tanpa Judul";
 
           const normalizedCoverImage = pickString(
+            "book_pic",
             "pic",
             "cover",
             "coverWap",
@@ -4750,6 +4957,7 @@ export default function Home() {
 
           const normalizedPosterImage =
             pickString(
+              "book_pic",
               "pic",
               "posterImage",
               "poster_image",
@@ -4789,7 +4997,7 @@ export default function Home() {
           ).slice(0, 8);
 
           const normalizedDrama = {
-            id: normalizedId,
+            id: normalizedId as any,
             source: "ReelShort",
             sourceId: selectedSource?.id ?? "2",
             sourceName: "ReelShort",
@@ -4832,7 +5040,6 @@ export default function Home() {
 
           return normalizedDrama as Drama;
         });
-
         setLiveReelShortDramas(normalizedDramas);
         setReelShortHasNextPage(
           isPaginatedPayload
@@ -4907,7 +5114,7 @@ export default function Home() {
           : getMeloloTabEndpoint(meloloTab, meloloOffset);
 
         const response = await fetch(endpoint, {
-          method: "GET",
+                      method: "GET",
           cache: "no-store",
         });
 
@@ -5009,7 +5216,7 @@ export default function Home() {
           : getDramawaveTabEndpoint(dramawaveTab, dramawavePage);
 
         const response = await fetch(endpoint, {
-          method: "GET",
+                      method: "GET",
           cache: "no-store",
         });
 
@@ -5032,14 +5239,87 @@ export default function Home() {
           ),
         );
 
-        const dramas = Array.isArray(data)
-          ? data
-          : data && typeof data === "object" && Array.isArray((data as { items?: unknown }).items)
-            ? (data as { items: unknown[] }).items
-            : [];
+        const rawItems =
+          Array.isArray(data)
+            ? data
+            : data &&
+                typeof data === "object" &&
+                Array.isArray((data as { results?: unknown[] }).results)
+              ? (data as { results: unknown[] }).results
+              : data &&
+                  typeof data === "object" &&
+                  Array.isArray((data as { items?: unknown[] }).items)
+                ? (data as { items: unknown[] }).items
+                : data &&
+                    typeof data === "object" &&
+                    "data" in data &&
+                    Array.isArray((data as { data?: unknown[] }).data)
+                  ? (data as { data: unknown[] }).data
+                  : data &&
+                      typeof data === "object" &&
+                      "data" in data &&
+                      Array.isArray(
+                        ((data as { data?: { items?: unknown[] } }).data?.items),
+                      )
+                    ? ((data as { data: { items: unknown[] } }).data.items)
+                    : [];
+
+        const dramas = rawItems
+          .flatMap((entry: any) => {
+            if (Array.isArray(entry?.items)) {
+              return entry.items;
+            }
+            return [entry];
+          })
+          .filter((item: any) => {
+            const dramaId =
+              item?.key || item?.link || item?.drama_id || item?.id;
+
+            if (!dramaId) return false;
+            if (item?.is_preview === true) return false;
+            if (item?.type === "coming_soon") return false;
+            if (item?.link_type === 0) return false;
+
+            return true;
+          });
 
         if (dramas.length > 0) {
-          setLiveDramawaveDramas(dramas as Drama[]);
+          const normalized = dramas.map((item: any, index: number) => ({
+            id: createStableNumericId(
+              String(item?.key || item?.link || item?.series_id || item?.id || `dramawave-${index}`),
+              index + 1,
+            ),
+            source: "dramawave",
+            sourceId: "4",
+            sourceName: "Dramawave",
+
+            title: item?.title || "Untitled",
+            episodes: Number(item?.episode_count || 0),
+            badge: item?.free ? "FREE" : item?.vip_type ? "VIP" : "Dramawave",
+            tags: Array.isArray(item?.series_tag) ? item.series_tag : [],
+            posterClass: "",
+
+            slug: item?.link || item?.key || "",
+            description: item?.desc || "",
+            coverImage: item?.cover || "",
+            posterImage: item?.cover || "",
+            category: "Drama",
+            language: "id",
+            country: "ID",
+
+            isNew: false,
+            isDubbed: false,
+            isTrending: false,
+            sortOrder: index + 1,
+
+            rating: 0,
+            releaseYear: undefined,
+
+            dramawaveRawId: item?.key || "",
+            dramawaveDramaId: item?.key || item?.link || "",
+          }));
+
+          setLiveDramawaveDramas(normalized);
         } else {
           setLiveDramawaveDramas([]);
           setDramawaveHasNextPage(false);
@@ -5111,7 +5391,7 @@ export default function Home() {
           : getNetshortTabEndpoint(netshortTab, netshortPage);
 
         const response = await fetch(endpoint, {
-          method: "GET",
+                      method: "GET",
           cache: "no-store",
         });
 
@@ -5419,7 +5699,7 @@ export default function Home() {
           : getFlickreelsTabEndpoint(flickreelsTab, flickreelsPage);
 
         const response = await fetch(endpoint, {
-          method: "GET",
+                      method: "GET",
           cache: "no-store",
         });
 
@@ -5502,7 +5782,7 @@ export default function Home() {
           : getGoodshortTabEndpoint(goodshortTab, goodshortPage);
 
         const response = await fetch(endpoint, {
-          method: "GET",
+                      method: "GET",
           cache: "no-store",
         });
 
@@ -5595,11 +5875,9 @@ export default function Home() {
       setSelectedEpisode(null);
 
       try {
-        const goodshortDramaId = extractGoodshortDramaId(selectedDrama);
-
-        if (!goodshortDramaId) {
-          throw new Error("ID asli GoodShort tidak ditemukan dari feed.");
-        }
+        const goodshortDramaId =
+          extractGoodshortDramaId(selectedDrama) ||
+          String(selectedDrama.id);
 
         const response = await fetch(
           `/api/goodshort/episodes?dramaId=${encodeURIComponent(goodshortDramaId)}&numericDramaId=${selectedDrama.id}`,
@@ -5977,9 +6255,19 @@ export default function Home() {
         if (!isMounted) return;
 
         if (Array.isArray(data) && data.length > 0) {
-          setReelShortEpisodes(data);
+          const deduped = data.filter(
+            (episode, index, arr) =>
+              index ===
+              arr.findIndex(
+                (item) =>
+                  item?.reelShortEpisodeId === episode?.reelShortEpisodeId ||
+                  item?.id === episode?.id,
+              ),
+          );
+
+          setReelShortEpisodes(deduped);
           setReelShortEpisodesError(null);
-          writeCachedReelShortEpisodes(data);
+          writeCachedReelShortEpisodes(deduped);
         } else {
           const cachedEpisodes = readCachedReelShortEpisodes();
 
@@ -6487,7 +6775,7 @@ export default function Home() {
         const endpoint = getShortmaxTabEndpoint(shortmaxTab, shortmaxPage);
 
         const response = await fetch(endpoint, {
-          method: "GET",
+                      method: "GET",
           cache: "no-store",
         });
 
@@ -6847,7 +7135,7 @@ export default function Home() {
         const endpoint = getBilitvFeedEndpoint(keyword, bilitvTab, bilitvPage);
 
         const response = await fetch(endpoint, {
-          method: "GET",
+                      method: "GET",
           cache: "no-store",
         });
 
@@ -6919,7 +7207,7 @@ export default function Home() {
         const endpoint = getDramanovaFeedEndpoint(keyword, dramanovaTab);
 
         const response = await fetch(endpoint, {
-          method: "GET",
+                      method: "GET",
           cache: "no-store",
         });
 
@@ -6985,7 +7273,7 @@ export default function Home() {
         const endpoint = getDramapopsFeedEndpoint(keyword, dramapopsTab);
 
         const response = await fetch(endpoint, {
-          method: "GET",
+                      method: "GET",
           cache: "no-store",
         });
 
@@ -7051,7 +7339,7 @@ export default function Home() {
         const endpoint = getMicrodramaFeedEndpoint(keyword);
 
         const response = await fetch(endpoint, {
-          method: "GET",
+                      method: "GET",
           cache: "no-store",
         });
 
@@ -7117,7 +7405,7 @@ export default function Home() {
         const endpoint = getFundramaFeedEndpoint(keyword, fundramaTab);
 
         const response = await fetch(endpoint, {
-          method: "GET",
+                      method: "GET",
           cache: "no-store",
         });
 
@@ -7188,7 +7476,7 @@ export default function Home() {
         );
 
         const response = await fetch(endpoint, {
-          method: "GET",
+                      method: "GET",
           cache: "no-store",
         });
 
@@ -7260,7 +7548,7 @@ export default function Home() {
         const endpoint = getFlextvFeedEndpoint(keyword, flextvTab);
 
         const response = await fetch(endpoint, {
-          method: "GET",
+                      method: "GET",
           cache: "no-store",
         });
 
@@ -7326,7 +7614,7 @@ export default function Home() {
         const endpoint = getDramabiteFeedEndpoint(keyword, dramabiteTab);
 
         const response = await fetch(endpoint, {
-          method: "GET",
+                      method: "GET",
           cache: "no-store",
         });
 
@@ -7833,9 +8121,7 @@ export default function Home() {
           slug: `flextv-${seriesId}-ep-1`,
           description: "",
           thumbnail: activeFlextvDrama.coverImage || activeFlextvDrama.posterImage || undefined,
-          videoUrl: `/api/flextv/stream?seriesId=${encodeURIComponent(
-            seriesId,
-          )}&episodeId=1`,
+          videoUrl: "",
           originalVideoUrl: "",
           isLocked: false,
           isVipOnly: false,
@@ -7864,7 +8150,15 @@ export default function Home() {
 
         if (!isMounted) return;
 
-        setFlextvEpisodes(Array.isArray(data) ? (data as Episode[]) : []);
+        const normalizedEpisodes = Array.isArray(data)
+          ? (data as Episode[])
+          : [];
+
+        setFlextvEpisodes(normalizedEpisodes);
+
+        if (normalizedEpisodes.length > 0) {
+          setSelectedEpisode(normalizedEpisodes[0]);
+        }
       } catch (error) {
         console.error("Gagal memuat episode FlexTV:", error);
 
@@ -7933,7 +8227,7 @@ export default function Home() {
           slug: `dramabite-${dramaId}-ep-1`,
           description: "",
           thumbnail: activeDramabiteDrama.coverImage || activeDramabiteDrama.posterImage || undefined,
-          videoUrl: `/api/dramabite/stream?dramaId=${encodeURIComponent(
+          videoUrl: `/api/dramabite/stream?miniapp=1&dramaId=${encodeURIComponent(
             dramaId,
           )}&episode=1`,
           originalVideoUrl: "",
@@ -7950,8 +8244,8 @@ export default function Home() {
 
       try {
         const response = await fetch(
-          `/api/dramabite/episodes?dramaId=${encodeURIComponent(dramaId)}`,
-          { cache: "no-store" },
+          `/api/dramabite/episodes?dramaId=${encodeURIComponent(dramaId)}`, {
+            cache: "no-store" },
         );
 
         if (!response.ok) {
@@ -8013,7 +8307,7 @@ export default function Home() {
         );
 
         const response = await fetch(endpoint, {
-          method: "GET",
+                      method: "GET",
           cache: "no-store",
         });
 
@@ -8084,7 +8378,209 @@ export default function Home() {
 
       return Array.from(map.values());
     });
+
   }, [liveReelifeDramas]);
+
+  useEffect(() => {
+    if (!isPineDramaSource(selectedSource)) {
+      setLivePinedramaDramas([]);
+      setPinedramaCategories([]);
+      setPinedramaHasMore(false);
+      setPinedramaNextCursor("");
+      setPinedramaFeedError(null);
+      setIsLoadingPinedramaFeed(false);
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadCategories = async () => {
+      try {
+        const res = await fetch(
+          "/api/pinedrama/categories",
+          { cache: "no-store" },
+        );
+
+        if (!res.ok) {
+          throw new Error(
+            `PineDrama categories failed ${res.status}`,
+          );
+        }
+
+        const data = await res.json();
+
+        if (!isMounted) return;
+
+        const items = Array.isArray(data)
+          ? data
+          : [];
+
+        setPinedramaCategories(items);
+
+        if (
+          items.length > 0 &&
+          !selectedPinedramaCategory
+        ) {
+          const first =
+            String(
+              items[0]?.categoryId ??
+              items[0]?.category_id ??
+              "0",
+            );
+
+          setSelectedPinedramaCategory(first);
+        }
+      } catch (err) {
+        console.error(
+          "PineDrama categories failed:",
+          err,
+        );
+      }
+    };
+
+    loadCategories();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedSource]);
+
+  useEffect(() => {
+    if (!isPineDramaSource(selectedSource)) {
+      setLivePinedramaDramas([]);
+      setPinedramaHasMore(false);
+      setPinedramaNextCursor("");
+      return;
+    }
+
+    let isMounted = true;
+
+    const keyword =
+      submittedSearchQuery.trim();
+
+    const loadPinedramaFeed = async () => {
+      setIsLoadingPinedramaFeed(true);
+      setPinedramaFeedError(null);
+
+      try {
+        const endpoint =
+          keyword.length > 0
+            ? getPineDramaSearchEndpoint(
+                keyword,
+              )
+            : getPineDramaFeedEndpoint(
+                selectedPinedramaScene,
+                selectedPinedramaCategory || "0",
+                "",
+              );
+
+        const response = await fetch(
+          endpoint,
+          {
+            method: "GET",
+            cache: "no-store",
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `PineDrama feed failed ${response.status}`,
+          );
+        }
+
+        const payload =
+          await response.json();
+
+        if (!isMounted) return;
+
+        const items =
+          Array.isArray(payload?.items)
+            ? payload.items
+            : [];
+
+        setLivePinedramaDramas(
+          items as Drama[],
+        );
+
+        setPinedramaHasMore(
+          Boolean(payload?.hasMore),
+        );
+
+        setPinedramaNextCursor(
+          typeof payload?.nextCursor ===
+            "string"
+            ? payload.nextCursor
+            : "",
+        );
+      } catch (err) {
+        console.error(
+          "PineDrama feed failed:",
+          err,
+        );
+
+        if (!isMounted) return;
+
+        setLivePinedramaDramas([]);
+        setPinedramaHasMore(false);
+        setPinedramaNextCursor("");
+
+        setPinedramaFeedError(
+          err instanceof Error
+            ? err.message
+            : "PineDrama feed failed",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingPinedramaFeed(false);
+        }
+      }
+    };
+
+    loadPinedramaFeed();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    selectedSource,
+    selectedPinedramaCategory,
+    submittedSearchQuery,
+  ]);
+
+  useEffect(() => {
+    if (livePinedramaDramas.length === 0) {
+      return;
+    }
+
+    setPinedramaDramaCache(
+      (currentCache) => {
+        const map =
+          new Map<number, Drama>();
+
+        currentCache.forEach(
+          (drama) => {
+            map.set(
+              drama.id,
+              drama,
+            );
+          },
+        );
+
+        livePinedramaDramas.forEach(
+          (drama) => {
+            map.set(
+              drama.id,
+              drama,
+            );
+          },
+        );
+
+        return Array.from(
+          map.values(),
+        );
+      },
+    );
+  }, [livePinedramaDramas]);
 
   useEffect(() => {
     if (!selectedDrama || !isReelifeDrama(selectedDrama)) {
@@ -8183,15 +8679,142 @@ export default function Home() {
     handleSaveToHistory,
   ]);
 
+  useEffect(() => {
+    if (!selectedDrama || !isPineDramaDrama(selectedDrama)) {
+      setPinedramaEpisodes([]);
+      setIsLoadingPinedramaEpisodes(false);
+      setPinedramaEpisodesError(null);
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadPinedramaEpisodes = async () => {
+      setIsLoadingPinedramaEpisodes(true);
+      setPinedramaEpisodesError(null);
+      setPinedramaEpisodes([]);
+      setSelectedEpisode(null);
+
+      try {
+        const collectionId =
+          extractPineDramaCollectionId(selectedDrama);
+
+        if (!collectionId) {
+          throw new Error(
+            "Collection ID PineDrama tidak ditemukan dari feed.",
+          );
+        }
+
+        const response = await fetch(
+          `/api/pinedrama/episodes?collectionId=${encodeURIComponent(collectionId)}`,
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            "Gagal memuat episode PineDrama.",
+          );
+        }
+
+        const data = await response.json();
+
+        if (!isMounted) return;
+
+        if (Array.isArray(data)) {
+          setPinedramaEpisodes(data);
+
+          if (data.length === 0) {
+            setPinedramaEpisodesError(
+              "Episode belum tersedia untuk drama ini.",
+            );
+          }
+        } else {
+          setPinedramaEpisodes([]);
+          setPinedramaEpisodesError(
+            "Format episode PineDrama tidak valid.",
+          );
+        }
+      } catch (error) {
+        console.error(
+          "Gagal memuat episode PineDrama:",
+          error,
+        );
+
+        if (isMounted) {
+          setPinedramaEpisodes([]);
+          setPinedramaEpisodesError(
+            error instanceof Error
+              ? error.message
+              : "Terjadi kesalahan saat memuat episode PineDrama.",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingPinedramaEpisodes(false);
+        }
+      }
+    };
+
+    loadPinedramaEpisodes();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedDrama]);
+
+  useEffect(() => {
+    if (!selectedDrama || !isPineDramaDrama(selectedDrama)) return;
+    if (selectedEpisode) return;
+    if (pinedramaEpisodes.length === 0) return;
+
+    const resumeEpisode = getResumeEpisodeFromHistory(
+      selectedDrama.id,
+      pinedramaEpisodes,
+      historyByDramaId,
+    );
+
+    const fallbackEpisode =
+      pinedramaEpisodes[0] ?? null;
+
+    const targetEpisode =
+      resumeEpisode ?? fallbackEpisode;
+
+    if (!targetEpisode) return;
+
+    setSelectedEpisode(targetEpisode);
+    handleSaveToHistory(
+      selectedDrama.id,
+      targetEpisode.id,
+    );
+  }, [
+    selectedDrama,
+    selectedEpisode,
+    pinedramaEpisodes,
+    historyByDramaId,
+    handleSaveToHistory,
+  ]);
+
   const visibleHomeSources = useMemo(
     () => sources.filter(isSourceVisibleOnHome),
     [sources],
   );
 
+  const POPULAR_SOURCE_NAMES = [
+    "dramabox",
+    "reelshort",
+    "netshort",
+    "shortmax",
+    "goodshort",
+    "pinedrama",
+  ];
+
   const popularSources = useMemo(
     () =>
       visibleHomeSources
-        .filter((source) => source.isPopular)
+        .filter((source) =>
+          POPULAR_SOURCE_NAMES.includes(
+            String(source.slug || source.name).toLowerCase(),
+          ),
+        )
         .sort((a, b) => (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999)),
     [visibleHomeSources],
   );
@@ -8199,7 +8822,12 @@ export default function Home() {
   const otherSources = useMemo(
     () =>
       visibleHomeSources
-        .filter((source) => !source.isPopular)
+        .filter(
+          (source) =>
+            !POPULAR_SOURCE_NAMES.includes(
+              String(source.slug || source.name).toLowerCase(),
+            ),
+        )
         .sort((a, b) => (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999)),
     [visibleHomeSources],
   );
@@ -8227,7 +8855,7 @@ export default function Home() {
           : getIdramaTabEndpoint(idramaTab, idramaPage);
 
         const response = await fetch(endpoint, {
-          method: "GET",
+                      method: "GET",
           cache: "no-store",
         });
 
@@ -8438,7 +9066,7 @@ export default function Home() {
         );
 
         const response = await fetch(endpoint, {
-          method: "GET",
+                      method: "GET",
           cache: "no-store",
         });
 
@@ -8650,9 +9278,7 @@ export default function Home() {
     }
 
     if (isReelShortSource(selectedSource)) {
-      return liveReelShortDramas.length > 0
-        ? liveReelShortDramas
-        : reelShortDramaCache;
+      return liveReelShortDramas;
     }
 
     if (isMeloloSource(selectedSource)) {
@@ -8685,6 +9311,10 @@ export default function Home() {
 
     if (isReelifeSource(selectedSource)) {
       return liveReelifeDramas;
+    }
+
+    if (isPineDramaSource(selectedSource)) {
+      return livePinedramaDramas;
     }
 
     if (isDramabiteSource(selectedSource)) {
@@ -8737,6 +9367,7 @@ export default function Home() {
     liveGoodshortDramas,
     liveIdramaDramas,
     liveReelifeDramas,
+    livePinedramaDramas,
     liveDramabiteDramas,
     liveFlextvDramas,
     liveBilitvDramas,
@@ -8852,18 +9483,27 @@ export default function Home() {
   const handleGoHistory = () => {
     resetNavigationState();
     setShowPaymentSuccessNotice(false);
-    setActiveTab("history");
+
+    setIsFavoritesSheetOpen(false);
+    setIsProfileSheetOpen(false);
+    setIsHistorySheetOpen(true);
   };
 
   const handleGoFavorites = () => {
     resetNavigationState();
     setShowPaymentSuccessNotice(false);
-    setActiveTab("favorites");
+
+    setIsHistorySheetOpen(false);
+    setIsProfileSheetOpen(false);
+    setIsFavoritesSheetOpen(true);
   };
 
   const handleGoProfile = () => {
     resetNavigationState();
-    setActiveTab("profile");
+
+    setIsHistorySheetOpen(false);
+    setIsFavoritesSheetOpen(false);
+    setIsProfileSheetOpen(true);
   };
 
   useEffect(() => {
@@ -8883,9 +9523,6 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const effectiveBottomTab: "home" | "history" | "favorites" | "profile" =
-    selectedSource || selectedDrama ? "home" : activeTab;
-
   useEffect(() => {
     const header = document.querySelector("body > header") as HTMLElement | null;
     if (!header) return;
@@ -8903,147 +9540,6 @@ export default function Home() {
     };
   }, [activeTab, selectedSource, selectedDrama, selectedEpisode]);
 
-  const currentPagedHomePage = useMemo(() => {
-    if (isDramaBoxSource(selectedSource)) return dramaBoxPage;
-    if (isReelShortSource(selectedSource)) return reelShortPage;
-    if (isDramawaveSource(selectedSource)) return dramawavePage;
-    if (isNetshortSource(selectedSource)) return netshortPage;
-    if (isFlickreelsSource(selectedSource)) return flickreelsPage;
-    if (isShortmaxSource(selectedSource)) return shortmaxPage;
-    if (isGoodshortSource(selectedSource)) return goodshortPage;
-    if (isIdramaSource(selectedSource)) return idramaPage;
-    return 1;
-  }, [
-    selectedSource,
-    dramaBoxPage,
-    reelShortPage,
-    dramawavePage,
-    dramawaveHasNextPage,
-    netshortPage,
-    flickreelsPage,
-    shortmaxPage,
-    goodshortPage,
-    idramaPage,
-  ]);
-
-  const showGenericHomePagination = useMemo(() => {
-    if (
-      isShortmaxSource(selectedSource) &&
-      submittedSearchQuery.trim().length === 0
-    ) {
-      return activeSourceTab === "Beranda";
-    }
-
-    return (
-      !!selectedSource &&
-      !isMeloloSource(selectedSource) &&
-      submittedSearchQuery.trim().length === 0 &&
-      (false ||
-        (isReelShortSource(selectedSource) && activeSourceTab !== "Beranda") ||
-        (isDramawaveSource(selectedSource) &&
-          (activeSourceTab === "Terbaru" ||
-            activeSourceTab === "Dubbing" ||
-            activeSourceTab === "VIP")) ||
-        false ||
-        false ||
-        false)
-    );
-  }, [
-    selectedSource,
-    activeSourceTab,
-    submittedSearchQuery,
-    shortmaxPage,
-    shortmaxHasMorePages,
-    dramawaveHasNextPage,
-  ]);
-
-  const handleGenericPrevPage = useCallback(() => {
-    if (isDramaBoxSource(selectedSource)) {
-      return;
-    }
-
-    if (isReelShortSource(selectedSource)) {
-      setReelShortPage((current) => Math.max(1, current - 1));
-      return;
-    }
-
-    if (isDramawaveSource(selectedSource)) {
-      setDramawavePage((current) => Math.max(1, current - 1));
-      return;
-    }
-
-    if (isNetshortSource(selectedSource)) {
-      setLiveNetshortDramas([]);
-      setNetshortFeedError(null);
-      setNetshortPage((current) => Math.max(1, current - 1));
-      window.scrollTo({ top: 0, behavior: "auto" });
-      return;
-    }
-
-    if (isFlickreelsSource(selectedSource)) {
-      return;
-    }
-
-    if (isShortmaxSource(selectedSource)) {
-      setShortmaxPage((current) => Math.max(1, current - 1));
-      return;
-    }
-
-    if (isGoodshortSource(selectedSource)) {
-      return;
-    }
-
-    if (isIdramaSource(selectedSource)) {
-      return;
-    }
-  }, [selectedSource, activeSourceTab, shortmaxHasMorePages]);
-
-  const handleGenericNextPage = useCallback(() => {
-    if (isDramaBoxSource(selectedSource)) {
-      return;
-    }
-
-    if (isReelShortSource(selectedSource)) {
-      setReelShortPage((current) => current + 1);
-      return;
-    }
-
-    if (isDramawaveSource(selectedSource)) {
-      setDramawavePage((current) => current + 1);
-      return;
-    }
-
-    if (isNetshortSource(selectedSource)) {
-      setLiveNetshortDramas([]);
-      setNetshortFeedError(null);
-      setNetshortPage((current) => current + 1);
-      window.scrollTo({ top: 0, behavior: "auto" });
-      return;
-    }
-
-    if (isFlickreelsSource(selectedSource)) {
-      return;
-    }
-
-    if (isShortmaxSource(selectedSource)) {
-      setShortmaxPage((current) => {
-        if (shortmaxTab !== "Beranda") {
-          return 1;
-        }
-
-        return Math.min(5, current + 1);
-      });
-      return;
-    }
-
-    if (isGoodshortSource(selectedSource)) {
-      return;
-    }
-
-    if (isIdramaSource(selectedSource)) {
-      return;
-    }
-  }, [selectedSource, activeSourceTab, shortmaxHasMorePages]);
 
   if (showSplash) {
     return (
@@ -9123,292 +9619,7 @@ export default function Home() {
       </main>
     );
   }
-
-  if (activeTab === "history" && !selectedSource && !selectedDrama) {
-    return (
-      <>
-        <HistoryScreen
-          dramas={mergedDramas}
-          episodes={episodes}
-          historyItems={historyItems}
-          onBack={handleGoHome}
-          onOpenFavorites={handleGoFavorites}
-          onOpenProfile={handleGoProfile}
-          onClearHistory={handleClearHistory}
-          onSelectDrama={(drama, episode) => {
-            if (isDramaBoxDrama(drama)) {
-              cacheDramaBoxDrama(drama);
-              setSelectedDrama(drama);
-              setDramaBoxEpisodes([]);
-              setSelectedEpisode(null);
-              setDramaBoxEpisodesError(null);
-              setShowEpisodes(false);
-              setActiveTab("home");
-              return;
-            }
-
-            if (isReelShortDrama(drama)) {
-              cacheReelShortDrama(drama);
-              setSelectedDrama(drama);
-              setReelShortEpisodes([]);
-              setSelectedEpisode(null);
-              setReelShortEpisodesError(null);
-              setShowEpisodes(false);
-              setActiveTab("home");
-              return;
-            }
-
-            if (isMeloloDrama(drama)) {
-              cacheMeloloDrama(drama);
-              setSelectedDrama(drama);
-              setMeloloEpisodes([]);
-              setSelectedEpisode(null);
-              setMeloloEpisodesError(null);
-              setShowEpisodes(false);
-              setActiveTab("home");
-              return;
-            }
-
-            if (isDramawaveDrama(drama)) {
-              cacheDramawaveDrama(drama);
-              setSelectedDrama(drama);
-              setDramawaveEpisodes([]);
-              setSelectedEpisode(null);
-              setDramawaveEpisodesError(null);
-              setShowEpisodes(false);
-              setActiveTab("home");
-              return;
-            }
-
-            if (isNetshortDrama(drama)) {
-              cacheNetshortDrama(drama);
-              setSelectedDrama(drama);
-              setNetshortEpisodes([]);
-              setSelectedEpisode(null);
-              setNetshortEpisodesError(null);
-              setShowEpisodes(false);
-              setActiveTab("home");
-              return;
-            }
-
-            if (isFlickreelsDrama(drama)) {
-              cacheFlickreelsDrama(drama);
-              setSelectedDrama(drama);
-              setFlickreelsEpisodes([]);
-              setSelectedEpisode(null);
-              setFlickreelsEpisodesError(null);
-              setShowEpisodes(false);
-              setActiveTab("home");
-              return;
-            }
-
-            if (isShortmaxDrama(drama)) {
-              cacheShortmaxDrama(drama);
-              setSelectedDrama(drama);
-              setShortmaxEpisodes([]);
-              setSelectedEpisode(null);
-              setShortmaxEpisodesError(null);
-              setShowEpisodes(false);
-              setActiveTab("home");
-              return;
-            }
-
-            if (isGoodshortDrama(drama)) {
-              cacheGoodshortDrama(drama);
-              setSelectedDrama(drama);
-              setGoodshortEpisodes([]);
-              setSelectedEpisode(null);
-              setGoodshortEpisodesError(null);
-              setShowEpisodes(false);
-              setActiveTab("home");
-              return;
-            }
-
-            setSelectedDrama(drama);
-            setSelectedEpisode(episode);
-            setShowEpisodes(false);
-            setActiveTab("home");
-          }}
-        />
-        <PersistentBottomNav
-          activeTab={effectiveBottomTab}
-          onGoHome={handleGoHome}
-          onGoHistory={handleGoHistory}
-          onGoFavorites={handleGoFavorites}
-          onGoProfile={handleGoProfile}
-        />
-      </>
-    );
-  }
-
-  if (activeTab === "favorites" && !selectedSource && !selectedDrama) {
-    return (
-      <>
-        <FavoritesScreen
-          favoriteDramas={favoriteDramaList}
-          onBack={handleGoHome}
-          onOpenHistory={handleGoHistory}
-          onOpenProfile={handleGoProfile}
-          onClearFavorites={handleClearFavorites}
-          onSelectDrama={(drama) => {
-            if (isDramaBoxDrama(drama)) {
-              cacheDramaBoxDrama(drama);
-              setSelectedDrama(drama);
-              setDramaBoxEpisodes([]);
-              setSelectedEpisode(null);
-              setDramaBoxEpisodesError(null);
-              setShowEpisodes(false);
-              setActiveTab("home");
-              return;
-            }
-
-            if (isReelShortDrama(drama)) {
-              cacheReelShortDrama(drama);
-              setSelectedDrama(drama);
-              setReelShortEpisodes([]);
-              setSelectedEpisode(null);
-              setReelShortEpisodesError(null);
-              setShowEpisodes(false);
-              setActiveTab("home");
-              return;
-            }
-
-            if (isMeloloDrama(drama)) {
-              cacheMeloloDrama(drama);
-              setSelectedDrama(drama);
-              setMeloloEpisodes([]);
-              setSelectedEpisode(null);
-              setMeloloEpisodesError(null);
-              setShowEpisodes(false);
-              setActiveTab("home");
-              return;
-            }
-
-            if (isDramawaveDrama(drama)) {
-              cacheDramawaveDrama(drama);
-              setSelectedDrama(drama);
-              setDramawaveEpisodes([]);
-              setSelectedEpisode(null);
-              setDramawaveEpisodesError(null);
-              setShowEpisodes(false);
-              setActiveTab("home");
-              return;
-            }
-
-            if (isNetshortDrama(drama)) {
-              cacheNetshortDrama(drama);
-              setSelectedDrama(drama);
-              setNetshortEpisodes([]);
-              setSelectedEpisode(null);
-              setNetshortEpisodesError(null);
-              setShowEpisodes(false);
-              setActiveTab("home");
-              return;
-            }
-
-            if (isFlickreelsDrama(drama)) {
-              cacheFlickreelsDrama(drama);
-              setSelectedDrama(drama);
-              setFlickreelsEpisodes([]);
-              setSelectedEpisode(null);
-              setFlickreelsEpisodesError(null);
-              setShowEpisodes(false);
-              setActiveTab("home");
-              return;
-            }
-
-            if (isShortmaxDrama(drama)) {
-              cacheShortmaxDrama(drama);
-              setSelectedDrama(drama);
-              setShortmaxEpisodes([]);
-              setSelectedEpisode(null);
-              setShortmaxEpisodesError(null);
-              setShowEpisodes(false);
-              setActiveTab("home");
-              return;
-            }
-
-            if (isGoodshortDrama(drama)) {
-              cacheGoodshortDrama(drama);
-              setSelectedDrama(drama);
-              setGoodshortEpisodes([]);
-              setSelectedEpisode(null);
-              setGoodshortEpisodesError(null);
-              setShowEpisodes(false);
-              setActiveTab("home");
-              return;
-            }
-
-            const localEpisodes = episodes.filter(
-              (episode) => episode.dramaId === drama.id,
-            );
-
-            const resumeEpisode = getResumeEpisodeFromHistory(
-              drama.id,
-              localEpisodes,
-              historyByDramaId,
-            );
-
-            const firstEpisode = getFirstLocalEpisode(drama, episodes);
-            const targetEpisode = resumeEpisode ?? firstEpisode;
-
-            setSelectedDrama(drama);
-            setSelectedEpisode(targetEpisode);
-            setShowEpisodes(false);
-
-            if (targetEpisode) {
-              handleSaveToHistory(drama.id, targetEpisode.id);
-            }
-
-            setActiveTab("home");
-          }}
-        />
-        <PersistentBottomNav
-          activeTab={effectiveBottomTab}
-          onGoHome={handleGoHome}
-          onGoHistory={handleGoHistory}
-          onGoFavorites={handleGoFavorites}
-          onGoProfile={handleGoProfile}
-        />
-      </>
-    );
-  }
-
-  if (activeTab === "profile" && !selectedSource && !selectedDrama) {
-    return (
-      <>
-        <ProfileScreen
-          favoriteCount={favoriteDramaList.length}
-          historyCount={historyItems.length}
-          mostWatchedLabel={mostWatchedLabel}
-          membershipStatus={membershipStatus}
-          telegramUserName={telegramUserName ?? webProfileName ?? webProfileUsername}
-          telegramUserId={telegramUserId ?? webProfileUserId}
-          telegramPhotoUrl={telegramPhotoUrl}
-          vipUntil={membershipVipUntil}
-          paymentSuccessNotice={showPaymentSuccessNotice}
-          onDismissPaymentSuccessNotice={() => setShowPaymentSuccessNotice(false)}
-          onBack={handleGoHome}
-          onOpenHistory={handleGoHistory}
-          onOpenFavorites={handleGoFavorites}
-          onOpenMembershipInfo={() => {
-            window.alert(
-              "Status membership mengikuti bot Telegram. Jika status belum sesuai, silakan update lewat bot lalu buka ulang mini app.",
-            );
-          }}
-        />
-        <PersistentBottomNav
-          activeTab={effectiveBottomTab}
-          onGoHome={handleGoHome}
-          onGoHistory={handleGoHistory}
-          onGoFavorites={handleGoFavorites}
-          onGoProfile={handleGoProfile}
-        />
-      </>
-    );
-  }
-
-  if (selectedDrama) {
+    if (selectedDrama) {
     return (
       <>
         <PlayerScreen
@@ -9551,13 +9762,6 @@ export default function Home() {
             }
           }}
         />
-        <PersistentBottomNav
-          activeTab={effectiveBottomTab}
-          onGoHome={handleGoHome}
-          onGoHistory={handleGoHistory}
-          onGoFavorites={handleGoFavorites}
-          onGoProfile={handleGoProfile}
-        />
       </>
     );
   }
@@ -9569,6 +9773,7 @@ export default function Home() {
           key={`${selectedSource?.slug || selectedSource?.name || "source"}-${activeSourceTab}`}
           selectedSource={selectedSource}
           searchQuery={searchQuery}
+          submittedSearchQuery={submittedSearchQuery}
           sourceTab={
             activeSourceTab as React.ComponentProps<
               typeof SourceScreen
@@ -9577,49 +9782,18 @@ export default function Home() {
           filteredDramas={sourceScreenDramas}
           favoriteIds={favoriteIds}
           isTelegramReady={isTelegramWebAppReady}
-          dramaBoxPage={dramaBoxPage}
-          dramaBoxHasNextPage={dramaBoxHasNextPage}
-          showDramaBoxPagination={false}
-          onDramaBoxPrevPage={handleDramaBoxPrevPage}
-          onDramaBoxNextPage={handleDramaBoxNextPage}
-          bilitvPage={bilitvPage}
-          bilitvHasNextPage={bilitvHasNextPage}
-          showBilitvPagination={
-            isBilitvSource(selectedSource) &&
-            submittedSearchQuery.trim().length === 0 &&
-            (bilitvTab === "Beranda" || bilitvTab === "VIP")
-          }
-          onBilitvPrevPage={() =>
-            setBilitvPage((prev) => Math.max(1, prev - 1))
-          }
-          onBilitvNextPage={() =>
-            setBilitvPage((prev) =>
-              bilitvTab === "VIP"
-                ? Math.min(BILITV_VIP_MAX_PAGE, prev + 1)
-                : Math.min(BILITV_HOME_MAX_PAGE, prev + 1),
-            )
-          }
-          reelifePage={reelifePage}
-          reelifeHasNextPage={reelifeHasNextPage}
-          showReelifePagination={
-            isReelifeSource(selectedSource) &&
-            submittedSearchQuery.trim().length === 0 &&
-            (reelifeTab === "Beranda" ||
-              reelifeTab === "Trending" ||
-              reelifeTab === "Pewaris" ||
-              reelifeTab === "ForYou")
-          }
-          onReelifePrevPage={handleReelifePrevPage}
-          onReelifeNextPage={handleReelifeNextPage}
+
+          pinedramaCategories={pinedramaCategories}
+          selectedPinedramaCategory={selectedPinedramaCategory}
+          onSelectPinedramaCategory={setSelectedPinedramaCategory}
+            isLoadingPinedramaFeed={isLoadingPinedramaFeed}
+
           isSearchEnabled={
+            isPineDramaSource(selectedSource) ||
             isDramaBoxSource(selectedSource) ||
             isReelShortSource(selectedSource) ||
             isMeloloSource(selectedSource) ||
             isDramawaveSource(selectedSource) ||
-            isNetshortSource(selectedSource) ||
-            isFlickreelsSource(selectedSource) ||
-            isShortmaxSource(selectedSource) ||
-            isGoodshortSource(selectedSource) ||
             isIdramaSource(selectedSource) ||
             isStardusttvSource(selectedSource) ||
             isDramabiteSource(selectedSource) ||
@@ -9632,45 +9806,6 @@ export default function Home() {
             isReelifeSource(selectedSource) ||
             isFreeReelsSource(selectedSource)
           }
-          meloloPage={Math.floor(meloloOffset / 20) + 1}
-          meloloHasNextPage={meloloHasNextPage}
-          showMeloloPagination={
-            isMeloloSource(selectedSource) &&
-            submittedSearchQuery.trim().length === 0 &&
-            (meloloTab === "Beranda" ||
-              meloloTab === "Romance" ||
-              meloloTab === "ForYou" ||
-              meloloTab === "Pewaris")
-          }
-          onMeloloPrevPage={() =>
-            setMeloloOffset((prev) => Math.max(0, prev - 20))
-          }
-          onMeloloNextPage={() => setMeloloOffset((prev) => prev + 20)}
-          flickreelsPage={flickreelsPage}
-          showFlickreelsPagination={false}
-          onFlickreelsPrevPage={() =>
-            setFlickreelsPage((prev) => Math.max(1, prev - 1))
-          }
-          onFlickreelsNextPage={() => setFlickreelsPage((prev) => prev + 1)}
-          shortmaxPage={shortmaxPage}
-          showShortmaxPagination={false}
-          onShortmaxPrevPage={() =>
-            setShortmaxPage((prev) => Math.max(1, prev - 1))
-          }
-          onShortmaxNextPage={() =>
-            setShortmaxPage((prev) =>
-              shortmaxTab === "Beranda" ? Math.min(5, prev + 1) : 1,
-            )
-          }
-          goodshortPage={goodshortPage}
-          goodshortHasNextPage={goodshortHasNextPage}
-          showGoodshortPagination={
-            isGoodshortSource(selectedSource) &&
-            submittedSearchQuery.trim().length === 0 &&
-            goodshortTab !== "Trending"
-          }
-          onGoodshortPrevPage={handleGoodshortPrevPage}
-          onGoodshortNextPage={handleGoodshortNextPage}
           onBack={() => {
             setSelectedSource(null);
             setSubmittedSearchQuery("");
@@ -9731,57 +9866,11 @@ export default function Home() {
             setSelectedEpisode(null);
             setShowEpisodes(false);
           }}
-          stardusttvPage={stardusttvPage}
-          stardusttvHasNextPage={stardusttvHasNextPage}
-          showStardusttvPagination={
-            isStardusttvSource(selectedSource) &&
-            stardusttvTab === "Beranda" &&
-            submittedSearchQuery.trim().length === 0
-          }
-          onStardusttvPrevPage={() => {
-            setStardusttvPage((current) => Math.max(1, current - 1));
-          }}
-          onStardusttvNextPage={() => {
-            setStardusttvPage((current) => Math.min(5, current + 1));
-          }}
           onToggleFavorite={handleToggleFavorite}
         />
-        {showGenericHomePagination ? (
-          <div className="fixed bottom-24 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-full border border-white/10 bg-[#12131A]/95 px-3 py-2 shadow-[0_18px_40px_rgba(0,0,0,0.35)] backdrop-blur">
-            <button
-              type="button"
-              onClick={handleGenericPrevPage}
-              disabled={currentPagedHomePage <= 1}
-              className="rounded-full border border-white/10 bg-white/[0.05] px-4 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              ← Prev
-            </button>
-
-            <span className="min-w-[62px] text-center text-sm font-medium text-[#E6D3A3]">
-              Page {currentPagedHomePage}
-            </span>
-
-            <button
-              type="button"
-              onClick={handleGenericNextPage}
-              disabled={
-                isReelShortSource(selectedSource) ||
-                (isDramawaveSource(selectedSource) && !dramawaveHasNextPage)
-              }
-              className={`rounded-full border px-4 py-2 text-sm ${
-                isReelShortSource(selectedSource) ||
-                (isDramawaveSource(selectedSource) && !dramawaveHasNextPage)
-                  ? "cursor-not-allowed border-white/5 bg-white/[0.02] text-white/30"
-                  : "border-white/10 bg-white/[0.05] text-white"
-              }`}
-            >
-              Next →
-            </button>
-          </div>
-        ) : null}
 
         <PersistentBottomNav
-          activeTab={effectiveBottomTab}
+          activeTab="home"
           onGoHome={handleGoHome}
           onGoHistory={handleGoHistory}
           onGoFavorites={handleGoFavorites}
@@ -9854,13 +9943,69 @@ export default function Home() {
         onOpenFavorites={handleGoFavorites}
         onOpenProfile={handleGoProfile}
       />
-      <PersistentBottomNav
-        activeTab={effectiveBottomTab}
-        onGoHome={handleGoHome}
-        onGoHistory={handleGoHistory}
-        onGoFavorites={handleGoFavorites}
-        onGoProfile={handleGoProfile}
+
+      <HistoryBottomSheet
+        isOpen={isHistorySheetOpen}
+        dramas={mergedDramas}
+        episodes={episodes}
+        historyItems={historyItems}
+        onClose={() => setIsHistorySheetOpen(false)}
+        onClearAll={handleClearHistory}
+        onSelectHistory={(drama, episode) => {
+          setIsHistorySheetOpen(false);
+          setSelectedDrama(drama);
+          setSelectedEpisode(episode);
+          setShowEpisodes(false);
+        }}
       />
+
+      <FavoritesBottomSheet
+        isOpen={isFavoritesSheetOpen}
+        favoriteDramas={favoriteDramaList}
+        onClose={() => setIsFavoritesSheetOpen(false)}
+        onSelectDrama={(drama) => {
+          setIsFavoritesSheetOpen(false);
+          setSelectedDrama(drama);
+        }}
+        onToggleFavorite={handleToggleFavorite}
+      />
+
+      <ProfileBottomSheet
+        isOpen={isProfileSheetOpen}
+        membershipStatus={membershipStatus}
+        telegramUserName={
+          telegramUserName ??
+          window.Telegram?.WebApp?.initDataUnsafe?.user?.username ??
+          null
+        }
+        telegramUserId={
+          telegramUserId ??
+          window.Telegram?.WebApp?.initDataUnsafe?.user?.id ??
+          null
+        }
+        favoriteCount={favoriteDramaList.length}
+        historyCount={historyItems.length}
+        mostWatchedLabel={mostWatchedLabel}
+        onClose={() => setIsProfileSheetOpen(false)}
+        onToggleMembership={() => {
+          window.alert(
+            "Status membership mengikuti bot Telegram."
+          );
+        }}
+      />
+
+      {!selectedDrama &&
+       !isHistorySheetOpen &&
+       !isFavoritesSheetOpen &&
+       !isProfileSheetOpen ? (
+        <PersistentBottomNav
+          activeTab="home"
+          onGoHome={handleGoHome}
+          onGoHistory={handleGoHistory}
+          onGoFavorites={handleGoFavorites}
+          onGoProfile={handleGoProfile}
+        />
+      ) : null}
     </>
   );
 }

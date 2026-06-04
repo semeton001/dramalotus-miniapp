@@ -1,43 +1,21 @@
-import { NextRequest, NextResponse } from "next/server";
-import { adaptDramaBoxDramaList } from "@/lib/adapters/drama";
-import {
-  dedupeDramaBoxItems,
-  enrichDramaBoxDramaMeta,
-  extractDramaBoxItemsDeep,
-  fetchDramaBoxHomePage,
-  getLang,
-} from "../_shared";
+import { NextResponse } from "next/server";
+import { fetchDramaBoxHomePage } from "../_shared";
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const lang = getLang(request);
-    const payloads = await Promise.all(
-      [1, 2, 3, 4, 5].map((page) => fetchDramaBoxHomePage(page, lang)),
-    );
+    const data = await fetchDramaBoxHomePage(1);
 
-    const rawItems = dedupeDramaBoxItems(
-      payloads.flatMap((payload) => extractDramaBoxItemsDeep(payload)),
-    );
+    const items =
+      data?.data?.data?.classifyBookList?.records ?? [];
 
-    const adapted = adaptDramaBoxDramaList(rawItems).filter(
-      (item) => item.coverImage || item.posterImage,
-    );
-
-    return NextResponse.json(
-      {
-        items: enrichDramaBoxDramaMeta(adapted, rawItems),
-        page: 1,
-        hasNextPage: false,
-      },
-      { headers: { "Cache-Control": "no-store" } },
-    );
+    return NextResponse.json({
+      items,
+      hasNextPage: false,
+    });
   } catch (error) {
-    console.error("Failed to fetch DramaBox home:", error);
-
     return NextResponse.json(
       {
-        error: "Failed to fetch DramaBox home",
-        details: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : "Home failed",
       },
       { status: 500 },
     );

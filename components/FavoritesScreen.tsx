@@ -21,7 +21,7 @@ export default function FavoritesScreen({
 }: FavoritesScreenProps) {
   return (
     <main className="min-h-[100dvh] bg-[radial-gradient(circle_at_top,rgba(201,164,92,0.10),transparent_24%),#0B0B0F] text-white">
-      <div className="mx-auto min-h-[100dvh] w-full max-w-[430px] px-4 pb-28 pt-6">
+      <div className="mx-auto min-h-[100dvh] w-full max-w-[430px] px-4 pb-28 pt-10">
         <header className="mb-6 flex items-start justify-between gap-3">
           <div>
             <h1 className="text-[28px] font-bold tracking-tight text-white">

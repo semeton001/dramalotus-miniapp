@@ -7,6 +7,7 @@ import { createStreamToken, verifyStreamToken } from "@/lib/stream/token";
 import {
   extractMicrodramaEpisodes,
   fetchMicrodramaJson,
+  MICRODRAMA_USER_AGENT,
 } from "../_shared";
 
 export const runtime = "nodejs";
@@ -123,7 +124,7 @@ function buildUpstreamHeaders(request: NextRequest, upstreamUrl: URL): Headers {
   headers.set("Referer", `${upstreamUrl.origin}/`);
   headers.set(
     "User-Agent",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    MICRODRAMA_USER_AGENT,
   );
 
   if (range) {
@@ -144,6 +145,7 @@ async function resolveMicrodramaStreamUrl(
   );
 
   const episodeNumber = Number(episode) || 1;
+
   const rawEpisode = extractMicrodramaEpisodes(payload).find((item) => {
     const current = Number(item.index || item.episode || 0);
     return current === episodeNumber;
@@ -151,7 +153,7 @@ async function resolveMicrodramaStreamUrl(
 
   if (!rawEpisode) return "";
 
-  return pickBestVideoUrl(rawEpisode.videos);
+  return pickBestVideoUrl(rawEpisode.videos || []);
 }
 
 async function requireMicrodramaAccess(request: NextRequest) {
@@ -200,30 +202,6 @@ async function requireMicrodramaAccess(request: NextRequest) {
       { ok: false, error: "episodeNumber tidak valid." },
       { status: 400, headers: buildCorsHeaders("application/json") },
     );
-  }
-
-  const isFreeEpisode = episodeNumber <= FREE_EPISODE_LIMIT;
-
-  if (!isFreeEpisode && user.membership_status !== "vip") {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "VIP_REQUIRED",
-        message: "Episode ini hanya untuk VIP.",
-      },
-      { status: 403, headers: buildCorsHeaders("application/json") },
-    );
-  }
-
-  if (user.membership_status === "vip" && user.vip_until) {
-    const expiresAt = new Date(user.vip_until).getTime();
-
-    if (!Number.isNaN(expiresAt) && expiresAt <= Date.now()) {
-      return NextResponse.json(
-        { ok: false, error: "VIP_EXPIRED" },
-        { status: 403, headers: buildCorsHeaders("application/json") },
-      );
-    }
   }
 
   return null;

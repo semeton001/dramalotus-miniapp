@@ -1,45 +1,22 @@
-import { NextRequest, NextResponse } from "next/server";
-import {
-  adaptIdramaDramaList,
-  dedupeIdramaDramas,
-  extractIdramaItemsDeep,
-  fetchIdramaJson,
-} from "../_shared";
+import { NextResponse } from "next/server";
+import { fetchIdramaJson, normalizeDramaList } from "../_shared";
 
-export async function GET(request: NextRequest) {
-  try {
-    const page = Number(request.nextUrl.searchParams.get("page") || "1") || 1;
+export async function GET() {
+  const payloads = await Promise.all([
+    fetchIdramaJson("/ranking/hits", { page: 1, limit: 20 }),
+    fetchIdramaJson("/genre/section_96c34d71", { page: 1, limit: 20 }),
+    fetchIdramaJson("/genre/section_6ef00d1d", { page: 1, limit: 20 }),
+  ]);
 
-    const payloads = await Promise.all([
-      fetchIdramaJson("/genre/section_da51e8ee", {
-        page,
-        limit: 50,
-      }),
-      fetchIdramaJson("/genre/section_2a29373e", {
-        page,
-        limit: 50,
-      }),
-    ]);
+  const merged = payloads.flatMap(normalizeDramaList);
 
-    const rawItems = payloads.flatMap((payload) => extractIdramaItemsDeep(payload));
-    const items = dedupeIdramaDramas(adaptIdramaDramaList(rawItems, "Beranda"));
+  const dedupe = Array.from(
+    new Map(merged.map((x) => [x.id, x])).values(),
+  );
 
-    return NextResponse.json(
-      {
-        items,
-        hasNextPage: false,
-        page,
-      },
-      { headers: { "Cache-Control": "no-store" } },
-    );
-  } catch (error) {
-    console.error("iDrama home route error:", error);
-    return NextResponse.json(
-      {
-        error: "Failed to load iDrama home.",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    );
-  }
+  return NextResponse.json({
+    items: dedupe,
+    hasNextPage: false,
+    page: 1,
+  });
 }

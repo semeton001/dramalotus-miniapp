@@ -1,10 +1,46 @@
-import { NextRequest } from "next/server";
-import { respondDetail } from "../_shared";
+import { NextRequest, NextResponse } from "next/server";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+const TARGET = "https://api.dramalotus.site/api/reelshort/detail";
 
-export async function GET(request: NextRequest) {
-  const id = request.nextUrl.searchParams.get("id")?.trim() ?? "";
-  return respondDetail(id);
+async function handler(req: NextRequest) {
+  const id = req.nextUrl.searchParams.get("id")?.trim() || "";
+
+  if (!id) {
+    return NextResponse.json({ code: 1, msg: "id kosong" }, { status: 400 });
+  }
+
+  const qs = req.nextUrl.search || "";
+
+  const upstream = await fetch(TARGET + qs, {
+    method: req.method,
+    headers: {
+      Accept: req.headers.get("accept") || "*/*",
+      "User-Agent":
+        req.headers.get("user-agent") ||
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+      Authorization: req.headers.get("authorization") || "",
+      "Content-Type":
+        req.headers.get("content-type") || "application/json",
+    },
+    body:
+      req.method === "GET" || req.method === "HEAD"
+        ? undefined
+        : await req.text(),
+    redirect: "follow",
+    cache: "no-store",
+  });
+
+  const body = await upstream.text();
+
+  return new Response(body, {
+    status: upstream.status,
+    headers: {
+      "content-type":
+        upstream.headers.get("content-type") || "application/json",
+      "cache-control":
+        upstream.headers.get("cache-control") || "no-store",
+    },
+  });
 }
+
+export { handler as GET, handler as POST };

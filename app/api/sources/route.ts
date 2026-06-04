@@ -208,6 +208,26 @@ export async function GET() {
     });
   }
 
+  const hasPineDrama = mapped.some(
+    (item) =>
+      String(item.slug || "").toLowerCase() === "pinedrama" ||
+      String(item.name || "").toLowerCase() === "pinedrama",
+  );
+
+  if (!hasPineDrama) {
+    mapped.push({
+      id: "21",
+      name: "PineDrama",
+      slug: "pinedrama",
+      badge: "NEW",
+      description: "Source drama pendek PineDrama dengan subtitle WEBVTT.",
+      logo: "/sources/pinedrama.png",
+      cardClass: "from-[#10B981]/20 via-[#22C55E]/10 to-[#111827]",
+      sortOrder: 21,
+      isPopular: false,
+    });
+  }
+
   mapped.sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
 
   return NextResponse.json(mapped);

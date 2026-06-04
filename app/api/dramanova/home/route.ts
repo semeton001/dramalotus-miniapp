@@ -9,8 +9,9 @@ import {
 export async function GET() {
   try {
     const payloads = await Promise.all([
-      fetchDramaNovaJson("/dramas", { page: 1, size: 50 }),
-      fetchDramaNovaJson("/dramas", { page: 2, size: 50 }),
+      fetchDramaNovaJson("/dramas", { page: 1, size: 20 }),
+      fetchDramaNovaJson("/dramas", { page: 2, size: 20 }),
+      fetchDramaNovaJson("/dramas", { page: 3, size: 20 }),
     ]);
 
     const items = adaptDramaNovaDramaList(payloads.flatMap(extractDramaNovaItemsDeep));

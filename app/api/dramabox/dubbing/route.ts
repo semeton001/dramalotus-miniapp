@@ -1,44 +1,21 @@
-import { NextRequest, NextResponse } from "next/server";
-import { adaptDramaBoxDramaList } from "@/lib/adapters/drama";
-import {
-  dedupeDramaBoxItems,
-  enrichDramaBoxDramaMeta,
-  extractDramaBoxItemsDeep,
-  fetchDramaBoxSearch,
-  getLang,
-} from "../_shared";
+import { NextResponse } from "next/server";
+import { fetchDramaBoxVip } from "../_shared";
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const lang = getLang(request);
-    const payloads = await Promise.all([
-      fetchDramaBoxSearch("sulih suara", 1, lang),
-      fetchDramaBoxSearch("sulih suara", 2, lang),
-    ]);
+    const data = await fetchDramaBoxVip();
 
-    const rawItems = dedupeDramaBoxItems(
-      payloads.flatMap((payload) => extractDramaBoxItemsDeep(payload)),
-    );
+    const items =
+      data?.data?.data?.recommendList?.records ?? [];
 
-    const adapted = adaptDramaBoxDramaList(rawItems).filter(
-      (item) => item.coverImage || item.posterImage,
-    );
-
-    return NextResponse.json(
-      {
-        items: enrichDramaBoxDramaMeta(adapted, rawItems),
-        page: 1,
-        hasNextPage: false,
-      },
-      { headers: { "Cache-Control": "no-store" } },
-    );
+    return NextResponse.json({
+      items,
+      hasNextPage: false,
+    });
   } catch (error) {
-    console.error("Failed to fetch DramaBox VIP:", error);
-
     return NextResponse.json(
       {
-        error: "Failed to fetch DramaBox VIP",
-        details: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : "VIP failed",
       },
       { status: 500 },
     );

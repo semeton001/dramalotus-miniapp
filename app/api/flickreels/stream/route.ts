@@ -12,6 +12,12 @@ export const revalidate = 0;
 
 const ALLOWED_PROTOCOLS = new Set(["http:", "https:"]);
 
+
+const FLICKREELS_STREAM_CACHE = new Map<
+  string,
+  { url: string; exp: number }
+>();
+
 const HOP_BY_HOP_HEADERS = new Set([
   "connection",
   "keep-alive",
@@ -176,8 +182,15 @@ async function resolveFlickReelsStreamUrl(
 ): Promise<string> {
   if (!dramaId.trim() || !chapterId.trim()) return "";
 
+  const cacheKey = `${dramaId}:${chapterId}`;
+  const cached = FLICKREELS_STREAM_CACHE.get(cacheKey);
+
+  if (cached && cached.exp > Date.now()) {
+    return cached.url;
+  }
+
   const upstreamUrl = buildFlickreelsApiUrl(
-    `/stream/${encodeURIComponent(dramaId)}/${encodeURIComponent(chapterId)}`,
+    `/chapters/${encodeURIComponent(dramaId)}`,
   );
 
   const response = await fetch(upstreamUrl, {
@@ -185,19 +198,52 @@ async function resolveFlickReelsStreamUrl(
     cache: "no-store",
     headers: {
       Accept: "application/json,text/plain,*/*",
+      Authorization: `Bearer ${process.env.FLICKREELS_TOKEN}`,
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
     },
   });
 
   if (!response.ok) return "";
 
-  const payload = (await response.json()) as FlickReelsStreamResponse;
-  const hlsUrl = payload?.data?.hls_url;
+  const payload = await response.json();
+  const list = Array.isArray(payload?.data?.list)
+    ? payload.data.list
+    : [];
 
-  return typeof hlsUrl === "string" && hlsUrl.trim() ? hlsUrl.trim() : "";
+  const hit = list.find(
+    (item: any) => String(item?.chapter_id) === String(chapterId),
+  );
+
+  const hlsUrl = hit?.hls_url;
+
+  const finalUrl =
+    typeof hlsUrl === "string" && hlsUrl.trim()
+      ? hlsUrl.trim()
+      : "";
+
+  if (finalUrl) {
+    FLICKREELS_STREAM_CACHE.set(cacheKey, {
+      url: finalUrl,
+      exp: Date.now() + 10 * 60 * 1000,
+    });
+  }
+
+  return finalUrl;
 }
 
 async function requireFlickreelsAccess(request: NextRequest) {
   if (isMiniappRequest(request)) return null;
+
+  const token = request.nextUrl.searchParams.get("token")?.trim() ?? "";
+
+  if (token) {
+    const payload = verifyStreamToken(token);
+
+    if (payload && payload.provider === "flickreels") {
+      return null;
+    }
+  }
 
   const user = await getCurrentUser();
 
@@ -207,8 +253,6 @@ async function requireFlickreelsAccess(request: NextRequest) {
       { status: 401, headers: buildCorsHeaders("application/json") },
     );
   }
-
-  const token = request.nextUrl.searchParams.get("token")?.trim() ?? "";
   const legacyUrl = request.nextUrl.searchParams.get("url")?.trim() ?? "";
   const legacyU = request.nextUrl.searchParams.get("u")?.trim() ?? "";
 

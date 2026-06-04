@@ -8,7 +8,7 @@ import {
 
 export async function GET() {
   try {
-    const payload = await fetchDramapopsJson("/dramas/popular", { limit: 50 });
+    const payload = await fetchDramapopsJson("/dramas/popular", { limit: 20 });
     const items = adaptDramapopsDramaList(extractDramapopsItemsDeep(payload));
     return feedResponse(items, 1);
   } catch (error) {

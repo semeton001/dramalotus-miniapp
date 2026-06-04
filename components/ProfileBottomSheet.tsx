@@ -45,7 +45,7 @@ export default function ProfileBottomSheet({
       aria-hidden={!isOpen}
     >
       <div
-        className={`absolute inset-x-0 bottom-0 mx-auto w-full max-w-[1100px] rounded-t-[28px] border border-white/10 bg-[#0F1118] shadow-[0_-20px_50px_rgba(0,0,0,0.35)] transition-all duration-300 ease-out ${
+        className={`absolute inset-x-0 bottom-0 h-[65vh] mx-auto w-full max-w-[1100px] rounded-t-[28px] border border-white/10 bg-[#0F1118] shadow-[0_-20px_50px_rgba(0,0,0,0.35)] transition-all duration-300 ease-out ${
           isOpen ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"
         }`}
         onClick={(e) => e.stopPropagation()}
@@ -53,7 +53,7 @@ export default function ProfileBottomSheet({
         aria-modal="true"
       >
         <div className="flex justify-center pt-3">
-          <div className="h-1.5 w-14 rounded-full bg-white/20" />
+          <div className="h-1.5 w-20 rounded-full bg-white/20" />
         </div>
 
         <div className="flex items-center justify-between border-b border-white/8 px-4 py-4">
@@ -65,7 +65,7 @@ export default function ProfileBottomSheet({
         <div className="max-h-[70vh] overflow-y-auto px-4 py-4">
           <div className="rounded-[22px] border border-white/8 bg-[#171922] p-4">
             <div className="flex items-center gap-4">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#F6C667,#D99B5F)] text-2xl font-bold text-white">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#F6C667,#D99B5F)] text-lg font-bold text-white">
                 {initials}
               </div>
 
@@ -106,26 +106,26 @@ export default function ProfileBottomSheet({
               Statistik
             </p>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              <div className="rounded-[20px] border border-white/8 bg-[#171922] px-4 py-5 text-center">
-                <p className="text-4xl font-bold text-white">{historyCount}</p>
-                <p className="mt-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#8F887C]">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-[18px] border border-white/8 bg-[#171922] px-2 py-2 text-center min-h-[68px]">
+                <p className="text-lg font-bold text-white">{historyCount}</p>
+                <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8F887C]">
                   Riwayat
                 </p>
               </div>
 
-              <div className="rounded-[20px] border border-white/8 bg-[#171922] px-4 py-5 text-center">
-                <p className="text-4xl font-bold text-white">{favoriteCount}</p>
-                <p className="mt-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#8F887C]">
+              <div className="rounded-[18px] border border-white/8 bg-[#171922] px-2 py-2 text-center min-h-[68px]">
+                <p className="text-lg font-bold text-white">{favoriteCount}</p>
+                <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8F887C]">
                   Favorit
                 </p>
               </div>
 
-              <div className="rounded-[20px] border border-white/8 bg-[#171922] px-4 py-5 text-center">
-                <p className="truncate text-2xl font-bold text-white">
+              <div className="rounded-[18px] border border-white/8 bg-[#171922] px-2 py-2 text-center min-h-[68px]">
+                <p className="truncate text-[12px] font-semibold text-white">
                   {mostWatchedLabel || "-"}
                 </p>
-                <p className="mt-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#8F887C]">
+                <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8F887C]">
                   Sering Nonton
                 </p>
               </div>

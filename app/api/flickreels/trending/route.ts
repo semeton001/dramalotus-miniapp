@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import {
-  buildFlickreelsApiUrl,
   fetchAndNormalizeFeed,
   jsonError,
 } from "../_shared";
@@ -8,12 +7,8 @@ import {
 export async function GET() {
   try {
     const dramas = await fetchAndNormalizeFeed(
-      buildFlickreelsApiUrl("/category", {
-        navigation_id: 78,
-        page: 50,
-        page_size: 10,
-      }),
-      "home",
+      "/category?navigation_id=78&page=1&page_size=20",
+      "trending",
     );
 
     return NextResponse.json(

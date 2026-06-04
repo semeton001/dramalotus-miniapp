@@ -1,48 +1,65 @@
-import { NextRequest, NextResponse } from "next/server";
-import { normalizeDramawaveFeedPayload } from "../_shared";
+import { NextResponse } from "next/server";
+import { fetchJson, errorJson } from "../_shared";
 
-const DRAMAWAVE_VIP_URL =
-  "https://streamapi.web.id/p/dramawave/api/v1/feed/vip";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-const DRAMAWAVE_TOKEN = process.env.DRAMAWAVE_TOKEN?.trim() || "";
+function extractItems(payload: any): any[] {
+  if (Array.isArray(payload?.data)) {
+    return payload.data;
+  }
 
-export async function GET(request: NextRequest) {
-  try {
-    const page = Math.max(
-      1,
-      Number(request.nextUrl.searchParams.get("page") || "1") || 1,
+  if (Array.isArray(payload?.data?.list)) {
+    return payload.data.list;
+  }
+
+  if (Array.isArray(payload?.data?.items)) {
+    return payload.data.items.flatMap((entry: any) =>
+      Array.isArray(entry?.items) ? entry.items : [entry]
     );
+  }
 
-    const upstreamUrl = `${DRAMAWAVE_VIP_URL}?page=${page}&lang=id-ID&token=${DRAMAWAVE_TOKEN}`;
+  return [];
+}
 
-    const response = await fetch(upstreamUrl, {
-      method: "GET",
-      cache: "no-store",
-      headers: {
-        Accept: "application/json, text/plain, */*",
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-      },
+export async function GET() {
+  try {
+    const [popular, free, female] = await Promise.all([
+      fetchJson("/api/v1/feed/popular?page=1&lang=id-ID"),
+      fetchJson("/api/v1/feed/free?page=1&lang=id-ID"),
+      fetchJson("/api/v1/feed/female?page=1&lang=id-ID"),
+    ]);
+
+    const merged = [
+      ...extractItems(popular),
+      ...extractItems(free),
+      ...extractItems(female),
+    ];
+
+    const seen = new Set<string>();
+
+    const deduped = merged.filter((item: any) => {
+      const id = String(
+        item?.key ||
+        item?.drama_id ||
+        item?.id ||
+        item?.dramaId ||
+        item?.link ||
+        ""
+      );
+
+      if (!id) return false;
+      if (seen.has(id)) return false;
+
+      seen.add(id);
+      return true;
     });
 
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: `Failed to load DramaWave VIP. status=${response.status}` },
-        { status: response.status },
-      );
-    }
-
-    const payload = await response.json();
-    return NextResponse.json(normalizeDramawaveFeedPayload(payload, "vip", 4));
+    return NextResponse.json({
+      code: 200,
+      data: deduped,
+    });
   } catch (error) {
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to load DramaWave VIP.",
-      },
-      { status: 500 },
-    );
+    return errorJson(error);
   }
 }

@@ -1,34 +1,17 @@
-import { NextRequest, NextResponse } from "next/server";
 import {
-  adaptStardustDramaList,
   extractStardustItemsDeep,
-  feedResponse,
+  adaptStardustDramaList,
   fetchStardustJson,
+  feedResponse,
 } from "../_shared";
 
-export async function GET(request: NextRequest) {
-  try {
-    const page = Math.min(
-      5,
-      Math.max(1, Number(request.nextUrl.searchParams.get("page") || "1")),
-    );
+export async function GET() {
+  const payloads = await Promise.all([
+    fetchStardustJson("/homepage?lang=id"),
+    fetchStardustJson("/category/1?lang=id&page=1&page_size=10"),
+    fetchStardustJson("/category/15?lang=id&page=1&page_size=10"),
+  ]);
 
-    const payload = await fetchStardustJson("/category/0", {
-      page,
-      page_size: 30,
-    });
-
-    const items = adaptStardustDramaList(extractStardustItemsDeep(payload));
-
-    return feedResponse(items, page, page < 5);
-  } catch (error) {
-    console.error("StardustTV home route error:", error);
-    return NextResponse.json(
-      {
-        error: "Failed to load StardustTV home.",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    );
-  }
+  const merged = payloads.flatMap((p) => extractStardustItemsDeep(p));
+  return feedResponse(adaptStardustDramaList(merged));
 }

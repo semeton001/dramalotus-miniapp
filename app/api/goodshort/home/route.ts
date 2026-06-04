@@ -1,42 +1,45 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import {
+  buildGoodshortApiUrl,
   fetchGoodshortJson,
-  normalizeGoodshortFeed,
-  readPositiveInt,
+  normalizeGoodshortItems,
 } from "../_shared";
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const page = readPositiveInt(request, "page", 1);
+    const [p1, p2] = await Promise.all([
+      fetchGoodshortJson(
+        buildGoodshortApiUrl("/home", {
+          channelId: 562,
+          page: 1,
+          pageSize: 12,
+        }),
+      ),
+      fetchGoodshortJson(
+        buildGoodshortApiUrl("/home", {
+          channelId: 562,
+          page: 2,
+          pageSize: 12,
+        }),
+      ),
+    ]);
 
-    const payload = await fetchGoodshortJson("/home", {
-      channelId: 562,
-      page,
-      pageSize: 100,
-    });
+    const merged = [
+      ...normalizeGoodshortItems(p1),
+      ...normalizeGoodshortItems(p2),
+    ];
 
-    const items = normalizeGoodshortFeed(payload, "Beranda");
-
-    return NextResponse.json(
-      {
-        items,
-        hasNextPage: false,
-        page,
-      },
-      {
-        headers: {
-          "Cache-Control": "no-store",
-        },
-      },
+    const dedup = Array.from(
+      new Map(merged.map((x) => [x.id, x])).values(),
     );
-  } catch (error) {
+
+    return NextResponse.json({
+      items: dedup,
+      hasNextPage: false,
+    });
+  } catch (e: any) {
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Gagal memuat feed GoodShort.",
-      },
+      { error: e?.message || "GoodShort home failed" },
       { status: 500 },
     );
   }

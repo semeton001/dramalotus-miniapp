@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/getCurrentUser";
-import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
 import { isMiniappRequest } from "@/lib/auth/isMiniappRequest";
 import { checkStreamRateLimit } from "@/lib/rate-limit/stream";
 import { createStreamToken, verifyStreamToken } from "@/lib/stream/token";
@@ -185,44 +184,6 @@ async function requireBiliTVAccess(request: NextRequest) {
     userId: user.id,
   });
   if (rateLimitError) return rateLimitError;
-
-  const episodeNumber = Number(
-    request.nextUrl.searchParams.get("episodeNumber") ||
-      request.nextUrl.searchParams.get("episode") ||
-      request.nextUrl.searchParams.get("ep") ||
-      "1",
-  );
-
-  if (!Number.isInteger(episodeNumber) || episodeNumber < 1) {
-    return NextResponse.json(
-      { ok: false, error: "episodeNumber tidak valid." },
-      { status: 400, headers: buildCorsHeaders("application/json") },
-    );
-  }
-
-  const isFreeEpisode = episodeNumber <= FREE_EPISODE_LIMIT;
-
-  if (!isFreeEpisode && user.membership_status !== "vip") {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "VIP_REQUIRED",
-        message: "Episode ini hanya untuk VIP.",
-      },
-      { status: 403, headers: buildCorsHeaders("application/json") },
-    );
-  }
-
-  if (user.membership_status === "vip" && user.vip_until) {
-    const expiresAt = new Date(user.vip_until).getTime();
-
-    if (!Number.isNaN(expiresAt) && expiresAt <= Date.now()) {
-      return NextResponse.json(
-        { ok: false, error: "VIP_EXPIRED" },
-        { status: 403, headers: buildCorsHeaders("application/json") },
-      );
-    }
-  }
 
   return null;
 }

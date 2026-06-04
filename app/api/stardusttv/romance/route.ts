@@ -1,31 +1,16 @@
-import { NextResponse } from "next/server";
 import {
-  adaptStardustDramaList,
   extractStardustItemsDeep,
-  feedResponse,
+  adaptStardustDramaList,
   fetchStardustJson,
+  feedResponse,
 } from "../_shared";
 
 export async function GET() {
-  try {
-    const payloads = await Promise.all([
-      fetchStardustJson("/category/2", { page: 1, page_size: 30 }),
-      fetchStardustJson("/category/10", { page: 1, page_size: 30 }),
-    ]);
+  const payloads = await Promise.all([
+    fetchStardustJson("/category/9?lang=id&page=1&page_size=10"),
+    fetchStardustJson("/category/10?lang=id&page=1&page_size=10"),
+  ]);
 
-    const items = adaptStardustDramaList(
-      payloads.flatMap((payload) => extractStardustItemsDeep(payload)),
-    );
-
-    return feedResponse(items, 1, false);
-  } catch (error) {
-    console.error("StardustTV romance route error:", error);
-    return NextResponse.json(
-      {
-        error: "Failed to load StardustTV romance.",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    );
-  }
+  const merged = payloads.flatMap((p) => extractStardustItemsDeep(p));
+  return feedResponse(adaptStardustDramaList(merged));
 }

@@ -1,7 +1,6 @@
 import crypto from "crypto";
 
-const DEFAULT_TTL_SECONDS = 180;
-const TOKEN_VERSION = "v2";
+const DEFAULT_TTL_SECONDS = 1800;
 
 type StreamTokenPayload = {
   provider: string;
@@ -11,109 +10,39 @@ type StreamTokenPayload = {
   exp: number;
 };
 
-function getSecret() {
-  const secret = process.env.STREAM_TOKEN_SECRET;
+const tokenStore = new Map<string, StreamTokenPayload>();
 
-  if (!secret || secret.trim().length < 32) {
-    throw new Error("STREAM_TOKEN_SECRET is missing or too short");
+function cleanup() {
+  const now = Math.floor(Date.now() / 1000);
+
+  for (const [key, value] of tokenStore.entries()) {
+    if (value.exp < now) {
+      tokenStore.delete(key);
+    }
   }
-
-  return secret.trim();
-}
-
-function getEncryptionKey() {
-  return crypto.createHash("sha256").update(getSecret()).digest();
-}
-
-function base64UrlEncode(value: Buffer) {
-  return value.toString("base64url");
-}
-
-function base64UrlDecode(value: string) {
-  return Buffer.from(value, "base64url");
 }
 
 export function createStreamToken(
   input: Omit<StreamTokenPayload, "exp">,
   ttlSeconds = DEFAULT_TTL_SECONDS,
 ) {
-  const payload: StreamTokenPayload = {
+  cleanup();
+
+  const token = crypto.randomBytes(12).toString("hex");
+
+  tokenStore.set(token, {
     ...input,
     exp: Math.floor(Date.now() / 1000) + ttlSeconds,
-  };
+  });
 
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv("aes-256-gcm", getEncryptionKey(), iv);
-
-  const plaintext = Buffer.from(JSON.stringify(payload), "utf8");
-  const encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
-  const authTag = cipher.getAuthTag();
-
-  return [
-    TOKEN_VERSION,
-    base64UrlEncode(iv),
-    base64UrlEncode(encrypted),
-    base64UrlEncode(authTag),
-  ].join(".");
+  return token;
 }
 
 export function verifyStreamToken(token: string) {
-  const [version, encodedIv, encodedEncrypted, encodedAuthTag] = token.split(".");
+  cleanup();
+  return tokenStore.get(token) || null;
+}
 
-  if (
-    version !== TOKEN_VERSION ||
-    !encodedIv ||
-    !encodedEncrypted ||
-    !encodedAuthTag
-  ) {
-    return null;
-  }
-
-  let payload: StreamTokenPayload;
-
-  try {
-    const iv = base64UrlDecode(encodedIv);
-    const encrypted = base64UrlDecode(encodedEncrypted);
-    const authTag = base64UrlDecode(encodedAuthTag);
-
-    if (iv.length !== 12 || authTag.length !== 16) {
-      return null;
-    }
-
-    const decipher = crypto.createDecipheriv(
-      "aes-256-gcm",
-      getEncryptionKey(),
-      iv,
-    );
-
-    decipher.setAuthTag(authTag);
-
-    const decrypted = Buffer.concat([
-      decipher.update(encrypted),
-      decipher.final(),
-    ]);
-
-    payload = JSON.parse(decrypted.toString("utf8")) as StreamTokenPayload;
-  } catch {
-    return null;
-  }
-
-  if (!payload.exp || payload.exp < Math.floor(Date.now() / 1000)) {
-    return null;
-  }
-
-  if (
-    typeof payload.provider !== "string" ||
-    typeof payload.userId !== "string" ||
-    typeof payload.episodeKey !== "string" ||
-    typeof payload.url !== "string" ||
-    !payload.provider ||
-    !payload.userId ||
-    !payload.episodeKey ||
-    !payload.url
-  ) {
-    return null;
-  }
-
-  return payload;
+export function isStreamTokenExpired(payload: StreamTokenPayload) {
+  return payload.exp < Math.floor(Date.now() / 1000);
 }

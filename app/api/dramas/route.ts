@@ -57,73 +57,36 @@ type DramaBoxSearchItemResponse = {
   tags?: string[];
 };
 
-const DRAMABOX_BASE_URL = "https://dramabox.dramabos.my.id/api/v1";
 const DRAMABOX_LANG = "in";
 const DRAMABOX_ENRICH_LIMIT = 12;
 const DRAMABOX_SEARCH_QUERY = "love";
-const DRAMABOX_EPISODE_CODE = "4D96F22760EA30FB0FFBA9AA87A979A6";
 
-async function fetchDramaBoxSearchList(query: string) {
+
+
+
+
+async function fetchDramaBoxCatalog() {
+  const token = process.env.DRAMABOX_TOKEN?.trim() || "";
+
   const response = await fetch(
-    `${DRAMABOX_BASE_URL}/search?query=${encodeURIComponent(query)}&lang=${DRAMABOX_LANG}`,
+    "https://captain.sapimu.au/dramaboxv4/api/search?keyword=love&page=1&lang=in",
     {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-      },
       cache: "no-store",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+      },
     },
   );
 
   if (!response.ok) {
-    throw new Error(
-      `DramaBox search request failed with status ${response.status}`,
-    );
+    throw new Error(`DramaBox search failed ${response.status}`);
   }
 
-  return response.json();
-}
+  const payload = await response.json();
 
-async function fetchDramaBoxDetail(bookId: string) {
-  const response = await fetch(
-    `${DRAMABOX_BASE_URL}/detail?bookId=${encodeURIComponent(bookId)}&lang=${DRAMABOX_LANG}`,
-    {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-      },
-      cache: "no-store",
-    },
-  );
-
-  if (!response.ok) {
-    throw new Error(
-      `DramaBox detail request failed for bookId ${bookId} with status ${response.status}`,
-    );
-  }
-
-  return response.json();
-}
-
-async function fetchDramaBoxEpisodeList(bookId: string) {
-  const response = await fetch(
-    `${DRAMABOX_BASE_URL}/allepisode?bookId=${encodeURIComponent(bookId)}&lang=${DRAMABOX_LANG}&code=${DRAMABOX_EPISODE_CODE}`,
-    {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-      },
-      cache: "no-store",
-    },
-  );
-
-  if (!response.ok) {
-    throw new Error(
-      `DramaBox allepisode request failed for bookId ${bookId} with status ${response.status}`,
-    );
-  }
-
-  return response.json();
+  return payload?.data?.data?.searchList ?? [];
 }
 
 function shouldEnrichDramaBoxItem(item: DramaResponse) {
@@ -171,9 +134,7 @@ export async function GET() {
   let adaptedDramaBoxSearch: DramaResponse[] = [];
 
   try {
-    const dramaBoxSearchRaw = await fetchDramaBoxSearchList(
-      DRAMABOX_SEARCH_QUERY,
-    );
+    const dramaBoxSearchRaw = await fetchDramaBoxCatalog();
 
     const dramaBoxSearchItems = Array.isArray(dramaBoxSearchRaw)
       ? (dramaBoxSearchRaw as DramaBoxSearchItemResponse[])
@@ -184,69 +145,8 @@ export async function GET() {
       dramaBoxSearchItems,
     ) as DramaResponse[];
 
-    const enrichCandidates = searchAdapted
-      .filter(shouldEnrichDramaBoxItem)
-      .slice(0, DRAMABOX_ENRICH_LIMIT);
-
-    const enrichMap = new Map<
-      number,
-      {
-        detail?: Partial<DramaResponse> & { id: number };
-        episodeCount?: number;
-      }
-    >();
-
-    await Promise.allSettled(
-      enrichCandidates.map(async (item) => {
-        const bookId = String(item.id);
-
-        const [detailResult, episodeResult] = await Promise.allSettled([
-          fetchDramaBoxDetail(bookId),
-          item.episodes <= 0
-            ? fetchDramaBoxEpisodeList(bookId)
-            : Promise.resolve(null),
-        ]);
-
-        let detail: (Partial<DramaResponse> & { id: number }) | undefined;
-
-        if (detailResult.status === "fulfilled" && detailResult.value) {
-          try {
-            detail = adaptDramaDetailBySource(
-              "dramabox",
-              detailResult.value,
-            ) as Partial<DramaResponse> & { id: number };
-          } catch (error) {
-            console.error(
-              `Failed adapting DramaBox detail for ${bookId}:`,
-              error,
-            );
-          }
-        }
-
-        let episodeCount: number | undefined;
-
-        if (
-          episodeResult.status === "fulfilled" &&
-          Array.isArray(episodeResult.value)
-        ) {
-          episodeCount = episodeResult.value.length;
-        }
-
-        enrichMap.set(item.id, { detail, episodeCount });
-      }),
-    );
-
-    adaptedDramaBoxSearch = searchAdapted.map((item) => {
-      const enriched = enrichMap.get(item.id);
-
-      if (!enriched) return item;
-
-      return mergeDramaBoxDramaMetadata(
-        item,
-        enriched.detail,
-        enriched.episodeCount,
-      ) as DramaResponse;
-    });
+    
+    adaptedDramaBoxSearch = searchAdapted;
 
     console.log("DramaBox search raw count:", dramaBoxSearchItems.length);
     console.log("DramaBox search adapted count:", searchAdapted.length);

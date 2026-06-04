@@ -15,12 +15,17 @@ export async function GET(request: NextRequest) {
       Math.max(1, Number(request.nextUrl.searchParams.get("page") || "1")),
     );
 
-    const payload = await fetchBiliTVJson("/home", { page, limit: 20 });
-    const items = await enrichBiliTVSubtitleAvailability(
-      adaptBiliTVDramaList(extractBiliTVItemsDeep(payload)),
+    const payloads = await Promise.all([
+      fetchBiliTVJson("/home", { page: 1, limit: 20 }),
+      fetchBiliTVJson("/home", { page: 2, limit: 20 }),
+      fetchBiliTVJson("/home", { page: 3, limit: 20 }),
+    ]);
+
+    const items = adaptBiliTVDramaList(
+      payloads.flatMap(extractBiliTVItemsDeep),
     );
 
-    return feedResponse(items, page, page < BILITV_HOME_MAX_PAGE);
+    return feedResponse(items, 1, false);
   } catch (error) {
     console.error("BiliTV home route error:", error);
     return NextResponse.json(

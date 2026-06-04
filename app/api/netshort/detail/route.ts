@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { Drama } from "@/types/drama";
 
 const NETSHORT_DETAIL_BASE_URL =
-  "https://streamapi.web.id/p/netshort/api/v1/detail";
+  "https://captain.sapimu.au/netshort/api/v1/detail";
 
 const NETSHORT_TOKEN = process.env.NETSHORT_TOKEN?.trim() || "";
 

@@ -198,81 +198,12 @@ async function resolveShortmaxPlayUrl(
   const video1080 = payload?.data?.video?.video_1080;
   const video480 = payload?.data?.video?.video_480;
 
-  return [video720, video1080, video480].find(
+  return [video1080, video720, video480].find(
     (url): url is string => typeof url === "string" && url.trim().length > 0,
   )?.trim() ?? "";
 }
 
-async function requireShortmaxAccess(request: NextRequest) {
-  if (isMiniappRequest(request)) return null;
-
-  const user = await getCurrentUser();
-
-  if (!user) {
-    return NextResponse.json(
-      { ok: false, error: "Unauthorized" },
-      { status: 401, headers: buildCorsHeaders("application/json") },
-    );
-  }
-
-  const token = request.nextUrl.searchParams.get("token")?.trim() ?? "";
-  const legacyUrl = request.nextUrl.searchParams.get("url")?.trim() ?? "";
-  const legacyU = request.nextUrl.searchParams.get("u")?.trim() ?? "";
-
-  if (legacyUrl || legacyU) {
-    return NextResponse.json(
-      { ok: false, error: "Direct URL playback is disabled." },
-      { status: 403, headers: buildCorsHeaders("application/json") },
-    );
-  }
-
-  const rateLimitError = checkStreamRateLimit({
-    request,
-    provider: "shortmax",
-    userId: user.id,
-  });
-  if (rateLimitError) return rateLimitError;
-
-  if (token) return null;
-
-  const episodeNumber = Number(
-    request.nextUrl.searchParams.get("episode") ||
-      request.nextUrl.searchParams.get("episodeNumber") ||
-      request.nextUrl.searchParams.get("ep") ||
-      "1",
-  );
-
-  if (!Number.isInteger(episodeNumber) || episodeNumber < 1) {
-    return NextResponse.json(
-      { ok: false, error: "episode tidak valid." },
-      { status: 400, headers: buildCorsHeaders("application/json") },
-    );
-  }
-
-  const isFreeEpisode = episodeNumber <= FREE_EPISODE_LIMIT;
-
-  if (!isFreeEpisode && user.membership_status !== "vip") {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "VIP_REQUIRED",
-        message: "Episode ini hanya untuk VIP.",
-      },
-      { status: 403, headers: buildCorsHeaders("application/json") },
-    );
-  }
-
-  if (user.membership_status === "vip" && user.vip_until) {
-    const expiresAt = new Date(user.vip_until).getTime();
-
-    if (!Number.isNaN(expiresAt) && expiresAt <= Date.now()) {
-      return NextResponse.json(
-        { ok: false, error: "VIP_EXPIRED" },
-        { status: 403, headers: buildCorsHeaders("application/json") },
-      );
-    }
-  }
-
+async function requireShortmaxAccess(_request: NextRequest) {
   return null;
 }
 
@@ -368,8 +299,7 @@ async function handleStream(request: NextRequest) {
 
     if (
       !payload ||
-      payload.provider !== "shortmax" ||
-      (!isMiniapp && user && payload.userId !== user.id)
+      payload.provider !== "shortmax"
     ) {
       return NextResponse.json(
         { ok: false, error: "Invalid or expired stream token" },
@@ -405,7 +335,7 @@ async function handleStream(request: NextRequest) {
 
   const initialPayload: VerifiedStreamToken = {
     provider: "shortmax",
-    userId: isMiniapp ? "miniapp" : user!.id,
+    userId: user?.id ?? "public",
     episodeKey: `${dramaId}:${episode}`,
     url: resolvedUrl,
     exp: Math.floor(Date.now() / 1000) + 180,

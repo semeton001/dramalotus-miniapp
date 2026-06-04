@@ -1,56 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  buildGoodshortApiUrl,
   fetchGoodshortJson,
-  normalizeGoodshortFeed,
-  readPositiveInt,
+  normalizeGoodshortItems,
 } from "../_shared";
 
 export async function GET(request: NextRequest) {
   try {
-    const query =
-      request.nextUrl.searchParams.get("query")?.trim() ||
-      request.nextUrl.searchParams.get("q")?.trim() ||
-      "";
-    const page = readPositiveInt(request, "page", 1);
+    const q = request.nextUrl.searchParams.get("q")?.trim() || "";
 
-    if (!query) {
-      return NextResponse.json(
-        {
-          items: [],
-          hasNextPage: false,
-          page,
-        },
-        { status: 200 },
-      );
+    if (!q) {
+      return NextResponse.json({ items: [] });
     }
 
-    const payload = await fetchGoodshortJson("/search", {
-      q: query,
-      page,
-    });
-
-    const items = normalizeGoodshortFeed(payload, "Search");
-
-    return NextResponse.json(
-      {
-        items,
-        hasNextPage: false,
-        page,
-      },
-      {
-        headers: {
-          "Cache-Control": "no-store",
-        },
-      },
+    const payload = await fetchGoodshortJson(
+      buildGoodshortApiUrl("/search", { q }),
     );
-  } catch (error) {
+
+    return NextResponse.json({
+      items: normalizeGoodshortItems(payload),
+      hasNextPage: false,
+    });
+  } catch (e: any) {
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Gagal mencari drama GoodShort.",
-      },
+      { error: e?.message || "GoodShort search failed" },
       { status: 500 },
     );
   }

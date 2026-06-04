@@ -7,54 +7,31 @@ import {
 
 export async function GET(request: NextRequest) {
   try {
-    const query =
-      request.nextUrl.searchParams.get("query")?.trim() ||
-      request.nextUrl.searchParams.get("q")?.trim() ||
-      "";
-    const page = Math.max(
-      1,
-      Number(request.nextUrl.searchParams.get("page") || "1") || 1,
-    );
+    const q = request.nextUrl.searchParams.get("q")?.trim() || "";
 
-    if (!query) {
-      return NextResponse.json(
-        {
-          items: [],
-          hasNextPage: false,
-          page,
-        },
-        { status: 200 },
-      );
+    if (!q) {
+      return NextResponse.json({ items: [] });
     }
 
     const payload = await fetchShortmaxJson(
       buildShortmaxApiUrl("/search", {
-        q: query,
-        page,
+        q: q,
+        page: 1,
       }),
     );
 
-    const items = normalizeShortmaxFeed(payload, "search", "7");
-
-    return NextResponse.json(
-      {
-        items,
-        hasNextPage: items.length > 0 && page < 2,
-        page,
-      },
-      {
-        headers: { "Cache-Control": "no-store" },
-      },
-    );
+    return NextResponse.json({
+      items: normalizeShortmaxFeed(payload, "search"),
+      hasNextPage: false,
+      page: 1,
+    });
   } catch (error) {
-    console.error("Shortmax search route error:", error);
-
     return NextResponse.json(
       {
-        message:
+        error:
           error instanceof Error
             ? error.message
-            : "Terjadi kesalahan saat mencari Shortmax.",
+            : "Shortmax search error",
       },
       { status: 500 },
     );

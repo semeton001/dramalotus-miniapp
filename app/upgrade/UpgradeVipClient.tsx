@@ -101,7 +101,7 @@ export default function UpgradeVipClient({ packageCode, packageLabel }: Props) {
     }
 
     try {
-      const response = await fetch("/api/upgrade/recheck", {
+      const response = await fetch("https://api.dramalotus.site/api/app/payment/status", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -208,7 +208,7 @@ export default function UpgradeVipClient({ packageCode, packageLabel }: Props) {
     setError("");
 
     try {
-      const response = await fetch("/api/upgrade/checkout", {
+      const response = await fetch("https://api.dramalotus.site/api/app/checkout", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

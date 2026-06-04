@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 
-export const SHORTMAX_BASE_URL = "https://streamapi.web.id/p/shortmax/api/v1";
+export const SHORTMAX_BASE_URL = process.env.SHORTMAX_BASE_URL?.trim() || "https://captain.sapimu.au/shortmax/api/v1";
 export const SHORTMAX_TOKEN = process.env.SHORTMAX_TOKEN?.trim() || "";
 export const SHORTMAX_UPSTREAM_HEADERS = {
   Accept: "application/json, text/plain, */*",
   "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
-  Origin: SHORTMAX_BASE_URL,
-  Referer: `${SHORTMAX_BASE_URL}/`,
+  Origin: "https://captain.sapimu.au",
+  Referer: "https://captain.sapimu.au/",
   "User-Agent":
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
 };
@@ -97,9 +97,10 @@ export function buildShortmaxApiUrl(
   path: string,
   params?: Record<string, string | number | undefined | null>,
 ): string {
-  const url = new URL(`${SHORTMAX_BASE_URL}${path}`);
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  const url = new URL(`https://captain.sapimu.au/shortmax/api/v1${cleanPath}`);
+
   url.searchParams.set("lang", "id");
-  url.searchParams.set("token", SHORTMAX_TOKEN);
 
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
@@ -116,6 +117,7 @@ export async function fetchShortmaxJson(url: string, init?: RequestInit) {
     ...init,
     headers: {
       ...SHORTMAX_UPSTREAM_HEADERS,
+      Authorization: `Bearer ${SHORTMAX_TOKEN}`,
       ...(init?.headers ?? {}),
     },
     cache: "no-store",

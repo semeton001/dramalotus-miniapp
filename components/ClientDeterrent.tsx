@@ -71,6 +71,8 @@ export default function ClientDeterrent() {
   const hasTriggeredRef = useRef(false);
 
   useEffect(() => {
+    return;
+
     // Jangan aktifkan deterrent di Telegram MiniApp / route /tg.
     // Proteksi stream tetap dilakukan di backend API.
     if (isMiniAppPath() || isTelegramMiniApp()) {

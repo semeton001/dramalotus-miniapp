@@ -16,23 +16,33 @@ export async function GET() {
         limit: 6,
       }),
       fetchDramaNovaJson("/recommend", {
-        categoryKey: "Dramanova_banner",
-        page: 1,
+        categoryKey: "dramanova_more",
+        page: 2,
         size: 5,
-        limit: 10,
+        limit: 6,
       }),
       fetchDramaNovaJson("/recommend", {
-        categoryKey: "dramanova_previews",
-        page: 1,
+        categoryKey: "dramanova_free",
+        page: 2,
         size: 5,
-        limit: 13,
+        limit: 6,
+      }),
+      fetchDramaNovaJson("/recommend", {
+        categoryKey: "dramanova_animations",
+        page: 2,
+        size: 5,
+        limit: 6,
       }),
     ]);
 
-    const items = adaptDramaNovaDramaList(payloads.flatMap(extractDramaNovaItemsDeep));
+    const items = adaptDramaNovaDramaList(
+      payloads.flatMap(extractDramaNovaItemsDeep),
+    );
+
     return feedResponse(items, 1);
   } catch (error) {
     console.error("DramaNova vip route error:", error);
+
     return NextResponse.json(
       {
         error: "Failed to load DramaNova VIP.",

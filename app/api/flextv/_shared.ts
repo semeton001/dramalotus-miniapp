@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { Drama } from "@/types/drama";
 import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
 
-export const FLEXTV_BASE_URL = "https://streamapi.web.id/p/flextv/api/v1";
+export const FLEXTV_BASE_URL = "https://captain.sapimu.au/flextv/api/v1";
 export const FLEXTV_TOKEN = process.env.FLEXTV_TOKEN?.trim() || "";
 export const FLEXTV_LANG = "id";
 export const FLEXTV_SOURCE_ID = "14";
@@ -76,11 +76,15 @@ export async function fetchFlextvJson(
   });
 
   if (!url.searchParams.has("lang")) url.searchParams.set("lang", FLEXTV_LANG);
-  if (!url.searchParams.has("token")) url.searchParams.set("token", FLEXTV_TOKEN);
 
   const response = await fetch(url, {
     method: "GET",
-    headers: { Accept: "application/json" },
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${FLEXTV_TOKEN}`,
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
+    },
     cache: "no-store",
   });
 
@@ -257,13 +261,25 @@ function pick720VideoUrl(playInfo: JsonRecord | undefined): string {
     ? (playInfo?.progressive as JsonRecord[])
     : [];
 
-  const video720 =
+  const normalize = (v: unknown) =>
+    String(v || "").trim().toUpperCase();
+
+  const best =
     progressive.find((item) =>
-      String(item.title || "").toUpperCase().includes("720"),
-    ) || progressive.find((item) => typeof item.video_url === "string");
+      normalize(item.title).includes("1080P-MAX"),
+    ) ||
+    progressive.find((item) =>
+      normalize(item.title).includes("1080P"),
+    ) ||
+    progressive.find((item) =>
+      normalize(item.title).includes("720P"),
+    ) ||
+    progressive.find((item) =>
+      typeof item.video_url === "string",
+    );
 
   return (
-    pickString(video720 || {}, "video_url", "url", "videoPath") ||
+    pickString(best || {}, "video_url", "url", "videoPath") ||
     pickString(playInfo || {}, "video_url", "url", "videoPath")
   );
 }
@@ -275,6 +291,8 @@ export function adaptFlextvEpisode(
 ): Episode {
   const episodeNumber = toNumber(raw.series_no) || toNumber(raw.number) || 1;
   const episodeId = pickString(raw, "id", "episode_id") || String(episodeNumber);
+  const videoId =
+    pickString(raw, "video_id", "videoId") || episodeId;
   const isVip = episodeNumber > FREE_EPISODE_LIMIT || toNumber(raw.is_vip_free) === 1;
 
   return {
@@ -282,9 +300,11 @@ export function adaptFlextvEpisode(
     dramaId: numericDramaId,
     episodeNumber,
     title: `Episode ${episodeNumber}`,
-    videoUrl: `/api/flextv/stream?seriesId=${encodeURIComponent(
+    videoUrl: `/api/flextv/stream?miniapp=1&seriesId=${encodeURIComponent(
       seriesId,
-    )}&episodeId=${encodeURIComponent(episodeId)}&episodeNumber=${episodeNumber}`,
+    )}&episodeId=${encodeURIComponent(
+      episodeId,
+    )}&episodeNumber=${episodeNumber}&videoId=${encodeURIComponent(videoId)}`,
     originalVideoUrl: undefined,
     subtitleUrl: undefined,
     subtitleLang: undefined,
@@ -295,6 +315,7 @@ export function adaptFlextvEpisode(
     thumbnail: pickString(raw, "cover", "thumbnail") || undefined,
     flextvEpisodeId: episodeId,
     flextvPlayId: episodeId,
+    flextvVideoId: videoId,
   } as Episode & {
     flextvEpisodeId?: string;
     flextvPlayId?: string;
@@ -312,7 +333,33 @@ export function extractFlextvEpisodes(payload: unknown): JsonRecord[] {
 export function extractPlayVideoUrl(payload: unknown): string {
   const record = payload as JsonRecord;
   const data = record?.data as JsonRecord | undefined;
-  return pick720VideoUrl(data);
+
+  const progressive = Array.isArray(data?.progressive)
+    ? (data.progressive as JsonRecord[])
+    : [];
+
+  const normalize = (v: unknown) =>
+    String(v || "").trim().toUpperCase();
+
+  const best =
+    progressive.find((item) =>
+      normalize(item.title).includes("1080P-MAX"),
+    ) ||
+    progressive.find((item) =>
+      normalize(item.title).includes("1080P"),
+    ) ||
+    progressive.find((item) =>
+      normalize(item.title).includes("720P"),
+    ) ||
+    progressive.find((item) =>
+      typeof item.video_url === "string",
+    );
+
+  return (
+    pickString(best || {}, "video_url", "url") ||
+    pickString(data || {}, "video_url", "url") ||
+    ""
+  );
 }
 
 export async function proxyRemoteMedia(

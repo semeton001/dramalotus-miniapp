@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import {
-  buildFlickreelsApiUrl,
   fetchAndNormalizeFeed,
   jsonError,
+  dedupeFlickreelsDramas,
 } from "../_shared";
 
 function shuffle<T>(items: T[]): T[] {
   const cloned = [...items];
 
-  for (let i = cloned.length - 1; i > 0; i -= 1) {
+  for (let i = cloned.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [cloned[i], cloned[j]] = [cloned[j], cloned[i]];
   }
@@ -18,16 +18,19 @@ function shuffle<T>(items: T[]): T[] {
 
 export async function GET() {
   try {
-    const dramas = await fetchAndNormalizeFeed(
-      buildFlickreelsApiUrl("/category", {
-        navigation_id: 387,
-        page: 1,
-        page_size: 10,
-      }),
-      "random",
-    );
+    const [a, b] = await Promise.all([
+      fetchAndNormalizeFeed("/hot-rank", "random"),
+      fetchAndNormalizeFeed(
+        "/category?navigation_id=684&page=1&page_size=20",
+        "random",
+      ),
+    ]);
 
-    return NextResponse.json(shuffle(dramas));
+    return NextResponse.json(
+      shuffle(
+        dedupeFlickreelsDramas([...a, ...b]),
+      ),
+    );
   } catch (error) {
     return jsonError(
       error instanceof Error

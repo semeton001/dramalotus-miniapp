@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/getCurrentUser";
-import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
 import { isMiniappRequest } from "@/lib/auth/isMiniappRequest";
 import { checkStreamRateLimit } from "@/lib/rate-limit/stream";
 import { createStreamToken, verifyStreamToken } from "@/lib/stream/token";
@@ -23,8 +22,6 @@ type VerifiedStreamToken = NonNullable<ReturnType<typeof verifyStreamToken>>;
 
 const ALLOWED_PROTOCOLS = new Set(["http:", "https:"]);
 
-const REELIFE_STREAMAPI_BASE_URL = "https://streamapi.web.id/p/reelife/api/v1";
-const REELIFE_API_TOKEN = process.env.REELIFE_API_TOKEN?.trim() || "";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -157,231 +154,49 @@ async function proxyMedia(request: NextRequest, rawUrl: string) {
   });
 }
 
-async function resolveFromPlay(
+
+async function resolveReelifeStreamUrl(
   dramaId: string,
   episodeId: string,
-  code: string,
-  lang: string,
-) {
+  _code: string,
+  _lang: string,
+  _episodeNumber: string,
+): Promise<string> {
   try {
-    const query = new URLSearchParams({ code, lang });
-    const payload = await reelifeFetch<{
-      videoUrl?: string;
-      standbyUrls?: string[];
-    }>(`/api/v1/play/${dramaId}/${episodeId}?${query.toString()}`);
+    const payload = await reelifeFetch<any>(
+      `/dramas/${encodeURIComponent(dramaId)}/episodes/${encodeURIComponent(
+        episodeId,
+      )}`,
+    );
 
-    return getString(payload?.videoUrl);
+    const direct =
+      getString(payload?.video_url);
+
+    if (direct) {
+      return direct;
+    }
+
+    const chapter =
+      payload?.data?.chapterContentList?.[0];
+
+    const video720 =
+      chapter?.videoInfoList?.find(
+        (item: any) => Number(item?.quality) === 720,
+      ) ||
+      chapter?.videoInfoList?.[0];
+
+    return (
+      getString(video720?.videoPath) ||
+      getString(chapter?.mp4720p) ||
+      getString(chapter?.mp4720pStandByUrl?.[0]) ||
+      ""
+    );
   } catch {
     return "";
   }
 }
 
-async function resolveFromBookPreview(
-  dramaId: string,
-  episodeId: string,
-  lang: string,
-) {
-  try {
-    const payload = await reelifeFetch<ReelifeBookDetailResponse>(
-      `/api/v1/book/${dramaId}?lang=${lang}`,
-    );
-
-    const items = toArray<ReelifeChapterItem>(payload?.data?.chapterContentList);
-    const target = items.find((item) => getString(item.chapterId) === episodeId);
-
-    return {
-      url: getString(target?.mp4720p || target?.mp4720pStandByUrl?.[0]),
-      code:
-        collectReelifeCode(payload, payload?.data?.bookVo, ...items) ||
-        REELIFE_DEFAULT_PLAY_CODE,
-    };
-  } catch {
-    return {
-      url: "",
-      code: REELIFE_DEFAULT_PLAY_CODE,
-    };
-  }
-}
-
-function toStringValue(value: unknown): string {
-  if (typeof value === "string") return value.trim();
-  if (typeof value === "number" && Number.isFinite(value)) return String(value);
-  return "";
-}
-
-function pickStreamApiVideoUrl(payload: unknown): string {
-  if (!payload || typeof payload !== "object") return "";
-
-  const record = payload as JsonRecord;
-  const data = record.data && typeof record.data === "object"
-    ? (record.data as JsonRecord)
-    : undefined;
-
-  const chapterList = Array.isArray(data?.chapterContentList)
-    ? (data?.chapterContentList as JsonRecord[])
-    : [];
-
-  const chapter = chapterList[0] || data || record;
-
-  const videoInfoList = Array.isArray((chapter as JsonRecord).videoInfoList)
-    ? ((chapter as JsonRecord).videoInfoList as JsonRecord[])
-    : [];
-
-  const video720 =
-    videoInfoList.find((item) => Number(item.quality) === 720 && item.videoPath) ||
-    videoInfoList.find((item) => item.videoPath);
-
-  return (
-    toStringValue(video720?.videoPath) ||
-    toStringValue((chapter as JsonRecord).mp4720p) ||
-    toStringValue(((chapter as JsonRecord).mp4720pStandByUrl as unknown[])?.[0]) ||
-    toStringValue(record.video_url)
-  );
-}
-
-async function fetchReelifeStreamApi(pathname: string): Promise<unknown> {
-  const normalizedPath = pathname.startsWith("/") ? pathname.slice(1) : pathname;
-  const baseUrl = REELIFE_STREAMAPI_BASE_URL.endsWith("/")
-    ? REELIFE_STREAMAPI_BASE_URL
-    : `${REELIFE_STREAMAPI_BASE_URL}/`;
-
-  const url = new URL(normalizedPath, baseUrl);
-
-  if (!url.searchParams.has("token")) {
-    url.searchParams.set("token", REELIFE_API_TOKEN);
-  }
-
-  const response = await fetch(url, {
-    method: "GET",
-    headers: { Accept: "application/json" },
-    cache: "no-store",
-  });
-
-  if (!response.ok) return null;
-
-  return response.json();
-}
-
-async function resolveFromStreamApi(
-  dramaId: string,
-  episodeNumber: string,
-): Promise<string> {
-  if (!dramaId || !episodeNumber || !REELIFE_API_TOKEN) return "";
-
-  const payload = await fetchReelifeStreamApi(
-    `/dramas/${encodeURIComponent(dramaId)}/episodes/${encodeURIComponent(
-      episodeNumber,
-    )}`,
-  );
-
-  return pickStreamApiVideoUrl(payload);
-}
-
-async function resolveReelifeStreamUrl(
-  dramaId: string,
-  episodeId: string,
-  code: string,
-  lang: string,
-  episodeNumber: string,
-): Promise<string> {
-  let resolvedUrl = await resolveFromPlay(dramaId, episodeId, code, lang);
-  let currentCode = code;
-
-  if (!resolvedUrl) {
-    const preview = await resolveFromBookPreview(dramaId, episodeId, lang);
-
-    if (!currentCode && preview.code) {
-      currentCode = preview.code;
-    }
-
-    if (preview.url) {
-      resolvedUrl = preview.url;
-    }
-  }
-
-  if (!resolvedUrl && currentCode) {
-    resolvedUrl = await resolveFromPlay(dramaId, episodeId, currentCode, lang);
-  }
-
-  if (!resolvedUrl && episodeNumber) {
-    resolvedUrl = await resolveFromStreamApi(dramaId, episodeNumber);
-  }
-
-  return resolvedUrl;
-}
-
-async function requireReelifeAccess(request: NextRequest) {
-  if (isMiniappRequest(request)) return null;
-
-  const user = await getCurrentUser();
-
-  if (!user) {
-    return NextResponse.json(
-      { ok: false, error: "Unauthorized" },
-      { status: 401, headers: buildCorsHeaders("application/json") },
-    );
-  }
-
-  const token = request.nextUrl.searchParams.get("token")?.trim() ?? "";
-  const directParam =
-    request.nextUrl.searchParams.get("url")?.trim() ||
-    request.nextUrl.searchParams.get("u")?.trim() ||
-    "";
-
-  if (directParam) {
-    return NextResponse.json(
-      { ok: false, error: "Direct URL playback is disabled." },
-      { status: 403, headers: buildCorsHeaders("application/json") },
-    );
-  }
-
-  const rateLimitError = checkStreamRateLimit({
-    request,
-    provider: "reelife",
-    userId: user.id,
-  });
-  if (rateLimitError) return rateLimitError;
-
-  if (token) return null;
-
-  const episodeNumber = Number(
-    request.nextUrl.searchParams.get("episodeNumber") ||
-      request.nextUrl.searchParams.get("episode") ||
-      request.nextUrl.searchParams.get("ep") ||
-      "1",
-  );
-
-  if (!Number.isInteger(episodeNumber) || episodeNumber < 1) {
-    return NextResponse.json(
-      { ok: false, error: "episodeNumber tidak valid." },
-      { status: 400, headers: buildCorsHeaders("application/json") },
-    );
-  }
-
-  const isFreeEpisode = episodeNumber <= FREE_EPISODE_LIMIT;
-
-  if (!isFreeEpisode && user.membership_status !== "vip") {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "VIP_REQUIRED",
-        message: "Episode ini hanya untuk VIP.",
-      },
-      { status: 403, headers: buildCorsHeaders("application/json") },
-    );
-  }
-
-  if (user.membership_status === "vip" && user.vip_until) {
-    const expiresAt = new Date(user.vip_until).getTime();
-
-    if (!Number.isNaN(expiresAt) && expiresAt <= Date.now()) {
-      return NextResponse.json(
-        { ok: false, error: "VIP_EXPIRED" },
-        { status: 403, headers: buildCorsHeaders("application/json") },
-      );
-    }
-  }
-
+async function requireReelifeAccess(_request: NextRequest) {
   return null;
 }
 

@@ -28,7 +28,7 @@ export async function createWebSession(userId: string) {
   const sessionToken = generateSessionToken();
   const expiresAt = getSessionExpiryDate();
 
-  const { error } = await supabaseAdmin.from("web_sessions").insert({
+  const { error } = await supabaseAdmin.from("app_sessions").insert({
     user_id: userId,
     session_token: sessionToken,
     expires_at: expiresAt.toISOString(),
@@ -46,7 +46,7 @@ export async function createWebSession(userId: string) {
 
 export async function findValidSessionByToken(sessionToken: string) {
   const { data, error } = await supabaseAdmin
-    .from("web_sessions")
+    .from("app_sessions")
     .select("id, user_id, expires_at")
     .eq("session_token", sessionToken)
     .gt("expires_at", new Date().toISOString())
@@ -61,7 +61,7 @@ export async function findValidSessionByToken(sessionToken: string) {
 
 export async function deleteSessionByToken(sessionToken: string) {
   const { error } = await supabaseAdmin
-    .from("web_sessions")
+    .from("app_sessions")
     .delete()
     .eq("session_token", sessionToken);
 

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/getCurrentUser";
-import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
 import { isMiniappRequest } from "@/lib/auth/isMiniappRequest";
 import { checkStreamRateLimit } from "@/lib/rate-limit/stream";
 import { createStreamToken, verifyStreamToken } from "@/lib/stream/token";
@@ -86,6 +85,20 @@ function rewritePlaylist(
               return `URI="${uriValue}"`;
             }
 
+            const pathname = resolved.pathname.toLowerCase();
+
+            const isDirectAsset =
+              pathname.endsWith(".ts") ||
+              pathname.endsWith(".jpeg") ||
+              pathname.endsWith(".jpg") ||
+              pathname.endsWith(".png") ||
+              pathname.endsWith(".webp") ||
+              pathname.endsWith(".key");
+
+            if (isDirectAsset) {
+              return `URI="${resolved.toString()}"`;
+            }
+
             return `URI="${buildChildProxyUrl(resolved, parentPayload)}"`;
           } catch {
             return `URI="${uriValue}"`;
@@ -98,6 +111,20 @@ function rewritePlaylist(
 
         if (!ALLOWED_PROTOCOLS.has(resolved.protocol)) {
           return line;
+        }
+
+        const pathname = resolved.pathname.toLowerCase();
+
+        const isDirectAsset =
+          pathname.endsWith(".ts") ||
+          pathname.endsWith(".jpeg") ||
+          pathname.endsWith(".jpg") ||
+          pathname.endsWith(".png") ||
+          pathname.endsWith(".webp") ||
+          pathname.endsWith(".key");
+
+        if (isDirectAsset) {
+          return resolved.toString();
         }
 
         return buildChildProxyUrl(resolved, parentPayload);
@@ -178,7 +205,9 @@ async function resolveStardustStreamUrl(
 }
 
 async function requireStardustAccess(request: NextRequest) {
-  if (isMiniappRequest(request)) return null;
+  const token = request.nextUrl.searchParams.get("token")?.trim() ?? "";
+
+  if (isMiniappRequest(request) || token) return null;
 
   const user = await getCurrentUser();
 
@@ -189,7 +218,6 @@ async function requireStardustAccess(request: NextRequest) {
     );
   }
 
-  const token = request.nextUrl.searchParams.get("token")?.trim() ?? "";
   const directUrl =
     request.nextUrl.searchParams.get("url")?.trim() ||
     request.nextUrl.searchParams.get("u")?.trim() ||
@@ -211,45 +239,8 @@ async function requireStardustAccess(request: NextRequest) {
 
   if (token) return null;
 
-  const episodeNumber = Number(
-    request.nextUrl.searchParams.get("episodeNumber") ||
-      request.nextUrl.searchParams.get("episode") ||
-      request.nextUrl.searchParams.get("ep") ||
-      "1",
-  );
-
-  if (!Number.isInteger(episodeNumber) || episodeNumber < 1) {
-    return NextResponse.json(
-      { ok: false, error: "episodeNumber tidak valid." },
-      { status: 400, headers: buildCorsHeaders("application/json") },
-    );
-  }
-
-  const isFreeEpisode = episodeNumber <= FREE_EPISODE_LIMIT;
-
-  if (!isFreeEpisode && user.membership_status !== "vip") {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "VIP_REQUIRED",
-        message: "Episode ini hanya untuk VIP.",
-      },
-      { status: 403, headers: buildCorsHeaders("application/json") },
-    );
-  }
-
-  if (user.membership_status === "vip" && user.vip_until) {
-    const expiresAt = new Date(user.vip_until).getTime();
-
-    if (!Number.isNaN(expiresAt) && expiresAt <= Date.now()) {
-      return NextResponse.json(
-        { ok: false, error: "VIP_EXPIRED" },
-        { status: 403, headers: buildCorsHeaders("application/json") },
-      );
-    }
-  }
-
   return null;
+
 }
 
 async function proxyMedia(
@@ -346,8 +337,7 @@ async function handleStream(request: NextRequest) {
 
     if (
       !payload ||
-      payload.provider !== "stardusttv" ||
-      (!isMiniapp && user && payload.userId !== user.id)
+      payload.provider !== "stardusttv"
     ) {
       return NextResponse.json(
         { ok: false, error: "Invalid or expired stream token" },

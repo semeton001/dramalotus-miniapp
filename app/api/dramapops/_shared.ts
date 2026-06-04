@@ -3,11 +3,14 @@ import type { Drama } from "@/types/drama";
 import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
 
 export const DRAMAPOPS_BASE_URL =
-  "https://streamapi.web.id/p/dramapops/api/v1";
+  "https://captain.sapimu.au/dramapops/api/v1";
 export const DRAMAPOPS_TOKEN = process.env.DRAMAPOPS_TOKEN?.trim() || "";
 export const DRAMAPOPS_LANG = "id";
 export const DRAMAPOPS_SOURCE_ID = "18";
 export const DRAMAPOPS_SOURCE_NAME = "Dramapops";
+
+export const DRAMAPOPS_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -81,11 +84,14 @@ export async function fetchDramapopsJson(
   });
 
   if (!url.searchParams.has("lang")) url.searchParams.set("lang", DRAMAPOPS_LANG);
-  if (!url.searchParams.has("token")) url.searchParams.set("token", DRAMAPOPS_TOKEN);
 
   const response = await fetch(url, {
     method: "GET",
-    headers: { Accept: "application/json" },
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${DRAMAPOPS_TOKEN}`,
+      "User-Agent": DRAMAPOPS_USER_AGENT,
+    },
     cache: "no-store",
   });
 
@@ -274,15 +280,22 @@ function pickBestVideoUrl(payload: unknown): string {
       Boolean(item) && typeof item === "object" && !Array.isArray(item),
   );
 
+  const by1080 = items.find((item) =>
+    toStringValue(item.quality).toLowerCase().includes("1080"),
+  );
+
   const by720 = items.find((item) =>
     toStringValue(item.quality).toLowerCase().includes("720"),
   );
-  const by540 = items.find((item) =>
-    toStringValue(item.quality).toLowerCase().includes("540"),
-  );
   const fallback = items.find((item) => pickString(item, "url", "video", "videoUrl"));
 
-  return pickString(by720 || by540 || fallback, "url", "video", "videoUrl", "playUrl");
+  return pickString(
+    by1080 || by720 || fallback,
+    "url",
+    "video",
+    "videoUrl",
+    "playUrl",
+  );
 }
 
 function pickSubtitle(payload: unknown) {
@@ -321,12 +334,12 @@ export async function buildDramapopsEpisode(
 ): Promise<Episode> {
   const payload = await fetchDramapopsJson(
     `/drama/${encodeURIComponent(movieId)}/episode/${episodeNumber}/video`,
-    { quality: "720p" },
+    { quality: "1080" },
   );
 
   const data = (payload as JsonRecord)?.data as JsonRecord | undefined;
   const subtitle = pickSubtitle(payload);
-  const isVip = episodeNumber > FREE_EPISODE_LIMIT;
+  const isVip = false;
   const title = `Episode ${episodeNumber}`;
 
   return {
@@ -334,12 +347,12 @@ export async function buildDramapopsEpisode(
     dramaId: numericDramaId,
     episodeNumber,
     title,
-    videoUrl: `/api/dramapops/stream?movieId=${encodeURIComponent(
+    videoUrl: `/api/dramapops/stream?miniapp=1&movieId=${encodeURIComponent(
       movieId,
     )}&episode=${episodeNumber}&episodeNumber=${episodeNumber}`,
     originalVideoUrl: undefined,
-    isLocked: isVip,
-    isVipOnly: isVip,
+    isLocked: false,
+    isVipOnly: false,
     sortOrder: episodeNumber,
     thumbnail: pickString(data, "poster") || undefined,
     ...subtitle,

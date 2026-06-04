@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import type { Drama } from "@/types/drama";
 import type { Source } from "@/types/source";
 
@@ -23,58 +25,23 @@ type SourceTab =
 type SourceScreenProps = {
   selectedSource: Source;
   searchQuery: string;
+  submittedSearchQuery: string;
   sourceTab: SourceTab;
   filteredDramas: Drama[];
   favoriteIds: number[];
   isTelegramReady: boolean;
   isSearchEnabled?: boolean;
+  isLoadingPinedramaFeed?: boolean;
 
-  dramaBoxPage?: number;
-  dramaBoxHasNextPage?: boolean;
-  showDramaBoxPagination?: boolean;
-  onDramaBoxPrevPage?: () => void;
-  onDramaBoxNextPage?: () => void;
 
-  meloloPage?: number;
-  meloloHasNextPage?: boolean;
-  meloloOffset?: number;
-  showMeloloPagination?: boolean;
-  onMeloloPrevPage?: () => void;
-  onMeloloNextPage?: () => void;
+  pinedramaCategories?: Array<{
+    categoryId: string;
+    name: string;
+    sceneId?: number;
+  }>;
+  selectedPinedramaCategory?: string;
+  onSelectPinedramaCategory?: (categoryId: string) => void;
 
-  flickreelsPage?: number;
-  showFlickreelsPagination?: boolean;
-  onFlickreelsPrevPage?: () => void;
-  onFlickreelsNextPage?: () => void;
-
-  shortmaxPage?: number;
-  showShortmaxPagination?: boolean;
-  onShortmaxPrevPage?: () => void;
-  onShortmaxNextPage?: () => void;
-
-  goodshortPage?: number;
-  goodshortHasNextPage?: boolean;
-  showGoodshortPagination?: boolean;
-  onGoodshortPrevPage?: () => void;
-  onGoodshortNextPage?: () => void;
-
-  reelifePage?: number;
-  reelifeHasNextPage?: boolean;
-  showReelifePagination?: boolean;
-  onReelifePrevPage?: () => void;
-  onReelifeNextPage?: () => void;
-
-  stardusttvPage?: number;
-  stardusttvHasNextPage?: boolean;
-  showStardusttvPagination?: boolean;
-  onStardusttvPrevPage?: () => void;
-  onStardusttvNextPage?: () => void;
-
-  bilitvPage?: number;
-  bilitvHasNextPage?: boolean;
-  showBilitvPagination?: boolean;
-  onBilitvPrevPage?: () => void;
-  onBilitvNextPage?: () => void;
 
   onBack: () => void;
   onSearchChange: (value: string) => void;
@@ -100,9 +67,6 @@ const reelShortTabs: Array<{ label: string; value: SourceTab }> = [
 
 const meloloTabs: Array<{ label: string; value: SourceTab }> = [
   { label: "🏠 Beranda", value: "Beranda" },
-  { label: "💕 Romance", value: "Romance" },
-  { label: "✨ ForYou", value: "ForYou" },
-  { label: "👑 Pewaris", value: "Pewaris" },
 ];
 
 const dramawaveTabs: Array<{ label: string; value: SourceTab }> = [
@@ -162,9 +126,6 @@ const microdramaTabs: Array<{ label: string; value: SourceTab }> = [
 
 const fundramaTabs: Array<{ label: string; value: SourceTab }> = [
   { label: "🏠 Beranda", value: "Beranda" },
-  { label: "✨ ForYou", value: "ForYou" },
-  { label: "🔥 Hot", value: "Hot" },
-  { label: "💎 VIP", value: "VIP" },
 ];
 
 const stardusttvTabs: Array<{ label: string; value: SourceTab }> = [
@@ -185,13 +146,11 @@ const dramabiteTabs: Array<{ label: string; value: SourceTab }> = [
   { label: "🏠 Beranda", value: "Beranda" },
   { label: "✨ ForYou", value: "ForYou" },
   { label: "🏆 Ranking", value: "Ranking" },
-  { label: "💎 VIP", value: "VIP" },
 ];
 
 const reelifeTabs: Array<{ label: string; value: SourceTab }> = [
   { label: "🏠 Beranda", value: "Beranda" },
   { label: "🔥 Trending", value: "Trending" },
-  { label: "👑 Pewaris", value: "Pewaris" },
   { label: "✨ ForYou", value: "ForYou" },
 ];
 
@@ -207,6 +166,11 @@ const idramaTabs: Array<{ label: string; value: SourceTab }> = [
   { label: "🔥 Populer", value: "Populer" },
   { label: "📈 Trending", value: "Trending" },
   { label: "🆕 Terbaru", value: "Terbaru" },
+];
+
+
+const pinedramaTabs: Array<{ label: string; value: SourceTab }> = [
+  { label: "🏠 Beranda", value: "Beranda" },
 ];
 
 function isDramaBoxSource(source: Source): boolean {
@@ -339,6 +303,14 @@ function isIdramaSource(source: Source): boolean {
   );
 }
 
+
+function isPineDramaSource(source: Source): boolean {
+  return (
+    source.slug?.toLowerCase() === "pinedrama" ||
+    source.name?.toLowerCase() === "pinedrama"
+  );
+}
+
 function getSourceTabs(selectedSource: Source) {
   if (isReelShortSource(selectedSource)) return reelShortTabs;
   if (isMeloloSource(selectedSource)) return meloloTabs;
@@ -358,6 +330,9 @@ function getSourceTabs(selectedSource: Source) {
   if (isStardusttvSource(selectedSource)) return stardusttvTabs;
   if (isFreeReelsSource(selectedSource)) return freeReelsTabs;
   if (isIdramaSource(selectedSource)) return idramaTabs;
+
+  if (isPineDramaSource(selectedSource)) return pinedramaTabs;
+
   return dramaBoxTabs;
 }
 
@@ -402,6 +377,7 @@ function resolveBadge(
   if (isStardusttvSource(selectedSource)) return "StardustTV";
   if (isFreeReelsSource(selectedSource)) return "FreeReels";
   if (isIdramaSource(selectedSource)) return "iDrama";
+  if (isPineDramaSource(selectedSource)) return "PineDrama";
 
   return "Drama";
 }
@@ -515,83 +491,30 @@ function resolveBadgeClass(sourceTab: SourceTab, selectedSource: Source) {
     return "bg-[linear-gradient(135deg,#0F766E,#0EA5E9)] text-white";
   }
 
+  if (isPineDramaSource(selectedSource)) {
+    return "bg-[linear-gradient(135deg,#10B981,#22C55E)] text-white";
+  }
+
   return "bg-[linear-gradient(135deg,#B76E79,#C98B57)] text-white";
 }
 
-function PaginationButton({
-  disabled,
-  onClick,
-  children,
-}: {
-  disabled?: boolean;
-  onClick?: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="rounded-full border border-white/10 bg-[#12131A] px-3 py-1.5 text-[11px] font-medium text-white transition hover:bg-[#181B24] disabled:cursor-not-allowed disabled:opacity-40"
-    >
-      {children}
-    </button>
-  );
-}
 
 export default function SourceScreen({
   selectedSource,
   searchQuery,
+  submittedSearchQuery,
   sourceTab,
   filteredDramas,
   favoriteIds,
   isTelegramReady,
   isSearchEnabled = true,
+  isLoadingPinedramaFeed = false,
 
-  dramaBoxPage = 1,
-  dramaBoxHasNextPage = false,
-  showDramaBoxPagination = false,
-  onDramaBoxPrevPage,
-  onDramaBoxNextPage,
 
-  meloloOffset = 0,
-  showMeloloPagination = false,
-  onMeloloPrevPage,
-  onMeloloNextPage,
+  pinedramaCategories = [],
+  selectedPinedramaCategory,
+  onSelectPinedramaCategory,
 
-  flickreelsPage = 1,
-  showFlickreelsPagination = false,
-  onFlickreelsPrevPage,
-  onFlickreelsNextPage,
-
-  shortmaxPage = 1,
-  showShortmaxPagination = false,
-  onShortmaxPrevPage,
-  onShortmaxNextPage,
-
-  goodshortPage = 1,
-  goodshortHasNextPage = false,
-  showGoodshortPagination = false,
-  onGoodshortPrevPage,
-  onGoodshortNextPage,
-
-  reelifePage = 1,
-  reelifeHasNextPage = false,
-  showReelifePagination = false,
-  onReelifePrevPage,
-  onReelifeNextPage,
-
-  stardusttvPage = 1,
-  stardusttvHasNextPage = false,
-  showStardusttvPagination = false,
-  onStardusttvPrevPage,
-  onStardusttvNextPage,
-
-  bilitvPage = 1,
-  bilitvHasNextPage = false,
-  showBilitvPagination = false,
-  onBilitvPrevPage,
-  onBilitvNextPage,
 
   onBack,
   onSearchChange,
@@ -601,7 +524,131 @@ export default function SourceScreen({
   onSelectDrama,
   onToggleFavorite,
 }: SourceScreenProps) {
-  const sourceTabs = getSourceTabs(selectedSource);
+  const [showPinedramaCategories, setShowPinedramaCategories] =
+    useState(false);
+
+  const [showSearchMode, setShowSearchMode] =
+    useState(false);
+
+
+
+  const sourceTabs =
+    isPineDramaSource(selectedSource) &&
+    pinedramaCategories.length > 0
+      ? pinedramaCategories.map((item) => ({
+          label: item.name,
+          value: item.categoryId as SourceTab,
+        }))
+      : getSourceTabs(selectedSource);
+
+  const visiblePinedramaTabs =
+    isPineDramaSource(selectedSource)
+      ? sourceTabs.slice(0, 4)
+      : sourceTabs;
+
+  if (showSearchMode) {
+    return (
+      <main className="min-h-[100dvh] bg-[#050507] text-white">
+        <div className="flex min-h-[100dvh] flex-col px-3 pt-3">
+          <div className="mb-4 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowSearchMode(false)}
+              className="shrink-0 rounded-[12px] border border-white/10 px-3 py-2 text-sm"
+            >
+              ←
+            </button>
+
+            <div className="flex flex-1 items-center rounded-[14px] border border-white/10 bg-[#12131A] px-3 py-2">
+              <input
+                onChange={(e) => onSearchChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    onSubmitSearch();
+                  }
+                }}
+                className="w-full bg-transparent text-sm outline-none"
+              />
+
+              {searchQuery.trim() && (
+                <button
+                  type="button"
+                  onClick={onClearSearch}
+                  className="ml-2 text-white/60"
+                >
+                  ×
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={onSubmitSearch}
+                className="ml-2 rounded-[10px] border border-[#C9A45C]/20 bg-[linear-gradient(135deg,rgba(201,164,92,0.16),rgba(183,110,121,0.10))] px-2 py-1 text-[11px] font-medium text-[#E6D3A3]"
+              >
+                Cari
+              </button>
+            </div>
+          </div>
+
+            <div className="space-y-2">
+              {submittedSearchQuery.trim().length === 0 ? (
+                <div className="rounded-[14px] border border-white/10 bg-white/[0.03] p-4 text-center text-sm text-white/60">
+                  Mulai ketik judul drama untuk mencari
+                </div>
+              ) : filteredDramas.length === 0 ? (
+                <div className="rounded-[14px] border border-white/10 bg-white/[0.03] p-4 text-center text-sm text-white/60">
+                  Tidak ada hasil pencarian
+                </div>
+              ) : (
+                  <div className="grid grid-cols-3 gap-2">
+                    {filteredDramas.slice(0, 30).map((drama) => {
+                      const posterSrc =
+                        typeof drama.posterImage === "string" &&
+                        drama.posterImage.trim().length > 0
+                          ? drama.posterImage
+                          : typeof drama.coverImage === "string" &&
+                              drama.coverImage.trim().length > 0
+                            ? drama.coverImage
+                            : "";
+
+                      return (
+                        <button
+                          key={drama.id}
+                          type="button"
+                          onClick={() => {
+                              setShowSearchMode(false);
+                              onSelectDrama(drama);
+                            }}
+                          className="overflow-hidden rounded-[14px] border border-white/10 bg-[#12131A]"
+                        >
+                          <div className="aspect-[0.72] bg-[#0D0F15]">
+                            {posterSrc ? (
+                              <img
+                                src={posterSrc}
+                                alt={drama.title}
+                                className="h-full w-full object-cover"
+                                loading="lazy"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : null}
+                          </div>
+
+                          <div className="p-1.5">
+                            <div className="line-clamp-2 text-[10px] font-medium text-white">
+                              {drama.title}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+              )}
+            </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-[100dvh] w-full overflow-x-hidden bg-[#050507] text-white">
@@ -613,15 +660,9 @@ export default function SourceScreen({
       </div>
 
       <div className="relative min-h-[100dvh] w-full pb-28">
-        <header className="fixed left-0 right-0 top-0 z-40 border-b border-white/10 bg-[#0C0F18]/92 px-3 pb-2 pt-2 backdrop-blur-xl md:px-4 lg:px-6">
+        <header className="fixed left-0 right-0 top-0 z-40 border-b border-white/10 bg-[#0C0F18]/92 px-3 pb-2 pt-10 backdrop-blur-xl md:px-4 lg:px-6">
           <div className="mx-auto w-full max-w-[1600px]">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <button
-                onClick={onBack}
-                className="rounded-[16px] border border-[#C9A45C]/20 bg-[linear-gradient(135deg,rgba(183,110,121,0.92),rgba(201,139,87,0.92))] px-3 py-2 text-[13px] font-semibold text-white shadow-[0_8px_18px_rgba(183,110,121,0.22)] transition hover:-translate-y-0.5"
-              >
-                ✕ Tutup
-              </button>
 
               <div className="mx-auto min-w-0 flex-1 px-2">
                 <div className="flex items-center justify-center gap-3">
@@ -644,30 +685,23 @@ export default function SourceScreen({
                 </div>
               </div>
 
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  className="rounded-[14px] border border-[#C9A45C]/20 bg-[#14151C] px-2.5 py-2 text-[12px] text-[#E6D3A3] shadow-sm"
-                >
-                  ID
-                </button>
-                <button
-                  type="button"
-                  className="rounded-[14px] bg-[#1C1F29] px-2.5 py-2 text-[12px] text-[#F5F1E8]"
-                >
-                  ˅
-                </button>
-                <button
-                  type="button"
-                  className="rounded-[16px] bg-[#1C1F29] px-3 py-2.5 text-sm text-[#F5F1E8]"
-                >
-                  •••
-                </button>
-              </div>
             </div>
 
-            {isSearchEnabled ? (
-              <div className="overflow-hidden rounded-[20px] border border-white/10 bg-[linear-gradient(180deg,rgba(18,19,26,0.98)_0%,rgba(12,13,19,0.98)_100%)] px-3 py-2.5 shadow-[0_12px_24px_rgba(0,0,0,0.22)]">
+            {isSearchEnabled && isPineDramaSource(selectedSource) ? (
+              <button
+                type="button"
+                onClick={() => setShowSearchMode(true)}
+                className="flex w-full items-center gap-2 rounded-[14px] border border-white/10 bg-[linear-gradient(180deg,rgba(18,19,26,0.98)_0%,rgba(12,13,19,0.98)_100%)] px-3 py-2 text-left"
+              >
+                <span className="text-[18px] leading-none text-[#8F887C]">
+                  ⌕
+                </span>
+                <span className="text-[13px] text-[#8F887C]">
+                  Cari drama...
+                </span>
+              </button>
+            ) : isSearchEnabled ? (
+              <div className="overflow-hidden rounded-[14px] border border-white/10 bg-[linear-gradient(180deg,rgba(18,19,26,0.98)_0%,rgba(12,13,19,0.98)_100%)] px-3 py-1.5">
                 <div className="flex items-center gap-2.5">
                   <span className="text-[18px] leading-none text-[#8F887C]">
                     ⌕
@@ -707,32 +741,74 @@ export default function SourceScreen({
             ) : null}
 
             <div
-              className={`mt-2 flex items-center gap-1 overflow-x-auto rounded-[18px] border border-white/6 bg-white/[0.02] p-1.5 ${isSearchEnabled ? "" : "mt-1"}`}
+              className={`mt-2 rounded-[18px] border border-white/6 bg-white/[0.02] p-2 ${isSearchEnabled ? "" : "mt-1"}`}
             >
-              {sourceTabs.map((tab) => {
-                const active = sourceTab === tab.value;
+                {isPineDramaSource(selectedSource) ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    {(showPinedramaCategories ? sourceTabs : visiblePinedramaTabs).map((tab) => {
+                      const active =
+                        selectedPinedramaCategory === String(tab.value);
 
-                return (
-                  <button
-                    key={tab.value}
-                    type="button"
-                    onClick={() => onTabChange(tab.value)}
-                    className={`relative shrink-0 whitespace-nowrap rounded-[14px] px-3 py-2 text-[11px] font-semibold transition ${
-                      active
-                        ? "bg-[linear-gradient(135deg,rgba(201,164,92,0.18),rgba(183,110,121,0.16))] text-[#F0E1BF] shadow-[0_8px_18px_rgba(201,164,92,0.08)]"
-                        : "text-[#8F887C] hover:bg-white/[0.04] hover:text-[#DCC38A]"
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                );
-              })}
+                      return (
+                        <button
+                          key={tab.value}
+                          type="button"
+                          onClick={() => onTabChange(tab.value)}
+                          className={`relative h-[30px] overflow-hidden rounded-[8px] border text-[11px] font-semibold transition-all duration-200 ${
+                            active
+                              ? "border-[#C9A45C]/35 bg-[linear-gradient(135deg,rgba(201,164,92,0.18),rgba(183,110,121,0.14))] text-[#F5E5B9] shadow-[0_0_0_1px_rgba(201,164,92,0.05)]"
+                              : "text-[#8F887C] hover:bg-white/[0.04] hover:text-[#DCC38A]"
+                          }`}
+                        >
+                          {tab.label}
+                        </button>
+                      );
+                    })}
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setShowPinedramaCategories(!showPinedramaCategories)
+                      }
+                      className="col-span-2 mt-1 h-[32px] rounded-[8px] border border-[#C9A45C]/25 bg-[linear-gradient(135deg,rgba(201,164,92,0.14),rgba(183,110,121,0.10))] text-[12px] font-semibold text-[#F0D9A3]"
+                    >
+                      {showPinedramaCategories
+                        ? "Sembunyikan Kategori"
+                        : "Lihat Semua Kategori"}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {sourceTabs.map((tab) => {
+                      const active = sourceTab === tab.value;
+
+                      return (
+                        <button
+                          key={tab.value}
+                          type="button"
+                          onClick={() => onTabChange(tab.value)}
+                          className={`relative h-[30px] rounded-[8px] border px-3 text-[11px] font-semibold transition-all duration-200 ${
+                            active
+                              ? "border-[#C9A45C]/35 bg-[linear-gradient(135deg,rgba(201,164,92,0.18),rgba(183,110,121,0.14))] text-[#F5E5B9]"
+                              : "text-[#8F887C] hover:bg-white/[0.04] hover:text-[#DCC38A]"
+                          }`}
+                        >
+                          {tab.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
             </div>
           </div>
         </header>
 
-        <section className="px-3 pt-[188px] md:px-4 md:pt-[200px] lg:px-6">
-          {filteredDramas.length === 0 ? (
+        <section className={`px-3 ${isPineDramaSource(selectedSource) ? "pt-[280px] md:pt-[270px]" : "pt-[208px] md:pt-[200px]"} lg:px-6`}>
+          {(
+              isPineDramaSource(selectedSource)
+                ? isLoadingPinedramaFeed
+                : filteredDramas.length === 0
+            ) ? (
             <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(18,19,26,0.98)_0%,rgba(12,13,19,0.98)_100%)] px-5 py-10 text-center shadow-[0_18px_42px_rgba(0,0,0,0.22)]">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[22px] border border-[#C9A45C]/15 bg-[linear-gradient(135deg,rgba(201,164,92,0.12),rgba(183,110,121,0.08))] text-2xl">
                 ✦
@@ -918,156 +994,21 @@ export default function SourceScreen({
                 })}
               </div>
 
-              {showDramaBoxPagination ? (
-                <div className="mt-4 flex items-center justify-center gap-2">
-                  <PaginationButton
-                    onClick={onDramaBoxPrevPage}
-                    disabled={dramaBoxPage <= 1}
-                  >
-                    ← Prev
-                  </PaginationButton>
-                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-[#8F887C]">
-                    Page {dramaBoxPage}
-                  </span>
-                  <PaginationButton
-                    onClick={onDramaBoxNextPage}
-                    disabled={!dramaBoxHasNextPage}
-                  >
-                    Next →
-                  </PaginationButton>
-                </div>
-              ) : null}
+              
 
-              {showMeloloPagination ? (
-                <div className="mt-4 flex items-center justify-center gap-2">
-                  <PaginationButton
-                    onClick={onMeloloPrevPage}
-                    disabled={meloloOffset <= 0}
-                  >
-                    ← Prev
-                  </PaginationButton>
-                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-[#8F887C]">
-                    Page {meloloOffset + 1}
-                  </span>
-                  <PaginationButton onClick={onMeloloNextPage}>
-                    Next →
-                  </PaginationButton>
-                </div>
-              ) : null}
+              
 
-              {showFlickreelsPagination ? (
-                <div className="mt-4 flex items-center justify-center gap-2">
-                  <PaginationButton
-                    onClick={onFlickreelsPrevPage}
-                    disabled={flickreelsPage <= 1}
-                  >
-                    ← Prev
-                  </PaginationButton>
-                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-[#8F887C]">
-                    Page {flickreelsPage}
-                  </span>
-                  <PaginationButton onClick={onFlickreelsNextPage}>
-                    Next →
-                  </PaginationButton>
-                </div>
-              ) : null}
+              
 
-              {showShortmaxPagination ? (
-                <div className="mt-4 flex items-center justify-center gap-2">
-                  <PaginationButton
-                    onClick={onShortmaxPrevPage}
-                    disabled={shortmaxPage <= 1}
-                  >
-                    ← Prev
-                  </PaginationButton>
-                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-[#8F887C]">
-                    Page {shortmaxPage}
-                  </span>
-                  <PaginationButton onClick={onShortmaxNextPage}>
-                    Next →
-                  </PaginationButton>
-                </div>
-              ) : null}
+              
 
-              {showGoodshortPagination && sourceTab !== "Trending" ? (
-                <div className="mt-4 flex items-center justify-center gap-2">
-                  <PaginationButton
-                    onClick={onGoodshortPrevPage}
-                    disabled={goodshortPage <= 1}
-                  >
-                    ← Prev
-                  </PaginationButton>
-                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-[#8F887C]">
-                    Page {goodshortPage}
-                  </span>
-                  <PaginationButton
-                    onClick={onGoodshortNextPage}
-                    disabled={!goodshortHasNextPage}
-                  >
-                    Next →
-                  </PaginationButton>
-                </div>
-              ) : null}
+              
 
-              {showReelifePagination ? (
-                <div className="mt-4 flex items-center justify-center gap-2">
-                  <PaginationButton
-                    onClick={onReelifePrevPage}
-                    disabled={reelifePage <= 1}
-                  >
-                    ← Prev
-                  </PaginationButton>
-                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-[#8F887C]">
-                    Page {reelifePage}
-                  </span>
-                  <PaginationButton
-                    onClick={onReelifeNextPage}
-                    disabled={!reelifeHasNextPage}
-                  >
-                    Next →
-                  </PaginationButton>
-                </div>
-              ) : null}
+              
 
-              {showStardusttvPagination ? (
-                <div className="mt-4 flex items-center justify-center gap-2">
-                  <PaginationButton
-                    onClick={onStardusttvPrevPage}
-                    disabled={stardusttvPage <= 1}
-                  >
-                    ← Prev
-                  </PaginationButton>
-                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-[#8F887C]">
-                    Page {stardusttvPage}
-                  </span>
-                  <PaginationButton
-                    onClick={onStardusttvNextPage}
-                    disabled={!stardusttvHasNextPage || stardusttvPage >= 5}
-                  >
-                    Next →
-                  </PaginationButton>
-                </div>
-              ) : null}
+              
 
-              {showBilitvPagination ? (
-                <div className="mt-4 flex items-center justify-center gap-2">
-                  <PaginationButton
-                    onClick={onBilitvPrevPage}
-                    disabled={bilitvPage <= 1}
-                  >
-                    ← Prev
-                  </PaginationButton>
-                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-[#8F887C]">
-                    Page {bilitvPage}
-                  </span>
-                  <PaginationButton
-                    onClick={onBilitvNextPage}
-                    disabled={!bilitvHasNextPage}
-                  >
-                    Next →
-                  </PaginationButton>
-                </div>
-              ) : null}
+              
             </>
           )}
         </section>

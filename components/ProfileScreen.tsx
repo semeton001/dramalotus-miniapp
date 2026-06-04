@@ -52,63 +52,8 @@ export default function ProfileScreen({
   paymentSuccessNotice = false,
   onDismissPaymentSuccessNotice,
 }: ProfileScreenProps) {
-  const [accountName, setAccountName] = useState<string | null>(null);
-  const [accountUsername, setAccountUsername] = useState<string | null>(null);
-  const [accountUserId, setAccountUserId] = useState<number | null>(null);
-  const [accountMembership, setAccountMembership] = useState<"free" | "vip" | null>(null);
-  const [accountVipUntil, setAccountVipUntil] = useState<string | null>(null);
   const [serverPhotoUrl, setServerPhotoUrl] = useState<string | null>(null);
   const [serverPhotoDebug, setServerPhotoDebug] = useState<string>("pending");
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadAccount() {
-      try {
-        const response = await fetch("/api/me", {
-          cache: "no-store",
-          credentials: "include",
-        });
-
-        if (!response.ok) return;
-
-        const data = (await response.json()) as WebMeResponse;
-        const user = data?.user ?? null;
-
-        if (cancelled || !user) return;
-
-        const fullName = [user.first_name, user.last_name]
-          .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-          .join(" ")
-          .trim();
-
-        const username =
-          typeof user.telegram_username === "string" && user.telegram_username.trim().length > 0
-            ? user.telegram_username.trim()
-            : null;
-
-        setAccountName(fullName || username || null);
-        setAccountUsername(username);
-        setAccountUserId(
-          typeof user.telegram_user_id === "number" ? user.telegram_user_id : null,
-        );
-        setAccountMembership(user.membership_status === "vip" ? "vip" : "free");
-        setAccountVipUntil(
-          typeof user.vip_until === "string" && user.vip_until.trim().length > 0
-            ? user.vip_until.trim()
-            : null,
-        );
-      } catch {
-        // keep fallback props
-      }
-    }
-
-    void loadAccount();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -147,9 +92,9 @@ export default function ProfileScreen({
     };
   }, []);
 
-  const resolvedMembership = accountMembership ?? membershipStatus;
+  const resolvedMembership = membershipStatus;
   const isVip = resolvedMembership === "vip";
-  const resolvedVipUntil = accountVipUntil ?? vipUntil;
+  const resolvedVipUntil = vipUntil;
 
   const vipUntilText = useMemo(() => {
     if (!isVip || !resolvedVipUntil) return "";
@@ -169,28 +114,25 @@ export default function ProfileScreen({
   }, [resolvedVipUntil, isVip]);
 
   const resolvedName = useMemo(() => {
-    if (accountName && accountName.trim().length > 0) return accountName.trim();
     if (telegramUserName && telegramUserName.trim().length > 0) {
       return telegramUserName.replace(/^@/, "").trim();
     }
     return "User";
-  }, [accountName, telegramUserName]);
+  }, [telegramUserName]);
 
   const resolvedUsername = useMemo(() => {
-    if (accountUsername && accountUsername.trim().length > 0) {
-      return `@${accountUsername.replace(/^@/, "").trim()}`;
-    }
     if (telegramUserName && telegramUserName.trim().length > 0) {
       return `@${telegramUserName.replace(/^@/, "").trim()}`;
     }
     return "-";
-  }, [accountUsername, telegramUserName]);
+  }, [telegramUserName]);
 
   const resolvedUserId = useMemo(() => {
-    if (typeof accountUserId === "number") return String(accountUserId);
-    if (typeof telegramUserId === "number") return String(telegramUserId);
+    if (typeof telegramUserId === "number") {
+      return String(telegramUserId);
+    }
     return "-";
-  }, [accountUserId, telegramUserId]);
+  }, [telegramUserId]);
 
   const resolvedPhotoUrl =
     serverPhotoUrl && serverPhotoUrl.trim().length > 0
@@ -210,7 +152,7 @@ export default function ProfileScreen({
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,5,7,0.82)_0%,rgba(5,5,7,0.94)_34%,rgba(5,5,7,1)_100%)]" />
       </div>
 
-      <div className="relative mx-auto w-full max-w-[980px] px-4 pb-32 pt-5 md:px-6">
+      <div className="relative mx-auto w-full max-w-[980px] px-4 pb-32 pt-10 md:px-6">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <div className="text-[12px] uppercase tracking-[0.22em] text-[#8F887C]">
@@ -312,48 +254,6 @@ export default function ProfileScreen({
               <div className="text-[16px] font-bold text-white break-all">{resolvedUserId}</div>
             </div>
 
-          </div>
-        </section>
-
-        <section className="mt-5 overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(18,19,26,0.98)_0%,rgba(12,13,19,0.98)_100%)] p-5">
-          <div className="mb-4 text-[13px] uppercase tracking-[0.18em] text-[#8F887C]">
-            Aksi Akun
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            {!isVip ? (
-              hideUpgradeLink ? null : (
-                <Link
-                  href="/upgrade"
-                  className="inline-flex items-center justify-center rounded-[16px] border border-[#C9A45C]/20 bg-[linear-gradient(135deg,#E5C37A_0%,#C99859_100%)] px-4 py-3 text-center text-[16px] font-extrabold text-[#111318] shadow-[0_10px_24px_rgba(201,164,92,0.18)]"
-                >
-                  Upgrade VIP
-                </Link>
-              )
-            ) : hideVipPageLink ? null : (
-              <Link
-                href="/vip"
-                className="inline-flex items-center justify-center rounded-[16px] border border-[#C9A45C]/16 bg-white/[0.03] px-4 py-3 text-center text-[16px] font-bold text-[#F1E4BF]"
-              >
-                Halaman VIP
-              </Link>
-            )}
-
-            <Link
-              href="/terms"
-              className="inline-flex items-center justify-center rounded-[16px] border border-white/10 bg-white/[0.04] px-4 py-3 text-center text-[16px] font-bold text-[#F5F1E8]"
-            >
-              Syarat & Ketentuan
-            </Link>
-
-            <form action="/api/logout" method="post" className="m-0">
-              <button
-                type="submit"
-                className="inline-flex w-full items-center justify-center rounded-[16px] border border-white/10 bg-white/[0.03] px-4 py-3 text-[16px] font-bold text-[#F5F1E8]"
-              >
-                Logout
-              </button>
-            </form>
           </div>
         </section>
 

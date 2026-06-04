@@ -3,11 +3,14 @@ import type { Drama } from "@/types/drama";
 import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
 
 export const MICRODRAMA_BASE_URL =
-  "https://streamapi.web.id/p/microdrama/api/v1";
+  "https://captain.sapimu.au/microdrama/api/v1";
 export const MICRODRAMA_TOKEN = process.env.MICRODRAMA_TOKEN?.trim() || "";
 export const MICRODRAMA_LANG = "id";
 export const MICRODRAMA_SOURCE_ID = "14";
 export const MICRODRAMA_SOURCE_NAME = "MicroDrama";
+
+export const MICRODRAMA_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -84,13 +87,14 @@ export async function fetchMicrodramaJson(
     url.searchParams.set("lang", MICRODRAMA_LANG);
   }
 
-  if (!url.searchParams.has("token")) {
-    url.searchParams.set("token", MICRODRAMA_TOKEN);
-  }
 
   const response = await fetch(url, {
     method: "GET",
-    headers: { Accept: "application/json" },
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${MICRODRAMA_TOKEN}`,
+      "User-Agent": MICRODRAMA_USER_AGENT,
+    },
     cache: "no-store",
   });
 
@@ -194,6 +198,12 @@ export function adaptMicrodramaDrama(item: JsonRecord, index = 0): Drama {
   return {
     id: numericId,
     title,
+    posterClass: "",
+    category: "MicroDrama",
+    isNew: false,
+    isDubbed: false,
+    isTrending: false,
+    sortOrder: index,
     description:
       pickString(item, "description", "intro", "summary", "synopsis") || title,
     coverImage: posterImage,
@@ -295,22 +305,24 @@ export function adaptMicrodramaEpisode(
 ): Episode {
   const episodeNumber = toNumber(raw.index) || toNumber(raw.episode) || 1;
   const episodeId = pickString(raw, "id") || String(episodeNumber);
-  const isVip = episodeNumber > FREE_EPISODE_LIMIT;
+  const isVip = false;
 
   return {
     id: createStableNumericId(`${dramaId}-${episodeId}`, episodeNumber),
     dramaId: numericDramaId,
     episodeNumber,
     title: `Episode ${episodeNumber}`,
-    videoUrl: `/api/microdrama/stream?dramaId=${encodeURIComponent(
+    videoUrl: `/api/microdrama/stream?miniapp=1&dramaId=${encodeURIComponent(
       dramaId,
-    )}&episode=${encodeURIComponent(String(episodeNumber))}&episodeNumber=${episodeNumber}`,
+    )}&episode=${encodeURIComponent(
+      String(episodeNumber),
+    )}&episodeNumber=${episodeNumber}`,
     originalVideoUrl: undefined,
     subtitleUrl: undefined,
     subtitleLang: undefined,
     subtitleLabel: undefined,
-    isLocked: isVip,
-    isVipOnly: isVip,
+    isLocked: false,
+    isVipOnly: false,
     sortOrder: episodeNumber,
     thumbnail: undefined,
     microdramaEpisodeId: episodeId,

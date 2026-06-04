@@ -1,34 +1,35 @@
-import { NextRequest, NextResponse } from "next/server";
-import {
-  IDRAMA_POPULAR_SECTION_ID,
-  adaptIdramaDramaList,
-  fetchIdramaJson,
-  getSearchParam,
-} from "../_shared";
+import { NextResponse } from "next/server";
+import { fetchIdramaJson, normalizeDramaList } from "../_shared";
 
-export async function GET(request: NextRequest) {
+function shuffle<T>(arr: T[]): T[] {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+export async function GET() {
   try {
-    const rawPage = Number(getSearchParam(request, "page", "1"));
-    const mappedPage = ((Math.max(1, rawPage) - 1) % 7) + 1;
-
-    const payload = await fetchIdramaJson(`/section/${IDRAMA_POPULAR_SECTION_ID}`, {
-      page: mappedPage,
+    const payload = await fetchIdramaJson("/popular", {
+      page: 1,
+      limit: 50,
     });
 
-    const list =
-      Array.isArray((payload as { short_plays?: unknown[] })?.short_plays)
-        ? (payload as { short_plays: unknown[] }).short_plays
-        : [];
+    const items = shuffle(normalizeDramaList(payload)).slice(0, 20);
 
-    const dramas = adaptIdramaDramaList(list, "Acak").sort(
-      () => Math.random() - 0.5,
-    );
-
-    return NextResponse.json(dramas);
+    return NextResponse.json({
+      items,
+      hasNextPage: false,
+      page: 1,
+    });
   } catch (error) {
-    console.error("iDrama random route error:", error);
     return NextResponse.json(
-      { error: "Failed to load iDrama random." },
+      {
+        error: "Failed to load iDrama random.",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 },
     );
   }

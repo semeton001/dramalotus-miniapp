@@ -1,33 +1,29 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { fetchJson, errorJson } from "../../_shared";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET(
-  _request: Request,
+  _request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await context.params;
-    const upstreamUrl = `https://dramawave.dramabos.my.id/api/drama/${encodeURIComponent(id)}?lang=in&code=4D96F22760EA30FB0FFBA9AA87A979A6`;
 
-    const response = await fetch(upstreamUrl, { cache: "no-store" });
-
-    if (!response.ok) {
+    if (!id?.trim()) {
       return NextResponse.json(
-        { error: `Gagal memuat detail Dramawave. status=${response.status}` },
-        { status: response.status },
+        { error: "id required" },
+        { status: 400 },
       );
     }
 
-    const payload = await response.json();
+    const payload = await fetchJson(
+      `/api/v1/dramas/${encodeURIComponent(id)}?lang=id-ID`
+    );
+
     return NextResponse.json(payload);
   } catch (error) {
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Terjadi kesalahan saat memuat detail Dramawave.",
-      },
-      { status: 500 },
-    );
+    return errorJson(error);
   }
 }

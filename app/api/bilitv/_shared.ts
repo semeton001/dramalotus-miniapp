@@ -2,11 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import type { Drama } from "@/types/drama";
 import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
 
-export const BILITV_BASE_URL = "https://streamapi.web.id/p/bilitv/api/v1";
+export const BILITV_BASE_URL =
+  "https://captain.sapimu.au/bilitv/api/v1";
 export const BILITV_TOKEN = process.env.BILITV_TOKEN?.trim() || "";
 export const BILITV_LANG = "id";
 export const BILITV_SOURCE_ID = "20";
 export const BILITV_SOURCE_NAME = "BiliTV";
+
+export const BILITV_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36";
 export const BILITV_HOME_MAX_PAGE = 10;
 export const BILITV_VIP_MAX_PAGE = 5;
 
@@ -82,17 +86,13 @@ export async function fetchBiliTVJson(
   });
 
   if (!url.searchParams.has("lang")) url.searchParams.set("lang", BILITV_LANG);
-  if (!url.searchParams.has("token")) url.searchParams.set("token", BILITV_TOKEN);
-  if (!url.searchParams.has("api_token")) {
-    url.searchParams.set("api_token", BILITV_TOKEN);
-  }
 
   const response = await fetch(url, {
     method: "GET",
     headers: {
       Accept: "application/json",
-      "api-token": BILITV_TOKEN,
-      "x-api-token": BILITV_TOKEN,
+      Authorization: `Bearer ${BILITV_TOKEN}`,
+      "User-Agent": BILITV_USER_AGENT,
     },
     cache: "no-store",
   });
@@ -185,6 +185,12 @@ export function adaptBiliTVDrama(item: JsonRecord, index = 0): Drama {
   return {
     id: numericId,
     title,
+    posterClass: "",
+    category: "Drama",
+    isNew: false,
+    isDubbed: false,
+    isTrending: false,
+    sortOrder: index + 1,
     description:
       pickString(item, "description", "intro", "summary", "synopsis") || title,
     coverImage: posterImage,
@@ -313,14 +319,13 @@ export async function buildBiliTVEpisodes(
     .map((episode, index) => {
       const episodeNumber = toNumber(episode.number, index + 1);
       const episodeId = pickString(episode, "id") || `${dramaId}-${episodeNumber}`;
-      const isVip = episodeNumber > FREE_EPISODE_LIMIT;
 
       return {
         id: createStableNumericId(`${dramaId}-${episodeId}`, episodeNumber),
         dramaId: numericDramaId,
         episodeNumber,
         title: `Episode ${episodeNumber}`,
-        videoUrl: `/api/bilitv/stream?dramaId=${encodeURIComponent(
+        videoUrl: `/api/bilitv/stream?miniapp=1&dramaId=${encodeURIComponent(
           dramaId,
         )}&episode=${episodeNumber}&episodeNumber=${episodeNumber}`,
         originalVideoUrl: "",
@@ -329,8 +334,8 @@ export async function buildBiliTVEpisodes(
         )}&episode=${episodeNumber}`,
         subtitleLang: "id",
         subtitleLabel: "Indonesia",
-        isLocked: isVip,
-        isVipOnly: isVip,
+        isLocked: false,
+        isVipOnly: false,
         sortOrder: episodeNumber,
         bilitvEpisodeId: episodeId,
       } as Episode & {
@@ -357,8 +362,8 @@ export async function resolveBiliTVVideoUrl(
   if (qualities && typeof qualities === "object" && !Array.isArray(qualities)) {
     const qualityRecord = qualities as JsonRecord;
     return (
-      pickString(qualityRecord, "720") ||
       pickString(qualityRecord, "1080") ||
+      pickString(qualityRecord, "720") ||
       pickString(qualityRecord, "480")
     );
   }

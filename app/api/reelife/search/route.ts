@@ -2,29 +2,42 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   adaptReelifeDramaList,
   extractFeedItems,
-  getLang,
-  getPage,
-  getSearchQuery,
+  jsonFeed,
   reelifeFetch,
 } from "../_shared";
 
-export async function GET(req: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    const q = getSearchQuery(req);
-    const page = getPage(req, 1);
-    const lang = getLang(req);
+    const query =
+      request.nextUrl.searchParams.get("query")?.trim() ||
+      request.nextUrl.searchParams.get("q")?.trim() ||
+      "";
 
-    if (!q) {
-      return NextResponse.json([]);
+    if (!query) {
+      return jsonFeed([], 1, false);
     }
 
-    const payload = await reelifeFetch<unknown>(
-      `/api/v1/search?q=${encodeURIComponent(q)}&page=${page}&lang=${lang}`,
-    );
-    return NextResponse.json(adaptReelifeDramaList(extractFeedItems(payload)));
+    const payload =
+      await reelifeFetch(
+        `/search/suggest?q=${encodeURIComponent(query)}`,
+      );
+
+    const items =
+      adaptReelifeDramaList(
+        extractFeedItems(payload),
+      );
+
+    return jsonFeed(items, 1, false);
   } catch (error) {
+    console.error("Reelife search route error:", error);
+
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown Reelife search error" },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unknown Reelife search error",
+      },
       { status: 500 },
     );
   }

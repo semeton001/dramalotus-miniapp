@@ -1,48 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  adaptStardustEpisode,
-  createStableNumericId,
-  extractStardustEpisodes,
   fetchStardustJson,
+  extractStardustEpisodes,
+  adaptStardustEpisode,
 } from "../_shared";
 
 export async function GET(request: NextRequest) {
   try {
-    const videoId =
-      request.nextUrl.searchParams.get("videoId")?.trim() ||
+    const dramaId =
       request.nextUrl.searchParams.get("dramaId")?.trim() ||
+      request.nextUrl.searchParams.get("videoId")?.trim() ||
       request.nextUrl.searchParams.get("id")?.trim() ||
       "";
-    const numericDramaId =
-      Number(request.nextUrl.searchParams.get("numericDramaId") || "") ||
-      createStableNumericId(videoId);
+    const numericDramaId = Number(
+      request.nextUrl.searchParams.get("numericDramaId") || dramaId || "0"
+    );
 
-    if (!videoId) {
-      return NextResponse.json(
-        { error: "Missing StardustTV videoId." },
-        { status: 400 },
-      );
+    if (!dramaId) {
+      return NextResponse.json({ error: "Missing dramaId" }, { status: 400 });
     }
 
     const payload = await fetchStardustJson(
-      `/video/${encodeURIComponent(videoId)}`,
+      `/video/${encodeURIComponent(dramaId)}?lang=id`
     );
 
-    const episodes = extractStardustEpisodes(payload).map((item) =>
-      adaptStardustEpisode(item, videoId, numericDramaId),
-    );
+    const episodes = extractStardustEpisodes(payload)
+      .map((ep) => adaptStardustEpisode(ep, dramaId, numericDramaId))
+      .sort((a, b) => a.episodeNumber - b.episodeNumber);
 
-    return NextResponse.json(episodes, {
-      headers: { "Cache-Control": "no-store" },
-    });
+    return NextResponse.json(episodes);
   } catch (error) {
-    console.error("StardustTV episodes route error:", error);
     return NextResponse.json(
       {
-        error: "Failed to load StardustTV episodes.",
-        details: error instanceof Error ? error.message : "Unknown error",
+        error:
+          error instanceof Error ? error.message : "Failed loading episodes",
       },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

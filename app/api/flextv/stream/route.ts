@@ -99,11 +99,41 @@ async function resolveFlextvStreamUrl(
 ): Promise<string> {
   if (!seriesId.trim() || !episodeId.trim()) return "";
 
-  const payload = await fetchFlextvJson(
-    `/play/${encodeURIComponent(seriesId)}/${encodeURIComponent(episodeId)}`,
-  );
+  const payload = (await fetchFlextvJson(
+    `/play/${encodeURIComponent(seriesId)}/${encodeURIComponent(
+      episodeId,
+    )}`,
+    { lang: "id" },
+  )) as any;
 
-  return extractPlayVideoUrl(payload);
+  const data = payload?.data || {};
+
+  const progressive = Array.isArray(data?.progressive)
+    ? data.progressive
+    : [];
+
+  const normalize = (v: unknown) =>
+    String(v || "").trim().toUpperCase();
+
+  const best =
+    progressive.find((item: any) =>
+      normalize(item?.title).includes("1080P-MAX"),
+    ) ||
+    progressive.find((item: any) =>
+      normalize(item?.title).includes("1080P"),
+    ) ||
+    progressive.find((item: any) =>
+      normalize(item?.title).includes("720P"),
+    ) ||
+    progressive.find((item: any) =>
+      typeof item?.video_url === "string",
+    );
+
+  return (
+    best?.video_url ||
+    data?.video_url ||
+    ""
+  );
 }
 
 async function requireFlextvAccess(request: NextRequest) {
@@ -154,18 +184,7 @@ async function requireFlextvAccess(request: NextRequest) {
     );
   }
 
-  const isFreeEpisode = episodeNumber <= FREE_EPISODE_LIMIT;
 
-  if (!isFreeEpisode && user.membership_status !== "vip") {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "VIP_REQUIRED",
-        message: "Episode ini hanya untuk VIP.",
-      },
-      { status: 403, headers: buildCorsHeaders("application/json") },
-    );
-  }
 
   if (user.membership_status === "vip" && user.vip_until) {
     const expiresAt = new Date(user.vip_until).getTime();

@@ -1,37 +1,26 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import {
-  adaptStardustDramaList,
   extractStardustItemsDeep,
-  feedResponse,
+  adaptStardustDramaList,
   fetchStardustJson,
+  feedResponse,
 } from "../_shared";
 
 export async function GET(request: NextRequest) {
-  try {
-    const query =
-      request.nextUrl.searchParams.get("query")?.trim() ||
-      request.nextUrl.searchParams.get("q")?.trim() ||
-      "";
+  const q =
+    request.nextUrl.searchParams.get("q")?.trim() ||
+    request.nextUrl.searchParams.get("query")?.trim() ||
+    "";
 
-    if (!query) return feedResponse([], 1, false);
-
-    const payload = await fetchStardustJson("/search", {
-      q: query,
-      page: 1,
-      page_size: 30,
-    });
-
-    const items = adaptStardustDramaList(extractStardustItemsDeep(payload));
-
-    return feedResponse(items, 1, false);
-  } catch (error) {
-    console.error("StardustTV search route error:", error);
-    return NextResponse.json(
-      {
-        error: "Failed to search StardustTV.",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    );
+  if (!q) {
+    return feedResponse([]);
   }
+
+  const payload = await fetchStardustJson(
+    `/search?q=${encodeURIComponent(q)}&lang=id&page=1&page_size=10`
+  );
+
+  return feedResponse(
+    adaptStardustDramaList(extractStardustItemsDeep(payload))
+  );
 }

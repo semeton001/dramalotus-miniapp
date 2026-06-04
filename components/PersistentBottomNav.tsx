@@ -36,8 +36,8 @@ export default function PersistentBottomNav({
   };
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-[max(12px,env(safe-area-inset-bottom))]">
-      <nav className="pointer-events-auto w-full max-w-md overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,17,24,0.94)_0%,rgba(10,11,16,0.98)_100%)] p-2 shadow-[0_24px_60px_rgba(0,0,0,0.38)] backdrop-blur-xl">
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center pb-0">
+      <nav className="pointer-events-auto w-full overflow-hidden rounded-[8px] border border-white/10 bg-[#0A0B10] p-2 shadow-[0_24px_60px_rgba(0,0,0,0.38)] backdrop-blur-xl">
         <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(230,211,163,0.28),transparent)]" />
         <div className="grid grid-cols-4 gap-2">
           {items.map((item) => {

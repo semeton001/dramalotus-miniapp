@@ -9,5 +9,14 @@ type RouteContext = {
 
 export async function GET(_request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
-  return respondDetail(id);
+
+  const fakeRequest = {
+    nextUrl: {
+      searchParams: new URLSearchParams({
+        id,
+      }),
+    },
+  } as NextRequest;
+
+  return respondDetail(fakeRequest);
 }

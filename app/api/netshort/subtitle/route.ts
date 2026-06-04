@@ -3,7 +3,7 @@ import { request as httpsRequest } from "node:https";
 import { request as httpRequest } from "node:http";
 
 const NETSHORT_EPISODE_BASE_URL =
-  "https://streamapi.web.id/p/netshort/api/v1/episode";
+  "https://captain.sapimu.au/netshort/api/v1/episode";
 
 const NETSHORT_TOKEN = process.env.NETSHORT_TOKEN?.trim() || "";
 
@@ -80,15 +80,15 @@ async function resolveSubtitleUrl(
 ): Promise<string> {
   const upstreamUrl = `${NETSHORT_EPISODE_BASE_URL}/${encodeURIComponent(
     dramaId,
-  )}/${encodeURIComponent(episodeNo)}?lang=id_ID&token=${NETSHORT_TOKEN}`;
+  )}/${encodeURIComponent(episodeNo)}?lang=id_ID`;
 
   const response = await fetch(upstreamUrl, {
     method: "GET",
     cache: "no-store",
     headers: {
       Accept: "application/json, text/plain, */*",
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      Authorization: `Bearer ${NETSHORT_TOKEN}`,
+      "User-Agent": "Mozilla/5.0",
     },
   });
 

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/getCurrentUser";
-import { FREE_EPISODE_LIMIT } from "@/lib/episodes/access";
 import { isMiniappRequest } from "@/lib/auth/isMiniappRequest";
 import { checkStreamRateLimit } from "@/lib/rate-limit/stream";
 import { createStreamToken, verifyStreamToken } from "@/lib/stream/token";
@@ -64,17 +63,24 @@ function pickBestVideoUrl(payload: unknown): string {
       Boolean(item) && typeof item === "object" && !Array.isArray(item),
   );
 
+  const by1080 = items.find((item) =>
+    toStringValue(item.quality).toLowerCase().includes("1080"),
+  );
+
   const by720 = items.find((item) =>
     toStringValue(item.quality).toLowerCase().includes("720"),
-  );
-  const by540 = items.find((item) =>
-    toStringValue(item.quality).toLowerCase().includes("540"),
   );
   const fallback = items.find((item) =>
     pickString(item, "url", "video", "videoUrl"),
   );
 
-  return pickString(by720 || by540 || fallback, "url", "video", "videoUrl", "playUrl");
+  return pickString(
+    by1080 || by720 || fallback,
+    "url",
+    "video",
+    "videoUrl",
+    "playUrl",
+  );
 }
 
 function buildCorsHeaders(contentType?: string | null) {
@@ -148,7 +154,7 @@ async function resolveDramapopsStreamUrl(
     `/drama/${encodeURIComponent(movieId)}/episode/${encodeURIComponent(
       episode,
     )}/video`,
-    { quality: "720p" },
+    { quality: "1080" },
   );
 
   return pickBestVideoUrl(payload);
@@ -187,44 +193,6 @@ async function requireDramapopsAccess(request: NextRequest) {
     userId: user.id,
   });
   if (rateLimitError) return rateLimitError;
-
-  const episodeNumber = Number(
-    request.nextUrl.searchParams.get("episodeNumber") ||
-      request.nextUrl.searchParams.get("episode") ||
-      request.nextUrl.searchParams.get("ep") ||
-      "1",
-  );
-
-  if (!Number.isInteger(episodeNumber) || episodeNumber < 1) {
-    return NextResponse.json(
-      { ok: false, error: "episodeNumber tidak valid." },
-      { status: 400, headers: buildCorsHeaders("application/json") },
-    );
-  }
-
-  const isFreeEpisode = episodeNumber <= FREE_EPISODE_LIMIT;
-
-  if (!isFreeEpisode && user.membership_status !== "vip") {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "VIP_REQUIRED",
-        message: "Episode ini hanya untuk VIP.",
-      },
-      { status: 403, headers: buildCorsHeaders("application/json") },
-    );
-  }
-
-  if (user.membership_status === "vip" && user.vip_until) {
-    const expiresAt = new Date(user.vip_until).getTime();
-
-    if (!Number.isNaN(expiresAt) && expiresAt <= Date.now()) {
-      return NextResponse.json(
-        { ok: false, error: "VIP_EXPIRED" },
-        { status: 403, headers: buildCorsHeaders("application/json") },
-      );
-    }
-  }
 
   return null;
 }

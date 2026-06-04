@@ -7,14 +7,20 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
-export async function GET() {
+export async function GET(request: Request) {
   const currentUser = await getCurrentUser();
 
-  if (!currentUser || !currentUser.telegram_user_id) {
+  const url = new URL(request.url);
+  const queryTelegramUserId = url.searchParams.get("telegram_user_id");
+
+  const safeTelegramUserId =
+    currentUser?.telegram_user_id
+      ? String(currentUser.telegram_user_id)
+      : queryTelegramUserId;
+
+  if (!safeTelegramUserId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
-  const safeTelegramUserId = String(currentUser.telegram_user_id);
 
   const { data, error } = await supabaseAdmin
     .from("user_history")
@@ -41,25 +47,24 @@ export async function POST(request: Request) {
   try {
     const currentUser = await getCurrentUser();
 
-    if (!currentUser || !currentUser.telegram_user_id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const body = await request.json();
     const { telegram_user_id, drama_id, episode_id } = body;
 
-    const requestedTelegramUserId =
-      typeof telegram_user_id === "number" &&
-      Number.isInteger(telegram_user_id) &&
-      telegram_user_id > 0
-        ? telegram_user_id
-        : currentUser.telegram_user_id;
+    const safeTelegramUserId =
+      currentUser?.telegram_user_id ??
+      (typeof telegram_user_id === "number" ? telegram_user_id : null);
 
-    if (requestedTelegramUserId !== currentUser.telegram_user_id) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!safeTelegramUserId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const safeTelegramUserId = currentUser.telegram_user_id;
+    if (
+      currentUser?.telegram_user_id &&
+      telegram_user_id &&
+      telegram_user_id !== currentUser.telegram_user_id
+    ) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     const safeDramaId =
       typeof drama_id === "number" && Number.isInteger(drama_id) && drama_id > 0
