@@ -2784,22 +2784,6 @@ if (isReelifeDrama) {
                       </div>
 
                       <div className="absolute right-4 top-1/2 z-30 flex -translate-y-1/2 flex-col gap-4">
-                        <button
-                          className="pointer-events-auto flex h-14 w-14 flex-col items-center justify-center rounded-full bg-black/35 text-white backdrop-blur"
-                        >
-                          <svg
-                            viewBox="0 0 24 24"
-                            className="h-6 w-6"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z" />
-                          </svg>
-                          <span className="text-[10px] mt-1">Save</span>
-                        </button>
 
                         <button
                           onClick={onOpenEpisodes}
