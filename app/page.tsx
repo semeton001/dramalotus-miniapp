@@ -9890,6 +9890,7 @@ const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
             setSelectedDrama(drama);
           }}
           onToggleFavorite={handleToggleFavorite}
+          onClearAll={handleClearFavorites}
         />
 
         <ProfileBottomSheet
@@ -10015,6 +10016,7 @@ const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
           setSelectedDrama(drama);
         }}
         onToggleFavorite={handleToggleFavorite}
+        onClearAll={handleClearFavorites}
       />
 
       <ProfileBottomSheet

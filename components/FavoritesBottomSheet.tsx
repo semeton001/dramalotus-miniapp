@@ -8,6 +8,7 @@ type FavoritesBottomSheetProps = {
   onClose: () => void;
   onSelectDrama: (drama: Drama) => void;
   onToggleFavorite: (dramaId: number) => void;
+  onClearAll: () => void;
 };
 
 export default function FavoritesBottomSheet({
@@ -16,6 +17,7 @@ export default function FavoritesBottomSheet({
   onClose,
   onSelectDrama,
   onToggleFavorite,
+  onClearAll,
 }: FavoritesBottomSheetProps) {
   return (
     <div
@@ -39,14 +41,24 @@ export default function FavoritesBottomSheet({
           <div className="h-1.5 w-20 rounded-full bg-white/20" />
         </div>
 
-        <div className="flex items-center justify-between border-b border-white/8 px-4 py-4">
-          <div>
-            <h2 className="text-lg font-semibold text-white">Favorit Saya</h2>
-            <p className="mt-1 text-sm text-[#8F887C]">
-              {favoriteDramas.length} drama
-            </p>
+          <div className="flex items-center justify-between border-b border-white/8 px-4 py-4">
+            <div>
+              <h2 className="text-lg font-semibold text-white">Favorit Saya</h2>
+              <p className="mt-1 text-sm text-[#8F887C]">
+                {favoriteDramas.length} drama
+              </p>
+            </div>
+
+            {favoriteDramas.length > 0 && (
+              <button
+                type="button"
+                  onClick={onClearAll}
+                className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-300 hover:bg-red-500/20"
+              >
+                🗑 Hapus Semua
+              </button>
+            )}
           </div>
-        </div>
 
         <div className="max-h-[80vh] overflow-y-auto px-4 py-4">
           {favoriteDramas.length === 0 ? (
