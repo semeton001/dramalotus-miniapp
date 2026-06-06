@@ -9481,7 +9481,6 @@ const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
   };
 
   const handleGoHistory = () => {
-    resetNavigationState();
     setShowPaymentSuccessNotice(false);
 
     setIsFavoritesSheetOpen(false);
@@ -9490,7 +9489,6 @@ const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
   };
 
   const handleGoFavorites = () => {
-    resetNavigationState();
     setShowPaymentSuccessNotice(false);
 
     setIsHistorySheetOpen(false);
@@ -9499,7 +9497,6 @@ const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
   };
 
   const handleGoProfile = () => {
-    resetNavigationState();
 
     setIsHistorySheetOpen(false);
     setIsFavoritesSheetOpen(false);
@@ -9867,6 +9864,56 @@ const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
             setShowEpisodes(false);
           }}
           onToggleFavorite={handleToggleFavorite}
+        />
+
+        <HistoryBottomSheet
+          isOpen={isHistorySheetOpen}
+          dramas={mergedDramas}
+          episodes={episodes}
+          historyItems={historyItems}
+          onClose={() => setIsHistorySheetOpen(false)}
+          onClearAll={handleClearHistory}
+          onSelectHistory={(drama, episode) => {
+            setIsHistorySheetOpen(false);
+            setSelectedDrama(drama);
+            setSelectedEpisode(episode);
+            setShowEpisodes(false);
+          }}
+        />
+
+        <FavoritesBottomSheet
+          isOpen={isFavoritesSheetOpen}
+          favoriteDramas={favoriteDramaList}
+          onClose={() => setIsFavoritesSheetOpen(false)}
+          onSelectDrama={(drama) => {
+            setIsFavoritesSheetOpen(false);
+            setSelectedDrama(drama);
+          }}
+          onToggleFavorite={handleToggleFavorite}
+        />
+
+        <ProfileBottomSheet
+          isOpen={isProfileSheetOpen}
+          membershipStatus={membershipStatus}
+          telegramUserName={
+            telegramUserName ??
+            window.Telegram?.WebApp?.initDataUnsafe?.user?.username ??
+            null
+          }
+          telegramUserId={
+            telegramUserId ??
+            window.Telegram?.WebApp?.initDataUnsafe?.user?.id ??
+            null
+          }
+          favoriteCount={favoriteDramaList.length}
+          historyCount={historyItems.length}
+          mostWatchedLabel={mostWatchedLabel}
+          onClose={() => setIsProfileSheetOpen(false)}
+          onToggleMembership={() => {
+            window.alert(
+              "Status membership mengikuti bot Telegram."
+            );
+          }}
         />
 
         <PersistentBottomNav
