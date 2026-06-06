@@ -88,7 +88,7 @@ export default function HistoryBottomSheet({
           </button>
         </div>
 
-        <div className="max-h-[80vh] overflow-y-auto px-4 py-4">
+        <div className="max-h-[45vh] overflow-y-auto px-4 py-4">
           {historyEntries.length === 0 ? (
             <div className="flex min-h-[120px] items-center justify-center text-center text-[#8F887C]">
               <div className="transition-all duration-300 ease-out">

@@ -60,7 +60,7 @@ export default function FavoritesBottomSheet({
             )}
           </div>
 
-        <div className="max-h-[80vh] overflow-y-auto px-4 py-4">
+        <div className="max-h-[45vh] overflow-y-auto px-4 py-4">
           {favoriteDramas.length === 0 ? (
             <div className="flex min-h-[120px] items-center justify-center text-center text-[#8F887C]">
               <div>
@@ -73,7 +73,7 @@ export default function FavoritesBottomSheet({
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            <div className="grid grid-cols-4 gap-2 sm:grid-cols-4">
               {favoriteDramas.map((drama, index) => (
                 <div
                   key={drama.id}

@@ -45,7 +45,7 @@ export default function ProfileBottomSheet({
       aria-hidden={!isOpen}
     >
       <div
-        className={`absolute inset-x-0 bottom-0 h-[65vh] mx-auto w-full max-w-[1100px] rounded-t-[28px] border border-white/10 bg-[#0F1118] shadow-[0_-20px_50px_rgba(0,0,0,0.35)] transition-all duration-300 ease-out ${
+        className={`absolute inset-x-0 bottom-0 h-[55vh] mx-auto w-full max-w-[1100px] rounded-t-[28px] border border-white/10 bg-[#0F1118] shadow-[0_-20px_50px_rgba(0,0,0,0.35)] transition-all duration-300 ease-out ${
           isOpen ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"
         }`}
         onClick={(e) => e.stopPropagation()}
