@@ -1432,6 +1432,7 @@ if (isReelifeDrama) {
       videoSrc.includes(".m3u8") ||
       videoSrc.includes("application/vnd.apple.mpegurl") ||
       videoSrc.includes("/api/dramawave/stream") ||
+      videoSrc.includes("/api/dramabox/stream") ||
       videoSrc.includes("/api/freereels/stream") ||
       videoSrc.includes("/api/reelshort/stream") ||
       videoSrc.includes("/api/goodshort/stream");
@@ -1457,6 +1458,7 @@ if (isReelifeDrama) {
     video.load();
 
     const canUseNativeHls =
+      !isDramaboxDrama &&
       selectedDrama?.sourceName !== "Dramawave" &&
       !!video.canPlayType("application/vnd.apple.mpegurl");
 
@@ -2060,7 +2062,6 @@ if (isReelifeDrama) {
     onClickAdCta?.();
 
     if (adCampaign?.ctaUrl) {
-      console.log("CTA disabled for Hilltop preroll");
     }
   };
 
@@ -2133,7 +2134,6 @@ if (isReelifeDrama) {
               adsManager.addEventListener(
                 google.ima.AdEvent.Type.CONTENT_RESUME_REQUESTED,
                 () => {
-                  console.log("IMA CONTENT_RESUME_REQUESTED");
                   clearTimeout(watchdog);
                   finish(true);
                 }
@@ -2145,7 +2145,6 @@ if (isReelifeDrama) {
                 google.ima.ViewMode.NORMAL
               );
 
-              console.log("IMA adsManager.start()");
               adsManager.start();
             } catch (e) {
               console.error("IMA start failed", e);
@@ -2175,7 +2174,6 @@ if (isReelifeDrama) {
             tryTag(currentVastIndex);
           }, 2500);
 
-          console.log("IMA trying VAST:", tag);
 
           const adsRequest = new google.ima.AdsRequest();
           adsRequest.adTagUrl = tag;
@@ -2525,12 +2523,6 @@ if (isReelifeDrama) {
                         setTimeout(() => {
                           const r = v.getBoundingClientRect();
 
-                          console.log("VIDEO DOM", {
-                            width: r.width,
-                            height: r.height,
-                            top: r.top,
-                            bottom: r.bottom,
-                          });
                         }, 500);
                       }
 

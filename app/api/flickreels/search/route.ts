@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  buildFlickreelsApiUrl,
   fetchAndNormalizeFeed,
   jsonError,
 } from "../_shared";
@@ -17,11 +16,9 @@ export async function GET(request: NextRequest) {
     }
 
     const dramas = await fetchAndNormalizeFeed(
-      buildFlickreelsApiUrl("/search", {
-        keyword: query,
-        page: 1,
-        page_size: 10,
-      }),
+      `https://captain.sapimu.au/flickreels/api/search?keyword=${encodeURIComponent(
+        query,
+      )}&lang=id`,
       "search",
     );
 

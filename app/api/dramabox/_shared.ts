@@ -4,7 +4,7 @@ import type { Episode } from "@/types/episode";
 import type { DramaBoxDramaResponse } from "@/lib/adapters/drama/dramabox";
 
 export const DRAMABOX_BASE_URL =
-  "https://captain.sapimu.au/dramaboxv4/api";
+  "https://captain.sapimu.au/dramaboxbaru/api";
 export const DRAMABOX_LANG = "in";
 export const DRAMABOX_TOKEN = process.env.DRAMABOX_TOKEN?.trim() || "";
 
@@ -212,18 +212,35 @@ export async function fetchDramaBoxPopular(lang = DRAMABOX_LANG) {
   return fetchDramaBoxRanking(lang);
 }
 
-export async function fetchDramaBoxPlay(
+export async function fetchDramaBoxStream(
   bookId: string,
   episode: number,
   lang = DRAMABOX_LANG,
 ) {
-  return fetchJson(
-    buildDramaBoxApiUrl("/play", {
+  const response = await fetch(
+    buildDramaBoxApiUrl("/stream", {
       bookId,
       episode,
       lang,
     }),
+    {
+      method: "GET",
+      headers: {
+        Accept: "*/*",
+        Authorization: `Bearer ${DRAMABOX_TOKEN}`,
+        "User-Agent": DRAMABOX_USER_AGENT,
+      },
+      cache: "no-store",
+    },
   );
+
+  if (!response.ok) {
+    throw new Error(
+      `DramaBox stream failed: ${response.status}`,
+    );
+  }
+
+  return response.text();
 }
 
 
@@ -245,25 +262,21 @@ export async function fetchDramaBoxEpisodeList(
 ) {
   const detail = await fetchDramaBoxDetail(bookId, lang);
 
-  const chapterCount = Number(
-    detail?.data?.chapterCount ||
-    detail?.data?.data?.chapterCount ||
-    0,
-  );
+  const chapterList = Array.isArray(detail?.data?.chapterList)
+    ? detail.data.chapterList
+    : [];
 
-  if (!chapterCount || chapterCount < 1) {
-    throw new Error("DramaBox chapterCount not found");
+  if (chapterList.length === 0) {
+    throw new Error("DramaBox chapterList not found");
   }
 
-  return Array.from(
-    { length: chapterCount },
-    (_, index) => ({
-      chapterId: String(index + 1),
-      episode: index + 1,
-      chapterIndex: index,
-      chapterName: `Episode ${index + 1}`,
-    }),
-  );
+  return chapterList.map((item: any, index: number) => ({
+    chapterId: String(item?.id ?? index + 1),
+    episode: Number(item?.indexStr ?? index + 1),
+    chapterIndex: index,
+    chapterName: `Episode ${Number(item?.indexStr ?? index + 1)}`,
+    duration: item?.duration,
+  }));
 }
 
 export function encodeUrlToken(value: string): string {

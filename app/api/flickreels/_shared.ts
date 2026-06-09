@@ -34,9 +34,20 @@ export async function fetchFlickreelsJson(path: string) {
   const response = await fetch(url, {
     headers: {
       Accept: "application/json, text/plain, */*",
+      "Accept-Language": "id-ID,id;q=0.9,en;q=0.8",
+
       Authorization: `Bearer ${FLICKREELS_TOKEN}`,
+
+      Referer: "https://captain.sapimu.au/",
+      Origin: "https://captain.sapimu.au",
+
+      "X-Requested-With": "XMLHttpRequest",
+
+      "device-id": "dramalotus-web",
+      "app-version": "1.0.0",
+
       "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
     },
     cache: "no-store",
   });

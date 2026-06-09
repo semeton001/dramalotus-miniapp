@@ -256,3 +256,18 @@ export function mergeDramaBoxDramaMetadata(
     slug: resolvedSlug,
   };
 }
+
+export function normalizeDramaBoxBrowseFeed(
+  payload: unknown,
+): Drama[] {
+  const root =
+    payload && typeof payload === "object"
+      ? (payload as Record<string, any>)
+      : {};
+
+  const bookList = Array.isArray(root?.data?.bookList)
+    ? root.data.bookList
+    : [];
+
+  return adaptDramaBoxDramaList(bookList);
+}

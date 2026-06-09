@@ -32,6 +32,8 @@ type SourceScreenProps = {
   isTelegramReady: boolean;
   isSearchEnabled?: boolean;
   isLoadingPinedramaFeed?: boolean;
+  isSearchMode?: boolean;
+  onSearchModeChange?: (open: boolean) => void;
 
 
   pinedramaCategories?: Array<{
@@ -42,6 +44,19 @@ type SourceScreenProps = {
   selectedPinedramaCategory?: string;
   onSelectPinedramaCategory?: (categoryId: string) => void;
 
+  flickreelsCategories?: Array<{
+    categoryId: string;
+    name: string;
+  }>;
+  selectedFlickreelsCategory?: string;
+  onSelectFlickreelsCategory?: (categoryId: string) => void;
+
+  dramaboxCategories?: Array<{
+    id: string | number;
+    name: string;
+  }>;
+  selectedDramaboxCategory?: string;
+  onSelectDramaboxCategory?: (categoryId: string) => void;
 
   onBack: () => void;
   onSearchChange: (value: string) => void;
@@ -54,8 +69,6 @@ type SourceScreenProps = {
 
 const dramaBoxTabs: Array<{ label: string; value: SourceTab }> = [
   { label: "Beranda", value: "Beranda" },
-  { label: "Ranking", value: "Ranking" },
-  { label: "VIP", value: "VIP" },
 ];
 
 const reelShortTabs: Array<{ label: string; value: SourceTab }> = [
@@ -509,12 +522,21 @@ export default function SourceScreen({
   isTelegramReady,
   isSearchEnabled = true,
   isLoadingPinedramaFeed = false,
+  isSearchMode = false,
+  onSearchModeChange,
 
 
   pinedramaCategories = [],
   selectedPinedramaCategory,
   onSelectPinedramaCategory,
 
+  flickreelsCategories = [],
+  selectedFlickreelsCategory,
+  onSelectFlickreelsCategory,
+
+  dramaboxCategories = [],
+  selectedDramaboxCategory,
+  onSelectDramaboxCategory,
 
   onBack,
   onSearchChange,
@@ -527,40 +549,55 @@ export default function SourceScreen({
   const [showPinedramaCategories, setShowPinedramaCategories] =
     useState(false);
 
-  const [showSearchMode, setShowSearchMode] =
-    useState(false);
+  const showSearchMode = isSearchMode;
+
+  const setShowSearchMode = (open: boolean) => {
+    onSearchModeChange?.(open);
+  };
 
 
 
   const sourceTabs =
-    isPineDramaSource(selectedSource) &&
-    pinedramaCategories.length > 0
-      ? pinedramaCategories.map((item) => ({
+    isDramaBoxSource(selectedSource) &&
+    dramaboxCategories.length > 0
+      ? dramaboxCategories.slice(0, 30).map((item) => ({
           label: item.name,
-          value: item.categoryId as SourceTab,
+          value: String(item.id) as SourceTab,
         }))
-      : getSourceTabs(selectedSource);
+      : isPineDramaSource(selectedSource) &&
+        pinedramaCategories.length > 0
+        ? pinedramaCategories.map((item) => ({
+            label: item.name,
+            value: item.categoryId as SourceTab,
+          }))
+        : isFlickreelsSource(selectedSource) &&
+          flickreelsCategories.length > 0
+          ? flickreelsCategories.slice(0, 30).map((item) => ({
+              label: item.name,
+              value: item.categoryId as SourceTab,
+            }))
+          : getSourceTabs(selectedSource);
 
   const visiblePinedramaTabs =
-    isPineDramaSource(selectedSource)
+    isDramaBoxSource(selectedSource) ||
+    isPineDramaSource(selectedSource) ||
+    isFlickreelsSource(selectedSource)
       ? sourceTabs.slice(0, 4)
       : sourceTabs;
 
   if (showSearchMode) {
     return (
       <main className="min-h-[100dvh] bg-[#050507] text-white">
-        <div className="flex min-h-[100dvh] flex-col px-3 pt-3">
-          <div className="mb-4 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowSearchMode(false)}
-              className="shrink-0 rounded-[12px] border border-white/10 px-3 py-2 text-sm"
-            >
-              ←
-            </button>
-
-            <div className="flex flex-1 items-center rounded-[14px] border border-white/10 bg-[#12131A] px-3 py-2">
+        <div className="flex min-h-[100dvh] flex-col px-3 pt-24">
+          <div className="mb-4 overflow-hidden rounded-[14px] border border-white/10 bg-[linear-gradient(180deg,rgba(18,19,26,0.98)_0%,rgba(12,13,19,0.98)_100%)] px-3 py-1.5">
+            <div className="flex items-center gap-2.5">
+              <span className="text-[18px] leading-none text-[#8F887C]">
+                ⌕
+              </span>
               <input
+                type="text"
+                value={searchQuery}
+                placeholder="Cari drama..."
                 onChange={(e) => onSearchChange(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
@@ -568,14 +605,15 @@ export default function SourceScreen({
                     onSubmitSearch();
                   }
                 }}
-                className="w-full bg-transparent text-sm outline-none"
+                className="w-full bg-transparent text-[13px] text-[#F5F1E8] outline-none placeholder:text-[#8F887C]"
               />
 
               {searchQuery.trim() && (
                 <button
                   type="button"
                   onClick={onClearSearch}
-                  className="ml-2 text-white/60"
+                  aria-label="Batalkan pencarian"
+                  className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[12px] font-bold leading-none text-[#A6A0B3]"
                 >
                   ×
                 </button>
@@ -584,7 +622,7 @@ export default function SourceScreen({
               <button
                 type="button"
                 onClick={onSubmitSearch}
-                className="ml-2 rounded-[10px] border border-[#C9A45C]/20 bg-[linear-gradient(135deg,rgba(201,164,92,0.16),rgba(183,110,121,0.10))] px-2 py-1 text-[11px] font-medium text-[#E6D3A3]"
+                className="shrink-0 rounded-[12px] border border-[#C9A45C]/20 bg-[linear-gradient(135deg,rgba(201,164,92,0.16),rgba(183,110,121,0.1))] px-3 py-1.5 text-[12px] font-medium text-[#E6D3A3] transition hover:bg-[#20232D]"
               >
                 Cari
               </button>
@@ -687,7 +725,12 @@ export default function SourceScreen({
 
             </div>
 
-            {isSearchEnabled && isPineDramaSource(selectedSource) ? (
+            {isSearchEnabled &&
+              (
+                isDramaBoxSource(selectedSource) ||
+                isPineDramaSource(selectedSource) ||
+                isFlickreelsSource(selectedSource)
+              ) ? (
               <button
                 type="button"
                 onClick={() => setShowSearchMode(true)}
@@ -743,11 +786,17 @@ export default function SourceScreen({
             <div
               className={`mt-2 rounded-[18px] border border-white/6 bg-white/[0.02] p-2 ${isSearchEnabled ? "" : "mt-1"}`}
             >
-                {isPineDramaSource(selectedSource) ? (
+                {isDramaBoxSource(selectedSource) ||
+                  isPineDramaSource(selectedSource) ||
+                  isFlickreelsSource(selectedSource) ? (
                   <div className="grid grid-cols-2 gap-2">
                     {(showPinedramaCategories ? sourceTabs : visiblePinedramaTabs).map((tab) => {
                       const active =
-                        selectedPinedramaCategory === String(tab.value);
+                        isDramaBoxSource(selectedSource)
+                          ? selectedDramaboxCategory === String(tab.value)
+                          : isPineDramaSource(selectedSource)
+                            ? selectedPinedramaCategory === String(tab.value)
+                            : selectedFlickreelsCategory === String(tab.value);
 
                       return (
                         <button
@@ -803,9 +852,16 @@ export default function SourceScreen({
           </div>
         </header>
 
-        <section className={`px-3 ${isPineDramaSource(selectedSource) ? "pt-[280px] md:pt-[270px]" : "pt-[208px] md:pt-[200px]"} lg:px-6`}>
+        <section className={`px-3 ${
+            isDramaBoxSource(selectedSource) ||
+            isPineDramaSource(selectedSource) ||
+            isFlickreelsSource(selectedSource)
+              ? "pt-[280px] md:pt-[270px]"
+              : "pt-[208px] md:pt-[200px]"
+          } lg:px-6`}>
           {(
-              isPineDramaSource(selectedSource)
+              isPineDramaSource(selectedSource) ||
+              isFlickreelsSource(selectedSource)
                 ? isLoadingPinedramaFeed
                 : filteredDramas.length === 0
             ) ? (
@@ -962,30 +1018,44 @@ export default function SourceScreen({
                           ) : null}
                         </div>
 
-                        <div className="flex min-h-[92px] flex-col border-t border-white/6 px-3 pb-3 pt-2.5">
-                          <p className="line-clamp-2 min-h-[34px] text-[12px] font-semibold leading-[1.32] text-[#F5F1E8]">
+                        <div
+                          className={`border-t border-white/6 px-3 py-2 ${
+                            isPineDramaSource(selectedSource) ||
+                            isFlickreelsSource(selectedSource)
+                              ? "min-h-[56px]"
+                              : "min-h-[92px] flex flex-col pb-3 pt-2.5"
+                          }`}
+                        >
+                          <p className="line-clamp-2 text-[12px] font-semibold leading-[1.32] text-[#F5F1E8]">
                             {drama.title}
                           </p>
 
-                          {isBilitvSource(selectedSource) &&
-                          bilitvNoIndonesianSubtitle ? (
-                            <div className="mt-1.5 inline-flex w-fit items-center rounded-full border border-red-400/20 bg-red-500/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-red-200">
-                              No Subtitle
-                            </div>
-                          ) : null}
+                          {!(
+                            isPineDramaSource(selectedSource) ||
+                            isFlickreelsSource(selectedSource)
+                          ) && (
+                            <>
+                              {isBilitvSource(selectedSource) &&
+                              bilitvNoIndonesianSubtitle ? (
+                                <div className="mt-1.5 inline-flex w-fit items-center rounded-full border border-red-400/20 bg-red-500/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-red-200">
+                                  No Subtitle
+                                </div>
+                              ) : null}
 
-                          {safeDescription ? (
-                            <p className="mt-1.5 line-clamp-2 text-[11px] leading-[1.42] text-[#A6A0B3]">
-                              {safeDescription}
-                            </p>
-                          ) : safeTags.length > 0 ? (
-                            <p className="mt-1.5 line-clamp-2 text-[11px] leading-[1.42] text-[#A6A0B3]">
-                              {safeTags.slice(0, 3).join(" • ")}
-                            </p>
-                          ) : (
-                            <p className="mt-1.5 text-[11px] text-[#6F6A61]">
-                              Tap untuk buka detail
-                            </p>
+                              {safeDescription ? (
+                                <p className="mt-1.5 line-clamp-2 text-[11px] leading-[1.42] text-[#A6A0B3]">
+                                  {safeDescription}
+                                </p>
+                              ) : safeTags.length > 0 ? (
+                                <p className="mt-1.5 line-clamp-2 text-[11px] leading-[1.42] text-[#A6A0B3]">
+                                  {safeTags.slice(0, 3).join(" • ")}
+                                </p>
+                              ) : (
+                                <p className="mt-1.5 text-[11px] text-[#6F6A61]">
+                                  Tap untuk buka detail
+                                </p>
+                              )}
+                            </>
                           )}
                         </div>
                       </div>

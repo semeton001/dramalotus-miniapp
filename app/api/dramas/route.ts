@@ -58,7 +58,6 @@ type DramaBoxSearchItemResponse = {
 };
 
 const DRAMABOX_LANG = "in";
-const DRAMABOX_ENRICH_LIMIT = 12;
 const DRAMABOX_SEARCH_QUERY = "love";
 
 
@@ -69,7 +68,9 @@ async function fetchDramaBoxCatalog() {
   const token = process.env.DRAMABOX_TOKEN?.trim() || "";
 
   const response = await fetch(
-    "https://captain.sapimu.au/dramaboxv4/api/search?keyword=love&page=1&lang=in",
+    `https://captain.sapimu.au/dramaboxbaru/api/search?keyword=${encodeURIComponent(
+      DRAMABOX_SEARCH_QUERY,
+    )}&page=1&lang=${DRAMABOX_LANG}`,
     {
       cache: "no-store",
       headers: {
@@ -147,21 +148,6 @@ export async function GET() {
 
     
     adaptedDramaBoxSearch = searchAdapted;
-
-    console.log("DramaBox search raw count:", dramaBoxSearchItems.length);
-    console.log("DramaBox search adapted count:", searchAdapted.length);
-    console.log(
-      "DramaBox search enriched count:",
-      adaptedDramaBoxSearch.length,
-    );
-    console.log(
-      "DramaBox adapted titles:",
-      adaptedDramaBoxSearch.slice(0, 5).map((item) => ({
-        id: item.id,
-        title: item.title,
-        episodes: item.episodes,
-      })),
-    );
   } catch (error) {
     console.error("DramaBox search adapter test failed:", error);
   }
@@ -206,10 +192,6 @@ export async function GET() {
 
     return a.title.localeCompare(b.title);
   });
-
-  console.log("Supabase dramas count:", dramas.length);
-  console.log("DramaBox adapted count:", adaptedDramaBoxSearch.length);
-  console.log("Merged dramas count:", mergedDramas.length);
 
   return NextResponse.json(mergedDramas);
 }

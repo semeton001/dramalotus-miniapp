@@ -4,27 +4,23 @@ import { buildFlickreelsApiUrl } from "../_shared";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type FlickreelsChapterItem = {
-  chapter_num?: number | string;
+type FlickreelsEpisodeItem = {
   chapter_id?: number | string;
+  chapter_num?: number | string;
   chapter_title?: string;
   chapter_cover?: string;
   duration?: number | string;
   is_lock?: number | string;
   is_need_pay?: number | string;
   is_vip_episode?: number | string;
-  hls_url?: string;
 };
 
-type FlickreelsChaptersResponse = {
-  status_code?: number;
-  msg?: string;
-  data?: {
-    playlet_id?: string | number;
-    title?: string;
-    cover?: string;
-    list?: FlickreelsChapterItem[];
-  };
+type FlickreelsPlayletResponse = {
+  playlet_id?: string | number;
+  title?: string;
+  cover?: string;
+
+  "Episode List"?: FlickreelsEpisodeItem[];
 };
 
 function toStringValue(value: unknown): string {
@@ -77,7 +73,7 @@ export async function GET(request: NextRequest) {
     }
 
     const upstreamUrl = buildFlickreelsApiUrl(
-      `/chapters/${encodeURIComponent(dramaId)}`,
+      `/playlet/${encodeURIComponent(dramaId)}`,
     );
 
     const response = await fetch(upstreamUrl, {
@@ -96,8 +92,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const payload = (await response.json()) as FlickreelsChaptersResponse;
-    const rawList = Array.isArray(payload?.data?.list) ? payload.data.list : [];
+    const payload = (await response.json()) as FlickreelsPlayletResponse;
+
+    const rawList = Array.isArray(payload?.["Episode List"])
+      ? payload["Episode List"]
+      : [];
+
+    console.log("[FlickReels Episodes]", {
+      dramaId,
+      count: rawList.length,
+      first: rawList[0] || null,
+    });
 
     const episodes = rawList
       .map((item, index) => {

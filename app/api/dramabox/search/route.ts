@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchDramaBoxSearch } from "../_shared";
+import { adaptDramaSearchListBySource } from "@/lib/adapters/drama";
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,12 +14,21 @@ export async function GET(req: NextRequest) {
       req.nextUrl.searchParams.get("page") || "1",
     );
 
-    const data = await fetchDramaBoxSearch(
+    const payload = await fetchDramaBoxSearch(
       keyword,
       Number.isFinite(page) ? page : 1,
     );
 
-    return NextResponse.json(data);
+    const bookList = Array.isArray(payload?.data?.bookList)
+      ? payload.data.bookList
+      : [];
+
+    const adapted = adaptDramaSearchListBySource(
+      "dramabox",
+      bookList,
+    );
+
+    return NextResponse.json(adapted);
   } catch (error) {
     return NextResponse.json(
       {

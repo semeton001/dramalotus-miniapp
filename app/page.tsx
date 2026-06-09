@@ -155,7 +155,6 @@ type HistoryItem = {
   episodeId: number;
 };
 
-type DramaBoxTab = "Beranda" | "Ranking" | "VIP";
 type ReelShortTab = "Beranda" | "For You" | "Trending" | "Romance";
 type MeloloTab = "Beranda";
 type DramawaveTab =
@@ -167,7 +166,6 @@ type DramawaveTab =
   | "Dubbing"
   | "VIP";
 type NetshortTab = "Beranda" | "ForYou" | "Terbaru" | "VIP";
-type FlickreelsTab = "Beranda" | "Terbaru" | "ForYou" | "Acak";
 type ShortmaxTab = "Beranda" | "Terbaru" | "Trending" | "ForYou";
 type GoodshortTab = "Beranda" | "Populer" | "Trending" | "Acak";
 type ReelifeTab = "Beranda" | "Trending" | "ForYou";
@@ -181,7 +179,7 @@ type FundramaTab = "Beranda" | "ForYou" | "Hot" | "VIP";
 type StardusttvTab = "Beranda" | "Fantasi" | "Romance" | "VIP";
 type IdramaTab = "Beranda" | "Populer" | "Trending" | "Terbaru";
 type FreeReelsTab = "Beranda" | "Populer" | "Terbaru" | "ForYou";
-type DefaultSourceTab = DramaBoxTab;
+type DefaultSourceTab = string;
 type ExtraSourceTab =
   | "Hot"
   | "Pewaris"
@@ -192,12 +190,10 @@ type ExtraSourceTab =
 
 type SourceTab =
   | ExtraSourceTab
-  | DramaBoxTab
   | ReelShortTab
   | MeloloTab
   | DramawaveTab
   | NetshortTab
-  | FlickreelsTab
   | ShortmaxTab
   | GoodshortTab
   | ReelifeTab
@@ -688,21 +684,6 @@ function isPineDramaSource(source: Source | null): boolean {
   );
 }
 
-function getDramaBoxTabEndpoint(
-  tab: DramaBoxTab,
-  _page = 1,
-): string {
-  switch (tab) {
-    case "Ranking":
-      return "/api/dramabox/latest";
-    case "VIP":
-      return "/api/dramabox/dubbing";
-    case "Beranda":
-    default:
-      return "/api/dramabox/home";
-  }
-}
-
 function getDramaBoxSearchEndpoint(query: string): string {
   return `${DRAMABOX_SEARCH_BASE_URL}?query=${encodeURIComponent(query)}`;
 }
@@ -804,24 +785,6 @@ function getNetshortTabEndpoint(
 
 function getNetshortSearchEndpoint(query: string): string {
   return `${NETSHORT_SEARCH_BASE_URL}?query=${encodeURIComponent(query)}`;
-}
-
-function getFlickreelsTabEndpoint(
-  tab: "Beranda" | "Terbaru" | "ForYou" | "Acak",
-  page = 1,
-): string {
-  switch (tab) {
-    case "Beranda":
-      return `/api/flickreels/home?page=${page}`;
-    case "Terbaru":
-      return "/api/flickreels/trending";
-    case "ForYou":
-      return "/api/flickreels/foryou";
-    case "Acak":
-      return "/api/flickreels/random";
-    default:
-      return `/api/flickreels/home?page=${page}`;
-  }
 }
 
 function getFlickreelsSearchEndpoint(query: string): string {
@@ -1918,6 +1881,7 @@ export default function Home() {
   const [selectedDrama, setSelectedDrama] = useState<Drama | null>(null);
   const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(null);
   const [showEpisodes, setShowEpisodes] = useState(false);
+  const [isSourceSearchMode, setIsSourceSearchMode] = useState(false);
 
   useEffect(() => {
     const tg = (window as any)?.Telegram?.WebApp;
@@ -1927,6 +1891,11 @@ export default function Home() {
     }
 
       const handleBack = () => {
+        if (isSourceSearchMode) {
+          setIsSourceSearchMode(false);
+          return;
+        }
+
         if (selectedDrama) {
           setSelectedDrama(null);
           setSelectedEpisode(null);
@@ -1952,7 +1921,7 @@ export default function Home() {
         tg.BackButton.offClick(handleBack);
       } catch {}
     };
-  }, [selectedSource, selectedDrama]);
+  }, [selectedSource, selectedDrama, isSourceSearchMode]);
   const [activeTab, setActiveTab] = useState<
     "home" | "history" | "favorites" | "profile"
   >("home");
@@ -1960,16 +1929,16 @@ export default function Home() {
 const [isProfileSheetOpen, setIsProfileSheetOpen] = useState(false);
 const [isHistorySheetOpen, setIsHistorySheetOpen] = useState(false);
 const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
-  const [dramaBoxTab, setDramaBoxTab] = useState<DramaBoxTab>("Beranda");
+  const [dramaboxCategories, setDramaboxCategories] = useState<any[]>([]);
+const [selectedDramaboxCategory, setSelectedDramaboxCategory] =
+  useState<string>("all");
   const [reelShortTab, setReelShortTab] = useState<ReelShortTab>("Beranda");
   const [meloloTab, setMeloloTab] = useState<MeloloTab>("Beranda");
   const [meloloOffset, setMeloloOffset] = useState(0);
-  const [dramaBoxPage, setDramaBoxPage] = useState(1);
   const [reelShortPage, setReelShortPage] = useState(1);
   const [dramawavePage, setDramawavePage] = useState(1);
   const [, setDramawaveHasNextPage] = useState(false);
   const [netshortPage, setNetshortPage] = useState(1);
-  const [flickreelsPage, setFlickreelsPage] = useState(1);
   const [shortmaxPage, setShortmaxPage] = useState(1);
   const [shortmaxHasMorePages, setShortmaxHasMorePages] = useState(true);
 
@@ -2263,7 +2232,10 @@ const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
   const [flickreelsEpisodesError, setFlickreelsEpisodesError] = useState<
     string | null
   >(null);
-  const [flickreelsTab, setFlickreelsTab] = useState<FlickreelsTab>("Beranda");
+
+  const [flickreelsCategories, setFlickreelsCategories] = useState<any[]>([]);
+  const [selectedFlickreelsCategory, setSelectedFlickreelsCategory] =
+    useState("405");
   const [liveFlickreelsDramas, setLiveFlickreelsDramas] = useState<Drama[]>([]);
   const [isLoadingFlickreelsFeed, setIsLoadingFlickreelsFeed] = useState(false);
   const [flickreelsFeedError, setFlickreelsFeedError] = useState<string | null>(
@@ -2502,12 +2474,16 @@ const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
   }, [historyItems]);
 
   const activeSourceTab = useMemo<SourceTab>(() => {
-    if (isDramaBoxSource(selectedSource)) return dramaBoxTab;
+    if (isDramaBoxSource(selectedSource)) {
+      return selectedDramaboxCategory;
+    }
     if (isReelShortSource(selectedSource)) return reelShortTab;
     if (isMeloloSource(selectedSource)) return meloloTab;
     if (isDramawaveSource(selectedSource)) return dramawaveTab;
     if (isNetshortSource(selectedSource)) return netshortTab;
-    if (isFlickreelsSource(selectedSource)) return flickreelsTab;
+    if (isFlickreelsSource(selectedSource)) {
+      return selectedFlickreelsCategory as SourceTab;
+    }
     if (isShortmaxSource(selectedSource)) return shortmaxTab;
     if (isGoodshortSource(selectedSource)) return goodshortTab;
     if (isIdramaSource(selectedSource)) return idramaTab;
@@ -2527,13 +2503,12 @@ const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
     return defaultSourceTab;
   }, [
     selectedSource,
-    dramaBoxTab,
+    selectedDramaboxCategory,
     reelShortTab,
     meloloTab,
     dramawaveTab,
     netshortTab,
-    flickreelsTab,
-    shortmaxTab,
+shortmaxTab,
     goodshortTab,
     idramaTab,
     reelifeTab,
@@ -2552,13 +2527,7 @@ const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
   const handleSourceTabChange = useCallback(
     (tab: SourceTab) => {
       if (isDramaBoxSource(selectedSource)) {
-        setDramaBoxPage(1);
-
-        if (tab === "Beranda" || tab === "Ranking" || tab === "VIP") {
-          setDramaBoxTab(tab);
-        } else {
-          setDramaBoxTab("Beranda");
-        }
+        setSelectedDramaboxCategory(String(tab));
         return;
       }
 
@@ -2620,18 +2589,7 @@ const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
       }
 
       if (isFlickreelsSource(selectedSource)) {
-        setFlickreelsPage(1);
-
-        if (
-          tab === "Beranda" ||
-          tab === "ForYou" ||
-          tab === "Terbaru" ||
-          tab === "Acak"
-        ) {
-          setFlickreelsTab(tab);
-        } else {
-          setFlickreelsTab("Beranda");
-        }
+        setSelectedFlickreelsCategory(String(tab));
         return;
       }
 
@@ -2889,8 +2847,6 @@ const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
     setSubmittedSearchQuery(q);
 
     if (isDramaBoxSource(selectedSource)) {
-      setDramaBoxPage(1);
-
       try {
         if (!q) {
           setLiveDramaBoxDramas([]);
@@ -2955,7 +2911,6 @@ const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
     }
 
     if (isFlickreelsSource(selectedSource)) {
-      setFlickreelsPage(1);
     }
 
     if (isShortmaxSource(selectedSource)) {
@@ -4482,7 +4437,7 @@ const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
         const shouldUseSearch = keyword.length > 0;
         const endpoint = shouldUseSearch
           ? getDramaBoxSearchEndpoint(keyword)
-          : getDramaBoxTabEndpoint(dramaBoxTab, dramaBoxPage);
+          : `/api/dramabox/category/${selectedDramaboxCategory}`;
 
         const response = await fetch(endpoint, {
                       method: "GET",
@@ -4503,189 +4458,16 @@ const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
 
         if (!isMounted) return;
 
-        const normalizeDramaBoxDramas = (input: unknown): Drama[] => {
-          if (!Array.isArray(input)) return [];
 
-          return input.map((item, index) => {
-            const rawItem =
-              item && typeof item === "object"
-                ? (item as Record<string, unknown>)
-                : {};
-
-            const pickString = (...keys: string[]): string => {
-              for (const key of keys) {
-                const value = rawItem[key];
-                if (typeof value === "string" && value.trim().length > 0) {
-                  return value.trim();
-                }
-              }
-              return "";
-            };
-
-            const pickNumber = (...keys: string[]): number => {
-              for (const key of keys) {
-                const value = rawItem[key];
-                if (typeof value === "number" && Number.isFinite(value)) {
-                  return value;
-                }
-                if (typeof value === "string" && value.trim().length > 0) {
-                  const parsed = Number(value);
-                  if (Number.isFinite(parsed)) {
-                    return parsed;
-                  }
-                }
-              }
-              return 0;
-            };
-
-            const normalizeStringArray = (value: unknown): string[] => {
-              if (Array.isArray(value)) {
-                return value
-                  .filter((entry): entry is string => typeof entry === "string")
-                  .map((entry) => entry.trim())
-                  .filter(Boolean);
-              }
-
-              if (typeof value === "string" && value.trim().length > 0) {
-                return value
-                  .split(/[|,/]/)
-                  .map((entry) => entry.trim())
-                  .filter(Boolean);
-              }
-
-              return [];
-            };
-
-            const normalizedId =
-              pickNumber("id", "book_id", "bookId", "dramaId", "drama_id") ||
-              Date.now() + index;
-
-            const normalizedTitle =
-              pickString(
-                "title",
-                "name",
-                "bookName",
-                "book_name",
-                "dramaName",
-                "drama_name",
-              ) || "Tanpa Judul";
-
-            const normalizedCoverImage = pickString(
-              "cover",
-              "coverWap",
-              "coverImage",
-              "cover_image",
-              "thumbnail",
-              "thumb",
-              "poster",
-              "posterImage",
-              "poster_image",
-              "image",
-              "imageUrl",
-              "image_url",
-            );
-
-            const normalizedPosterImage =
-              pickString(
-                "posterImage",
-                "poster_image",
-                "poster",
-                "cover",
-                "coverWap",
-                "coverImage",
-                "cover_image",
-                "thumbnail",
-                "thumb",
-                "image",
-                "imageUrl",
-                "image_url",
-              ) || normalizedCoverImage;
-
-            const normalizedDescription = pickString(
-              "introduction",
-              "description",
-              "summary",
-              "intro",
-              "synopsis",
-            );
-
-            const normalizedTags = Array.from(
-              new Set([
-                ...normalizeStringArray(rawItem.tagNames),
-                ...normalizeStringArray(rawItem.tags),
-                ...normalizeStringArray(rawItem.category),
-                ...normalizeStringArray(rawItem.genre),
-                "Drama",
-              ]),
-            ).slice(0, 8);
-
-            const normalizedDrama: Drama = {
-              id: normalizedId as any,
-              source: "DramaBox",
-              sourceId: "1",
-              sourceName: "DramaBox",
-              title: normalizedTitle,
-              episodes: pickNumber(
-                "chapterCount",
-                "episodes",
-                "episodeCount",
-                "episode_count",
-                "totalEpisodes",
-              ),
-              badge: "DramaBox",
-              tags: normalizedTags,
-              posterClass: "from-[#3A102A] via-[#12131A] to-[#090B12]",
-              slug:
-                pickString("slug", "bookSlug", "book_slug") ||
-                `dramabox-${normalizedId}`,
-              description: normalizedDescription,
-              coverImage: normalizedCoverImage || undefined,
-              posterImage: normalizedPosterImage || undefined,
-              category: "Drama",
-              language: "in",
-              country: undefined,
-              isNew: false,
-              isDubbed: normalizedTitle.toLowerCase().includes("sulih suara"),
-              isTrending: false,
-              sortOrder:
-                typeof rawItem.sort === "number"
-                  ? rawItem.sort
-                  : typeof rawItem.sort === "string"
-                    ? Number(rawItem.sort) || index
-                    : index,
-              rating: undefined,
-              releaseYear: undefined,
-            };
-
-            return normalizedDrama;
-          });
-        };
-
-        const isDramaBoxPaginatedPayload =
-          !shouldUseSearch &&
-          data &&
-          typeof data === "object" &&
-          Array.isArray((data as { items?: unknown[] }).items);
-
-        if (isDramaBoxPaginatedPayload) {
-          const payload = data as {
-            items: unknown[];
-            hasNextPage?: boolean;
-            page?: number;
-          };
-
-          const normalizedDramas = normalizeDramaBoxDramas(payload.items);
-          setLiveDramaBoxDramas(normalizedDramas);
-          setDramaBoxHasNextPage(Boolean(payload.hasNextPage));
-        } else if (Array.isArray(data)) {
-          const normalizedDramas = normalizeDramaBoxDramas(data);
-          setLiveDramaBoxDramas(normalizedDramas);
+        if (Array.isArray(data)) {
+          setLiveDramaBoxDramas(data as Drama[]);
           setDramaBoxHasNextPage(false);
         } else {
           setLiveDramaBoxDramas([]);
           setDramaBoxHasNextPage(false);
           setDramaBoxFeedError("Format feed DramaBox tidak valid.");
         }
+
       } catch (error) {
         console.error("Gagal memuat feed DramaBox:", error);
 
@@ -4709,7 +4491,11 @@ const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
     return () => {
       isMounted = false;
     };
-  }, [selectedSource, dramaBoxTab, dramaBoxPage, submittedSearchQuery]);
+  }, [
+    selectedSource,
+    selectedDramaboxCategory,
+    submittedSearchQuery,
+  ]);
 
   useEffect(() => {
     if (liveDramaBoxDramas.length === 0) return;
@@ -5696,7 +5482,7 @@ const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
         const shouldUseSearch = keyword.length > 0;
         const endpoint = shouldUseSearch
           ? getFlickreelsSearchEndpoint(keyword)
-          : getFlickreelsTabEndpoint(flickreelsTab, flickreelsPage);
+          : `/api/flickreels/category/${selectedFlickreelsCategory}`;
 
         const response = await fetch(endpoint, {
                       method: "GET",
@@ -5715,8 +5501,7 @@ const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
 
         if (Array.isArray(data)) {
           console.log("[FlickReels feed]", {
-            tab: flickreelsTab,
-            page: flickreelsPage,
+            category: selectedFlickreelsCategory,
             endpoint,
             count: data.length,
             firstTitle: data[0]?.title || null,
@@ -5750,7 +5535,11 @@ const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
     return () => {
       isMounted = false;
     };
-  }, [selectedSource, flickreelsTab, flickreelsPage, submittedSearchQuery]);
+  }, [
+    selectedSource,
+    selectedFlickreelsCategory,
+    submittedSearchQuery,
+  ]);
 
   useEffect(() => {
     // FlickReels source explorer harus menampilkan hasil tab aktif saja.
@@ -8443,6 +8232,120 @@ const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
     return () => {
       isMounted = false;
     };
+
+  }, [selectedSource]);
+
+  useEffect(() => {
+    if (!isDramaBoxSource(selectedSource)) {
+      setDramaboxCategories([]);
+      setSelectedDramaboxCategory("all");
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadCategories = async () => {
+      try {
+        const res = await fetch(
+          "/api/dramabox/categories",
+          { cache: "no-store" },
+        );
+
+        if (!res.ok) {
+          throw new Error(
+            `DramaBox categories failed ${res.status}`,
+          );
+        }
+
+        const data = await res.json();
+
+        if (!isMounted) return;
+
+        const items = Array.isArray(data?.data)
+          ? data.data
+          : Array.isArray(data)
+            ? data
+            : [];
+
+        setDramaboxCategories(items);
+
+        if (
+          items.length > 0 &&
+          selectedDramaboxCategory === "all"
+        ) {
+          setSelectedDramaboxCategory(
+            String(items[0]?.id ?? "all"),
+          );
+        }
+      } catch (err) {
+        console.error(
+          "DramaBox categories failed:",
+          err,
+        );
+      }
+    };
+
+    loadCategories();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedSource]);
+
+  useEffect(() => {
+    if (!isFlickreelsSource(selectedSource)) {
+      setFlickreelsCategories([]);
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadCategories = async () => {
+      try {
+        const res = await fetch(
+          "/api/flickreels/categories",
+          { cache: "no-store" },
+        );
+
+        if (!res.ok) {
+          throw new Error(
+            `FlickReels categories failed ${res.status}`,
+          );
+        }
+
+        const data = await res.json();
+
+        if (!isMounted) return;
+
+        const items = Array.isArray(data)
+          ? data
+          : [];
+
+        setFlickreelsCategories(items);
+
+        if (
+          items.length > 0 &&
+          !selectedFlickreelsCategory
+        ) {
+          setSelectedFlickreelsCategory(
+            String(
+              items[0]?.categoryId ?? "405",
+            ),
+          );
+        }
+      } catch (err) {
+        console.error(
+          "FlickReels categories failed:",
+          err,
+        );
+      }
+    };
+
+    loadCategories();
+
+    return () => {
+      isMounted = false;
+    };
   }, [selectedSource]);
 
   useEffect(() => {
@@ -9390,12 +9293,11 @@ const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
     setSearchQuery("");
     setSubmittedSearchQuery("");
 
-    setDramaBoxTab("Beranda");
+    setSelectedDramaboxCategory("all");
     setReelShortTab("Beranda");
     setMeloloTab("Beranda");
     setDramawaveTab("Terbaru");
     setNetshortTab("Beranda");
-    setFlickreelsTab("Beranda");
     setShortmaxTab("Beranda");
     setShortmaxHasMorePages(true);
 
@@ -9404,11 +9306,8 @@ const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
     setDefaultSourceTab("Beranda");
 
     setMeloloOffset(0);
-    setDramaBoxPage(1);
-    setReelShortPage(1);
-    setDramawavePage(1);
+    
     setNetshortPage(1);
-    setFlickreelsPage(1);
     setShortmaxPage(1);
     setShortmaxHasMorePages(true);
     setGoodshortPage(1);
@@ -9783,10 +9682,22 @@ const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
           pinedramaCategories={pinedramaCategories}
           selectedPinedramaCategory={selectedPinedramaCategory}
           onSelectPinedramaCategory={setSelectedPinedramaCategory}
-            isLoadingPinedramaFeed={isLoadingPinedramaFeed}
+
+          flickreelsCategories={flickreelsCategories}
+          selectedFlickreelsCategory={selectedFlickreelsCategory}
+          onSelectFlickreelsCategory={setSelectedFlickreelsCategory}
+
+          dramaboxCategories={dramaboxCategories}
+          selectedDramaboxCategory={selectedDramaboxCategory}
+          onSelectDramaboxCategory={setSelectedDramaboxCategory}
+
+          isLoadingPinedramaFeed={isLoadingPinedramaFeed}
+          isSearchMode={isSourceSearchMode}
+          onSearchModeChange={setIsSourceSearchMode}
 
           isSearchEnabled={
             isPineDramaSource(selectedSource) ||
+            isFlickreelsSource(selectedSource) ||
             isDramaBoxSource(selectedSource) ||
             isReelShortSource(selectedSource) ||
             isMeloloSource(selectedSource) ||
@@ -9807,23 +9718,19 @@ const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
             setSelectedSource(null);
             setSubmittedSearchQuery("");
             setSearchQuery("");
-            setDramaBoxPage(1);
+            
             setReelShortPage(1);
-            setMeloloOffset(0);
-            setDramawavePage(1);
             setNetshortPage(1);
-            setFlickreelsPage(1);
-            setShortmaxPage(1);
+                setShortmaxPage(1);
             setShortmaxHasMorePages(true);
             setGoodshortPage(1);
             setIdramaPage(1);
             setBilitvPage(1);
-            setDramaBoxTab("Beranda");
+            setSelectedDramaboxCategory("all");
             setReelShortTab("Beranda");
             setMeloloTab("Beranda");
             setDramawaveTab("Terbaru");
             setNetshortTab("Beranda");
-            setFlickreelsTab("Beranda");
             setShortmaxTab("Beranda");
             setShortmaxHasMorePages(true);
 
@@ -9941,19 +9848,16 @@ const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
           setSelectedSource(source);
           setSearchQuery("");
           setSubmittedSearchQuery("");
-          setDramaBoxTab("Beranda");
+          setSelectedDramaboxCategory("all");
           setReelShortTab("Beranda");
           setMeloloTab("Beranda");
           setMeloloOffset(0);
-          setDramaBoxPage(1);
+          
           setReelShortPage(1);
           setDramawavePage(1);
-          setNetshortPage(1);
-          setFlickreelsPage(1);
           setShortmaxPage(1);
           setDramawaveTab("Terbaru");
           setNetshortTab("Beranda");
-          setFlickreelsTab("Beranda");
           setShortmaxTab("Beranda");
           setDefaultSourceTab("Beranda");
           setLiveDramaBoxDramas([]);

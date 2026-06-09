@@ -12,6 +12,7 @@ type Payload = {
   u: string;
   exp: number;
   src: string;
+  c?: string;
 };
 
 export function createStreamToken(payload: Payload): string {
