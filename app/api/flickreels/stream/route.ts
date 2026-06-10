@@ -189,37 +189,35 @@ async function resolveFlickReelsStreamUrl(
     return cached.url;
   }
 
-  const upstreamUrl = buildFlickreelsApiUrl(
-    `/chapters/${encodeURIComponent(dramaId)}`,
-  );
+  const upstreamUrl =
+    `https://captain.sapimu.au/flickreels/api/stream/${encodeURIComponent(
+      dramaId,
+    )}/${encodeURIComponent(chapterId)}?lang=id`;
 
   const response = await fetch(upstreamUrl, {
     method: "GET",
     cache: "no-store",
     headers: {
-      Accept: "application/json,text/plain,*/*",
+      Accept: "application/json, text/plain, */*",
+      "Accept-Language": "id-ID,id;q=0.9,en;q=0.8",
       Authorization: `Bearer ${process.env.FLICKREELS_TOKEN}`,
+      Referer: "https://captain.sapimu.au/",
+      Origin: "https://captain.sapimu.au",
+      "X-Requested-With": "XMLHttpRequest",
+      "device-id": "dramalotus-web",
+      "app-version": "1.0.0",
       "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
     },
   });
 
   if (!response.ok) return "";
 
   const payload = await response.json();
-  const list = Array.isArray(payload?.data?.list)
-    ? payload.data.list
-    : [];
-
-  const hit = list.find(
-    (item: any) => String(item?.chapter_id) === String(chapterId),
-  );
-
-  const hlsUrl = hit?.hls_url;
 
   const finalUrl =
-    typeof hlsUrl === "string" && hlsUrl.trim()
-      ? hlsUrl.trim()
+    typeof payload?.hls_url === "string" && payload.hls_url.trim()
+      ? payload.hls_url.trim()
       : "";
 
   if (finalUrl) {

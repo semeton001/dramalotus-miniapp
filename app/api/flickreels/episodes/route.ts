@@ -4,23 +4,27 @@ import { buildFlickreelsApiUrl } from "../_shared";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type FlickreelsEpisodeItem = {
-  chapter_id?: number | string;
+type FlickreelsChapterItem = {
   chapter_num?: number | string;
+  chapter_id?: number | string;
   chapter_title?: string;
   chapter_cover?: string;
   duration?: number | string;
   is_lock?: number | string;
   is_need_pay?: number | string;
   is_vip_episode?: number | string;
+  hls_url?: string;
 };
 
-type FlickreelsPlayletResponse = {
-  playlet_id?: string | number;
-  title?: string;
-  cover?: string;
-
-  "Episode List"?: FlickreelsEpisodeItem[];
+type FlickreelsChaptersResponse = {
+  status_code?: number;
+  msg?: string;
+  data?: {
+    playlet_id?: string | number;
+    title?: string;
+    cover?: string;
+    list?: FlickreelsChapterItem[];
+  };
 };
 
 function toStringValue(value: unknown): string {
@@ -72,9 +76,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Missing dramaId" }, { status: 400 });
     }
 
-    const upstreamUrl = buildFlickreelsApiUrl(
-      `/playlet/${encodeURIComponent(dramaId)}`,
-    );
+    const upstreamUrl =
+      `https://captain.sapimu.au/flickreels/api/playlet/${encodeURIComponent(dramaId)}?lang=id`;
+
 
     const response = await fetch(upstreamUrl, {
       method: "GET",
@@ -86,26 +90,22 @@ export async function GET(request: NextRequest) {
       },
     });
 
+
     if (!response.ok) {
       throw new Error(
         `Failed to fetch FlickReels chapters. status=${response.status}`,
       );
     }
 
-    const payload = (await response.json()) as FlickreelsPlayletResponse;
-
+    const payload = (await response.json()) as any;
     const rawList = Array.isArray(payload?.["Episode List"])
       ? payload["Episode List"]
+      : Array.isArray(payload?.data?.list)
+      ? payload.data.list
       : [];
 
-    console.log("[FlickReels Episodes]", {
-      dramaId,
-      count: rawList.length,
-      first: rawList[0] || null,
-    });
-
     const episodes = rawList
-      .map((item, index) => {
+      .map((item: FlickreelsChapterItem, index: number) => {
         const episodeNumber = toNumberValue(item.chapter_num) || index + 1;
         const chapterId =
           toStringValue(item.chapter_id) || `${dramaId}-${episodeNumber}`;
@@ -135,7 +135,7 @@ export async function GET(request: NextRequest) {
           flickreelsVid: chapterId,
         };
       })
-      .sort((a, b) => a.episodeNumber - b.episodeNumber);
+      .sort((a: any, b: any) => a.episodeNumber - b.episodeNumber);
 
     return NextResponse.json(episodes, { status: 200 });
   } catch (error) {
