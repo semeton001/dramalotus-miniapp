@@ -51,6 +51,13 @@ type SourceScreenProps = {
   selectedFlickreelsCategory?: string;
   onSelectFlickreelsCategory?: (categoryId: string) => void;
 
+  viglooCategories?: Array<{
+    categoryId: string;
+    name: string;
+  }>;
+  selectedViglooCategory?: string;
+  onSelectViglooCategory?: (categoryId: string) => void;
+
   dramaboxCategories?: Array<{
     id: string | number;
     name: string;
@@ -222,6 +229,13 @@ function isFlickreelsSource(source: Source): boolean {
   return (
     source.slug?.toLowerCase() === "flickreels" ||
     source.name?.toLowerCase() === "flickreels"
+  );
+}
+
+function isViglooSource(source: Source): boolean {
+  return (
+    source.slug?.toLowerCase() === "vigloo" ||
+    source.name?.toLowerCase() === "vigloo"
   );
 }
 
@@ -534,6 +548,10 @@ export default function SourceScreen({
   selectedFlickreelsCategory,
   onSelectFlickreelsCategory,
 
+  viglooCategories = [],
+  selectedViglooCategory,
+  onSelectViglooCategory,
+
   dramaboxCategories = [],
   selectedDramaboxCategory,
   onSelectDramaboxCategory,
@@ -576,12 +594,19 @@ export default function SourceScreen({
               label: item.name,
               value: item.categoryId as SourceTab,
             }))
-          : getSourceTabs(selectedSource);
+          : isViglooSource(selectedSource) &&
+            viglooCategories.length > 0
+            ? viglooCategories.slice(0, 30).map((item) => ({
+                label: item.name,
+                value: item.categoryId as SourceTab,
+              }))
+            : getSourceTabs(selectedSource);
 
   const visiblePinedramaTabs =
     isDramaBoxSource(selectedSource) ||
     isPineDramaSource(selectedSource) ||
-    isFlickreelsSource(selectedSource)
+    isFlickreelsSource(selectedSource) ||
+    isViglooSource(selectedSource)
       ? sourceTabs.slice(0, 4)
       : sourceTabs;
 
@@ -729,7 +754,8 @@ export default function SourceScreen({
               (
                 isDramaBoxSource(selectedSource) ||
                 isPineDramaSource(selectedSource) ||
-                isFlickreelsSource(selectedSource)
+                isFlickreelsSource(selectedSource) ||
+                isViglooSource(selectedSource)
               ) ? (
               <button
                 type="button"
@@ -788,7 +814,8 @@ export default function SourceScreen({
             >
                 {isDramaBoxSource(selectedSource) ||
                   isPineDramaSource(selectedSource) ||
-                  isFlickreelsSource(selectedSource) ? (
+                  isFlickreelsSource(selectedSource) ||
+                  isViglooSource(selectedSource) ? (
                   <div className="grid grid-cols-2 gap-2">
                     {(showPinedramaCategories ? sourceTabs : visiblePinedramaTabs).map((tab) => {
                       const active =
@@ -796,7 +823,9 @@ export default function SourceScreen({
                           ? selectedDramaboxCategory === String(tab.value)
                           : isPineDramaSource(selectedSource)
                             ? selectedPinedramaCategory === String(tab.value)
-                            : selectedFlickreelsCategory === String(tab.value);
+                            : isFlickreelsSource(selectedSource)
+                              ? selectedFlickreelsCategory === String(tab.value)
+                              : selectedViglooCategory === String(tab.value);
 
                       return (
                         <button
@@ -852,19 +881,21 @@ export default function SourceScreen({
           </div>
         </header>
 
-        <section className={`px-3 ${
+
+<section className={`px-3 ${
             isDramaBoxSource(selectedSource) ||
             isPineDramaSource(selectedSource) ||
-            isFlickreelsSource(selectedSource)
+            isFlickreelsSource(selectedSource) ||
+            isViglooSource(selectedSource)
               ? "pt-[280px] md:pt-[270px]"
               : "pt-[208px] md:pt-[200px]"
           } lg:px-6`}>
           {(
-              isPineDramaSource(selectedSource) ||
-              isFlickreelsSource(selectedSource)
-                ? isLoadingPinedramaFeed
-                : filteredDramas.length === 0
-            ) ? (
+            isPineDramaSource(selectedSource) ||
+            isFlickreelsSource(selectedSource)
+              ? isLoadingPinedramaFeed
+              : filteredDramas.length === 0
+          ) ? (
             <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(18,19,26,0.98)_0%,rgba(12,13,19,0.98)_100%)] px-5 py-10 text-center shadow-[0_18px_42px_rgba(0,0,0,0.22)]">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[22px] border border-[#C9A45C]/15 bg-[linear-gradient(135deg,rgba(201,164,92,0.12),rgba(183,110,121,0.08))] text-2xl">
                 ✦

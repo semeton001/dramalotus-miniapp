@@ -593,6 +593,9 @@ export default function PlayerScreen({
     useState("");
   const [isResolvingFreeReels, setIsResolvingFreeReels] = useState(false);
 
+  const [resolvedViglooUrl, setResolvedViglooUrl] = useState("");
+  const [isResolvingVigloo, setIsResolvingVigloo] = useState(false);
+
   const [netshortSubtitleCues, setNetshortSubtitleCues] = useState<
     SubtitleCue[]
   >([]);
@@ -620,7 +623,13 @@ export default function PlayerScreen({
 
   useEffect(() => {
     const updateViewport = () => {
-      setIsDesktopViewport(window.innerWidth >= 768);
+      const isTelegram =
+        typeof window !== "undefined" &&
+        Boolean(window.Telegram?.WebApp);
+
+      setIsDesktopViewport(
+        !isTelegram && window.innerWidth >= 768,
+      );
     };
 
     updateViewport();
@@ -791,6 +800,13 @@ if (isReelifeDrama) {
       return resolvedFreeReelsUrl || rawVideoSrc;
     }
 
+    if (
+      selectedDrama?.source?.toLowerCase() === "vigloo" ||
+      selectedDrama?.sourceName === "Vigloo"
+    ) {
+      return resolvedViglooUrl;
+    }
+
     if (isDramaboxDrama) {
       const dramaBoxEpisode = selectedEpisode as any;
 
@@ -847,12 +863,14 @@ if (isReelifeDrama) {
     resolvedReelifeUrl,
     resolvedReelShortUrl,
     resolvedFreeReelsUrl,
+    resolvedViglooUrl,
   ]);
 
   const isResolvingVideo =
     (isReelifeDrama && isResolvingReelife) ||
     (isReelShortDrama && isResolvingReelShort) ||
-    (isFreeReelsDrama && isResolvingFreeReels);
+    (isFreeReelsDrama && isResolvingFreeReels) ||
+    isResolvingVigloo;
 
   const subtitleSrc = useMemo(() => {
     if (isFreeReelsDrama) {
@@ -1137,6 +1155,74 @@ if (isReelifeDrama) {
     selectedDrama.slug,
     selectedEpisode?.reelShortEpisodeId,
     selectedEpisode?.reelShortVideoId,
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function resolveViglooStream() {
+      const isVigloo =
+        selectedDrama?.source?.toLowerCase() === "vigloo" ||
+        selectedDrama?.sourceName === "Vigloo";
+
+      if (!isVigloo) {
+        setResolvedViglooUrl("");
+        setIsResolvingVigloo(false);
+        return;
+      }
+
+      if (!rawVideoSrc) {
+        setResolvedViglooUrl("");
+        setIsResolvingVigloo(false);
+        return;
+      }
+
+      setIsResolvingVigloo(true);
+      setResolvedViglooUrl("");
+      setVideoError(null);
+
+      try {
+        const response = await fetch(rawVideoSrc, {
+          cache: "no-store",
+        });
+
+        const json = await response.json();
+
+        if (cancelled) return;
+
+        if (!response.ok || !json?.url) {
+          throw new Error(
+            json?.error || "Gagal resolve stream Vigloo",
+          );
+        }
+
+        setResolvedViglooUrl(json.url);
+      } catch (error) {
+        if (cancelled) return;
+
+        setResolvedViglooUrl("");
+
+        setVideoError(
+          error instanceof Error
+            ? error.message
+            : "Gagal resolve stream Vigloo",
+        );
+      } finally {
+        if (!cancelled) {
+          setIsResolvingVigloo(false);
+        }
+      }
+    }
+
+    void resolveViglooStream();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    selectedDrama?.source,
+    selectedDrama?.sourceName,
+    rawVideoSrc,
   ]);
 
 
@@ -1431,6 +1517,7 @@ if (isReelifeDrama) {
     const isHlsStream =
       videoSrc.includes(".m3u8") ||
       videoSrc.includes("application/vnd.apple.mpegurl") ||
+      videoSrc.includes("/api/vigloo/play") ||
       videoSrc.includes("/api/dramawave/stream") ||
       videoSrc.includes("/api/dramabox/stream") ||
       videoSrc.includes("/api/freereels/stream") ||
@@ -1457,7 +1544,12 @@ if (isReelifeDrama) {
     video.removeAttribute("src");
     video.load();
 
+    const isVigloo =
+      selectedDrama?.source?.toLowerCase() === "vigloo" ||
+      selectedDrama?.sourceName === "Vigloo";
+
     const canUseNativeHls =
+      !isVigloo &&
       !isDramaboxDrama &&
       selectedDrama?.sourceName !== "Dramawave" &&
       !!video.canPlayType("application/vnd.apple.mpegurl");
@@ -1501,9 +1593,36 @@ if (isReelifeDrama) {
     hlsRef.current = hls;
 
     const handleManifestParsed = async () => {
-      hls.currentLevel = -1;
-      hls.loadLevel = -1;
-      hls.nextLevel = -1;
+      const isVigloo =
+        selectedDrama?.source?.toLowerCase() === "vigloo" ||
+        selectedDrama?.sourceName === "Vigloo";
+
+      if (isVigloo) {
+        const highestLevel = hls.levels.reduce(
+          (best, level, index) => {
+            const bestPixels =
+              (hls.levels[best]?.width || 0) *
+              (hls.levels[best]?.height || 0);
+
+            const currentPixels =
+              (level.width || 0) *
+              (level.height || 0);
+
+            return currentPixels > bestPixels
+              ? index
+              : best;
+          },
+          0,
+        );
+
+        hls.currentLevel = highestLevel;
+        hls.loadLevel = highestLevel;
+        hls.nextLevel = highestLevel;
+      } else {
+        hls.currentLevel = -1;
+        hls.loadLevel = -1;
+        hls.nextLevel = -1;
+      }
 
       if (shouldAutoplayNext && videoSrc) {
         await tryAutoplay();
@@ -2522,6 +2641,12 @@ if (isReelifeDrama) {
                       if (v) {
                         setTimeout(() => {
                           const r = v.getBoundingClientRect();
+
+                          if (
+                            selectedDrama?.source?.toLowerCase() === "vigloo" ||
+                            selectedDrama?.sourceName === "Vigloo"
+                          ) {
+                          }
 
                         }, 500);
                       }

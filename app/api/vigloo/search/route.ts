@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
     const response = await fetch(
       buildViglooApiUrl(
-        `/vigloo/api/v1/search?q=${encodeURIComponent(query)}`,
+        `/vigloo/api/v1/search?q=${encodeURIComponent(query)}&limit=20&lang=id`,
       ),
       {
         cache: "no-store",
@@ -37,6 +37,18 @@ export async function GET(request: NextRequest) {
         item.description ||
         "",
       thumbnail:
+        item?.thumbnails?.[0]?.url ||
+        item.thumbnailExpanded ||
+        item.bannerImage ||
+        "",
+
+      posterImage:
+        item?.thumbnails?.[0]?.url ||
+        item.thumbnailExpanded ||
+        item.bannerImage ||
+        "",
+
+      coverImage:
         item?.thumbnails?.[0]?.url ||
         item.thumbnailExpanded ||
         item.bannerImage ||

@@ -46,7 +46,7 @@ const st = createStreamToken({
 
     u: cached.url,
     c: cached.cookieHeader,
-    exp: Date.now() + 300000,
+    exp: Date.now() + 30000,
     src: "vigloo",
   });
 
@@ -129,14 +129,14 @@ const seasonId =
     VIGLOO_STREAM_CACHE.set(cacheKey, {
       url,
       cookieHeader: cookieString,
-      exp: Date.now() + 300000,
+      exp: Date.now() + 1800000,
     });
 
 
     const st = createStreamToken({
       u: url,
       c: cookieString,
-      exp: Date.now() + 300000,
+      exp: Date.now() + 1800000,
       src: "vigloo",
     });
 

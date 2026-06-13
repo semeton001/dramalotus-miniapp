@@ -460,6 +460,22 @@ function isFlickreelsSource(source: Source | null): boolean {
   );
 }
 
+function isViglooDrama(drama: Drama | null): boolean {
+  return (
+    !!drama &&
+    (drama.sourceName === "Vigloo" ||
+      drama.source?.toLowerCase() === "vigloo")
+  );
+}
+
+function isViglooSource(source: Source | null): boolean {
+  return (
+    !!source &&
+    (source.slug?.toLowerCase() === "vigloo" ||
+      source.name?.toLowerCase() === "vigloo")
+  );
+}
+
 function isShortmaxDrama(drama: Drama | null): boolean {
   return (
     !!drama &&
@@ -1786,6 +1802,7 @@ const ENABLED_HOME_SOURCE_SLUGS = new Set([
   "dramawave",
   "netshort",
   "flickreels",
+  "vigloo",
   "shortmax",
   "goodshort",
   "idrama",
@@ -2243,6 +2260,23 @@ const [selectedDramaboxCategory, setSelectedDramaboxCategory] =
   );
   const [flickreelsDramaCache, setFlickreelsDramaCache] = useState<Drama[]>([]);
 
+  const [viglooEpisodes, setViglooEpisodes] = useState<Episode[]>([]);
+  const [isLoadingViglooEpisodes, setIsLoadingViglooEpisodes] =
+    useState(false);
+  const [viglooEpisodesError, setViglooEpisodesError] = useState<
+    string | null
+  >(null);
+
+  const [viglooCategories, setViglooCategories] = useState<any[]>([]);
+  const [selectedViglooCategory, setSelectedViglooCategory] =
+    useState("15000101");
+  const [liveViglooDramas, setLiveViglooDramas] = useState<Drama[]>([]);
+  const [isLoadingViglooFeed, setIsLoadingViglooFeed] = useState(false);
+  const [viglooFeedError, setViglooFeedError] = useState<string | null>(
+    null,
+  );
+  const [viglooDramaCache, setViglooDramaCache] = useState<Drama[]>([]);
+
   const [shortmaxEpisodes, setShortmaxEpisodes] = useState<Episode[]>([]);
   const [isLoadingShortmaxEpisodes, setIsLoadingShortmaxEpisodes] =
     useState(false);
@@ -2484,6 +2518,11 @@ const [selectedDramaboxCategory, setSelectedDramaboxCategory] =
     if (isFlickreelsSource(selectedSource)) {
       return selectedFlickreelsCategory as SourceTab;
     }
+
+    if (isViglooSource(selectedSource)) {
+      return selectedViglooCategory as SourceTab;
+    }
+
     if (isShortmaxSource(selectedSource)) return shortmaxTab;
     if (isGoodshortSource(selectedSource)) return goodshortTab;
     if (isIdramaSource(selectedSource)) return idramaTab;
@@ -2504,11 +2543,14 @@ const [selectedDramaboxCategory, setSelectedDramaboxCategory] =
   }, [
     selectedSource,
     selectedDramaboxCategory,
+    selectedPinedramaCategory,
+    selectedFlickreelsCategory,
+    selectedViglooCategory,
     reelShortTab,
     meloloTab,
     dramawaveTab,
     netshortTab,
-shortmaxTab,
+    shortmaxTab,
     goodshortTab,
     idramaTab,
     reelifeTab,
@@ -2590,6 +2632,11 @@ shortmaxTab,
 
       if (isFlickreelsSource(selectedSource)) {
         setSelectedFlickreelsCategory(String(tab));
+        return;
+      }
+
+      if (isViglooSource(selectedSource)) {
+        setSelectedViglooCategory(String(tab));
         return;
       }
 
@@ -2804,7 +2851,9 @@ shortmaxTab,
               ? netshortEpisodes
               : isFlickreelsDrama(selectedDrama)
                 ? flickreelsEpisodes
-                : isShortmaxDrama(selectedDrama)
+                : isViglooDrama(selectedDrama)
+                  ? viglooEpisodes
+                  : isShortmaxDrama(selectedDrama)
                   ? shortmaxEpisodes
                   : isGoodshortDrama(selectedDrama)
                     ? goodshortEpisodes
@@ -5500,13 +5549,6 @@ shortmaxTab,
         if (!isMounted) return;
 
         if (Array.isArray(data)) {
-          console.log("[FlickReels feed]", {
-            category: selectedFlickreelsCategory,
-            endpoint,
-            count: data.length,
-            firstTitle: data[0]?.title || null,
-            firstBadge: data[0]?.badge || null,
-          });
           setLiveFlickreelsDramas(data as Drama[]);
         } else {
           setLiveFlickreelsDramas([]);
@@ -5546,6 +5588,88 @@ shortmaxTab,
     // Jangan merge lintas tab ke cache, karena membuat Beranda/Terbaru/ForYou/Acak tercampur.
     setFlickreelsDramaCache(liveFlickreelsDramas);
   }, [liveFlickreelsDramas]);
+
+  useEffect(() => {
+    if (!isViglooSource(selectedSource)) {
+      setLiveViglooDramas([]);
+      setIsLoadingViglooFeed(false);
+      setViglooFeedError(null);
+      return;
+    }
+
+    let isMounted = true;
+    const keyword = submittedSearchQuery.trim();
+
+    const loadViglooFeed = async () => {
+      setIsLoadingViglooFeed(true);
+      setViglooFeedError(null);
+      setLiveViglooDramas([]);
+
+      try {
+        const endpoint =
+          keyword.length > 0
+            ? `/api/vigloo/search?q=${encodeURIComponent(keyword)}`
+            : `/api/vigloo/category/${selectedViglooCategory}`;
+
+        const response = await fetch(endpoint, {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `Gagal memuat feed Vigloo. endpoint=${endpoint} status=${response.status}`,
+          );
+        }
+
+        const data = await response.json();
+
+        if (!isMounted) return;
+
+        if (Array.isArray(data)) {
+          setLiveViglooDramas(data as Drama[]);
+        } else {
+          setLiveViglooDramas([]);
+          setViglooFeedError(
+            "Format feed Vigloo tidak valid.",
+          );
+        }
+      } catch (error) {
+        console.error(
+          "Gagal memuat feed Vigloo:",
+          error,
+        );
+
+        if (!isMounted) return;
+
+        setLiveViglooDramas([]);
+
+        setViglooFeedError(
+          error instanceof Error
+            ? error.message
+            : "Terjadi kesalahan saat memuat feed Vigloo.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingViglooFeed(false);
+        }
+      }
+    };
+
+    loadViglooFeed();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    selectedSource,
+    selectedViglooCategory,
+    submittedSearchQuery,
+  ]);
+
+  useEffect(() => {
+    setViglooDramaCache(liveViglooDramas);
+  }, [liveViglooDramas]);
 
   useEffect(() => {
     if (!isGoodshortSource(selectedSource)) {
@@ -6543,6 +6667,93 @@ shortmaxTab,
       isMounted = false;
     };
   }, [selectedDrama]);
+
+
+  useEffect(() => {
+    if (!selectedDrama || !isViglooDrama(selectedDrama)) {
+      setViglooEpisodes([]);
+      setIsLoadingViglooEpisodes(false);
+      setViglooEpisodesError(null);
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadViglooEpisodes = async () => {
+      setIsLoadingViglooEpisodes(true);
+      setViglooEpisodesError(null);
+      setViglooEpisodes([]);
+      setSelectedEpisode(null);
+
+      try {
+        const viglooDramaId =
+          (selectedDrama as any).viglooDramaId ||
+          String(selectedDrama.id);
+
+        const response = await fetch(
+          `/api/vigloo/episodes?dramaId=${encodeURIComponent(
+            viglooDramaId,
+          )}&numericDramaId=${selectedDrama.id}`,
+        );
+
+        if (!response.ok) {
+          throw new Error("Gagal memuat episode Vigloo.");
+        }
+
+        const data = await response.json();
+
+        if (!isMounted) return;
+
+        if (Array.isArray(data)) {
+          setViglooEpisodes(data);
+
+          if (data.length > 0) {
+            setSelectedEpisode(data[0]);
+
+            const firstEpisodeUrl =
+              typeof data[0]?.videoUrl === "string"
+                ? data[0].videoUrl
+                : "";
+
+            if (firstEpisodeUrl) {
+              fetch(firstEpisodeUrl, {
+                cache: "force-cache",
+              }).catch(() => {});
+            }
+          } else {
+            setViglooEpisodesError(
+              "Episode belum tersedia untuk drama ini.",
+            );
+          }
+        } else {
+          setViglooEpisodes([]);
+          setViglooEpisodesError(
+            "Format episode Vigloo tidak valid.",
+          );
+        }
+      } catch (error) {
+        if (isMounted) {
+          setViglooEpisodes([]);
+          setViglooEpisodesError(
+            error instanceof Error
+              ? error.message
+              : "Terjadi kesalahan saat memuat episode Vigloo.",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingViglooEpisodes(false);
+        }
+      }
+    };
+
+    loadViglooEpisodes();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedDrama]);
+
 
   useEffect(() => {
     if (!isShortmaxSource(selectedSource)) {
@@ -8349,6 +8560,63 @@ shortmaxTab,
   }, [selectedSource]);
 
   useEffect(() => {
+    if (!isViglooSource(selectedSource)) {
+      setViglooCategories([]);
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadCategories = async () => {
+      try {
+        const res = await fetch(
+          "/api/vigloo/tabs",
+          { cache: "no-store" },
+        );
+
+        if (!res.ok) {
+          throw new Error(
+            `Vigloo tabs failed ${res.status}`,
+          );
+        }
+
+        const data = await res.json();
+
+        if (!isMounted) return;
+
+        const items = Array.isArray(data)
+          ? data
+          : [];
+
+        setViglooCategories(items);
+
+        if (
+          items.length > 0 &&
+          !selectedViglooCategory
+        ) {
+          setSelectedViglooCategory(
+            String(
+              items[0]?.categoryId ??
+                "15000101",
+            ),
+          );
+        }
+      } catch (err) {
+        console.error(
+          "Vigloo tabs failed:",
+          err,
+        );
+      }
+    };
+
+    loadCategories();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedSource]);
+
+  useEffect(() => {
     if (!isPineDramaSource(selectedSource)) {
       setLivePinedramaDramas([]);
       setPinedramaHasMore(false);
@@ -9200,6 +9468,10 @@ shortmaxTab,
       return liveFlickreelsDramas;
     }
 
+    if (isViglooSource(selectedSource)) {
+      return liveViglooDramas;
+    }
+
     if (isShortmaxSource(selectedSource)) {
       return liveShortmaxDramas;
     }
@@ -9266,6 +9538,7 @@ shortmaxTab,
     liveDramawaveDramas,
     liveNetshortDramas,
     liveFlickreelsDramas,
+    liveViglooDramas,
     liveShortmaxDramas,
     liveGoodshortDramas,
     liveIdramaDramas,
@@ -9542,7 +9815,9 @@ shortmaxTab,
                       ? isLoadingNetshortEpisodes
                       : isFlickreelsDrama(selectedDrama)
                         ? isLoadingFlickreelsEpisodes
-                        : isShortmaxDrama(selectedDrama)
+                        : isViglooDrama(selectedDrama)
+                          ? isLoadingViglooEpisodes
+                          : isShortmaxDrama(selectedDrama)
                           ? isLoadingShortmaxEpisodes
                           : isGoodshortDrama(selectedDrama)
                             ? isLoadingGoodshortEpisodes
@@ -9581,7 +9856,9 @@ shortmaxTab,
                       ? netshortEpisodesError
                       : isFlickreelsDrama(selectedDrama)
                         ? flickreelsEpisodesError
-                        : isShortmaxDrama(selectedDrama)
+                        : isViglooDrama(selectedDrama)
+                          ? viglooEpisodesError
+                          : isShortmaxDrama(selectedDrama)
                           ? shortmaxEpisodesError
                           : isGoodshortDrama(selectedDrama)
                             ? goodshortEpisodesError
@@ -9686,6 +9963,10 @@ shortmaxTab,
           flickreelsCategories={flickreelsCategories}
           selectedFlickreelsCategory={selectedFlickreelsCategory}
           onSelectFlickreelsCategory={setSelectedFlickreelsCategory}
+
+          viglooCategories={viglooCategories}
+          selectedViglooCategory={selectedViglooCategory}
+          onSelectViglooCategory={setSelectedViglooCategory}
 
           dramaboxCategories={dramaboxCategories}
           selectedDramaboxCategory={selectedDramaboxCategory}
