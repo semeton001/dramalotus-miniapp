@@ -49,11 +49,7 @@ const isArray = <T,>(value: unknown): value is T[] => Array.isArray(value);
 
 const DRAMABOX_SEARCH_BASE_URL = "/api/dramabox/search";
 
-const REELSHORT_HOME_URL = "/api/reelshort/home";
-const REELSHORT_FOR_YOU_URL = "/api/reelshort/foryou";
-const REELSHORT_TRENDING_URL = "/api/reelshort/trending";
 const REELSHORT_SEARCH_BASE_URL = "/api/reelshort/search";
-const REELSHORT_ROMANCE_URL = "/api/reelshort/romance";
 
 const MELOLO_HOME_URL = "/api/melolo/home";
 const MELOLO_LATEST_URL = "/api/melolo/latest";
@@ -155,7 +151,6 @@ type HistoryItem = {
   episodeId: number;
 };
 
-type ReelShortTab = "Beranda" | "For You" | "Trending" | "Romance";
 type MeloloTab = "Beranda";
 type DramawaveTab =
   | "Beranda"
@@ -190,7 +185,6 @@ type ExtraSourceTab =
 
 type SourceTab =
   | ExtraSourceTab
-  | ReelShortTab
   | MeloloTab
   | DramawaveTab
   | NetshortTab
@@ -726,24 +720,6 @@ function getPineDramaSearchEndpoint(
   query: string,
 ): string {
   return `/api/pinedrama/search?keyword=${encodeURIComponent(query)}`;
-}
-
-function getReelShortTabEndpoint(
-  tab: "Beranda" | "For You" | "Trending" | "Romance",
-  page = 1,
-): string {
-  switch (tab) {
-    case "Beranda":
-      return `${REELSHORT_HOME_URL}?page=${page}`;
-    case "For You":
-      return `${REELSHORT_FOR_YOU_URL}?page=${page}`;
-    case "Trending":
-      return `${REELSHORT_TRENDING_URL}?page=${page}`;
-    case "Romance":
-      return `${REELSHORT_ROMANCE_URL}?page=${page}`;
-    default:
-      return `${REELSHORT_HOME_URL}?page=${page}`;
-  }
 }
 
 function getReelShortSearchEndpoint(query: string): string {
@@ -1949,10 +1925,84 @@ const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
   const [dramaboxCategories, setDramaboxCategories] = useState<any[]>([]);
 const [selectedDramaboxCategory, setSelectedDramaboxCategory] =
   useState<string>("all");
-  const [reelShortTab, setReelShortTab] = useState<ReelShortTab>("Beranda");
+  const [reelShortCategories, setReelShortCategories] = useState<
+    { categoryId: string; name: string }[]
+  >([]);
+
+  const [selectedReelShortCategoryId, setSelectedReelShortCategoryId] =
+    useState<string>("");
   const [meloloTab, setMeloloTab] = useState<MeloloTab>("Beranda");
   const [meloloOffset, setMeloloOffset] = useState(0);
   const [reelShortPage, setReelShortPage] = useState(1);
+
+  useEffect(() => {
+    if (!isReelShortSource(selectedSource)) {
+      return;
+    }
+
+    let mounted = true;
+
+    (async () => {
+      try {
+        const response = await fetch(
+          "/api/reelshort/categories",
+          {
+            cache: "no-store",
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `ReelShort categories ${response.status}`,
+          );
+        }
+
+        const categories = await response.json();
+
+        if (!mounted) return;
+
+        const normalized = Array.isArray(categories)
+          ? categories
+              .map((item: any) => ({
+                categoryId: String(
+                  item?.categoryId ??
+                  item?.id ??
+                  "",
+                ),
+                name: String(
+                  item?.name ?? ""
+                ).trim(),
+              }))
+              .filter(
+                (item: any) =>
+                  item.categoryId.length > 0 &&
+                  item.name.length > 0,
+              )
+          : [];
+
+        setReelShortCategories(normalized);
+
+        if (
+          normalized.length > 0 &&
+          !selectedReelShortCategoryId
+        ) {
+          setSelectedReelShortCategoryId(
+            normalized[0].categoryId,
+          );
+        }
+      } catch (error) {
+        console.error(
+          "Gagal memuat kategori ReelShort:",
+          error,
+        );
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [selectedSource]);
+
   const [dramawavePage, setDramawavePage] = useState(1);
   const [, setDramawaveHasNextPage] = useState(false);
   const [netshortPage, setNetshortPage] = useState(1);
@@ -2511,7 +2561,9 @@ const [selectedDramaboxCategory, setSelectedDramaboxCategory] =
     if (isDramaBoxSource(selectedSource)) {
       return selectedDramaboxCategory;
     }
-    if (isReelShortSource(selectedSource)) return reelShortTab;
+    if (isReelShortSource(selectedSource)) {
+      return (selectedReelShortCategoryId || "44421") as SourceTab;
+    }
     if (isMeloloSource(selectedSource)) return meloloTab;
     if (isDramawaveSource(selectedSource)) return dramawaveTab;
     if (isNetshortSource(selectedSource)) return netshortTab;
@@ -2546,7 +2598,6 @@ const [selectedDramaboxCategory, setSelectedDramaboxCategory] =
     selectedPinedramaCategory,
     selectedFlickreelsCategory,
     selectedViglooCategory,
-    reelShortTab,
     meloloTab,
     dramawaveTab,
     netshortTab,
@@ -2576,16 +2627,12 @@ const [selectedDramaboxCategory, setSelectedDramaboxCategory] =
       if (isReelShortSource(selectedSource)) {
         setReelShortPage(1);
 
-        if (
-          tab === "Beranda" ||
-          tab === "For You" ||
-          tab === "Trending" ||
-          tab === "Romance"
-        ) {
-          setReelShortTab(tab);
-        } else {
-          setReelShortTab("Beranda");
+        const categoryId = String(tab);
+
+        if (categoryId.length > 0) {
+          setSelectedReelShortCategoryId(categoryId);
         }
+
         return;
       }
 
@@ -4584,12 +4631,17 @@ const [selectedDramaboxCategory, setSelectedDramaboxCategory] =
 
       try {
         const shouldUseSearch = keyword.length > 0;
+
         const endpoint = shouldUseSearch
           ? getReelShortSearchEndpoint(keyword)
-          : getReelShortTabEndpoint(reelShortTab, reelShortPage);
+          : (
+              selectedReelShortCategoryId
+                ? `/api/reelshort/category/${selectedReelShortCategoryId}`
+                : "/api/reelshort/category/44421"
+            );
 
         const response = await fetch(endpoint, {
-                      method: "GET",
+          method: "GET",
           cache: "no-store",
         });
 
@@ -4599,288 +4651,15 @@ const [selectedDramaboxCategory, setSelectedDramaboxCategory] =
           );
         }
 
-        const data = await response.json();
+        const dramas = await response.json();
 
         if (!isMounted) return;
 
-        const isPaginatedPayload =
-          !shouldUseSearch &&
-          data &&
-          typeof data === "object" &&
-          Array.isArray((data as { items?: unknown[] }).items);
-
-        const containerLists = Array.isArray(
-          (data as { data?: { lists?: unknown[] } })?.data?.lists,
-        )
-          ? (data as { data: { lists: unknown[] } }).data.lists
-          : null;
-
-        const rawList = containerLists
-          ? containerLists.flatMap((section) => {
-              const record =
-                section && typeof section === "object"
-                  ? (section as Record<string, unknown>)
-                  : {};
-              return Array.isArray(record.books) ? record.books : [];
-            })
-          : Array.isArray(data)
-            ? data
-            : Array.isArray((data as { results?: unknown[] })?.results)
-              ? (data as { results: unknown[] }).results
-              : Array.isArray((data as { books?: unknown[] })?.books)
-                ? (data as { books: unknown[] }).books
-                : Array.isArray((data as { data?: unknown[] })?.data)
-                  ? (data as { data: unknown[] }).data
-                  : Array.isArray((data as { items?: unknown[] })?.items)
-                    ? (data as { items: unknown[] }).items
-                    : [];
-
-        const looksAdaptedDrama = (value: unknown): value is Drama => {
-          if (!value || typeof value !== "object") return false;
-          const record = value as Record<string, unknown>;
-          return (
-            typeof record.sourceName === "string" &&
-            typeof record.sourceId === "string" &&
-            typeof record.title === "string"
-          );
-        };
-
-        const normalizedDramas = rawList.map((item, index) => {
-          if (looksAdaptedDrama(item)) {
-            const adapted = item as Drama & ReelShortDramaMeta;
-            const stableRawId =
-              (typeof adapted.reelShortRawId === "string" &&
-                adapted.reelShortRawId.trim()) ||
-              (typeof adapted.reelShortSlug === "string" &&
-                adapted.reelShortSlug.match(/[a-f0-9]{24}/i)?.[0]) ||
-              (typeof adapted.slug === "string" &&
-                adapted.slug.match(/[a-f0-9]{24}/i)?.[0]) ||
-              "";
-
-            const stableCode =
-              typeof adapted.reelShortCode === "string" &&
-              adapted.reelShortCode.trim()
-                ? adapted.reelShortCode.trim()
-                : "";
-
-            return {
-              ...adapted,
-              source: "ReelShort",
-              sourceName: "ReelShort",
-              sourceId: adapted.sourceId || selectedSource?.id || "2",
-              reelShortRawId: stableRawId || adapted.reelShortRawId,
-              reelShortCode: stableCode || adapted.reelShortCode,
-              reelShortSlug:
-                adapted.reelShortSlug ||
-                adapted.slug ||
-                (stableRawId ? `reelshort-${stableRawId}` : adapted.slug),
-            } as Drama;
-          }
-
-          const rawItem =
-            item && typeof item === "object"
-              ? (item as Record<string, unknown>)
-              : {};
-
-          const pickString = (...keys: string[]): string => {
-            for (const key of keys) {
-              const value = rawItem[key];
-              if (typeof value === "string" && value.trim().length > 0) {
-                return value.trim();
-              }
-              if (typeof value === "number" && Number.isFinite(value)) {
-                return String(value);
-              }
-            }
-            return "";
-          };
-
-          const pickNumber = (...keys: string[]): number => {
-            for (const key of keys) {
-              const value = rawItem[key];
-              if (typeof value === "number" && Number.isFinite(value)) {
-                return value;
-              }
-              if (typeof value === "string" && value.trim().length > 0) {
-                const parsed = Number(value);
-                if (Number.isFinite(parsed)) {
-                  return parsed;
-                }
-              }
-            }
-            return 0;
-          };
-
-          const normalizeStringArray = (value: unknown): string[] => {
-            if (Array.isArray(value)) {
-              return value
-                .filter((entry): entry is string => typeof entry === "string")
-                .map((entry) => entry.trim())
-                .filter(Boolean);
-            }
-
-            if (typeof value === "string" && value.trim().length > 0) {
-              return value
-                .split(/[|,/]/)
-                .map((entry) => entry.trim())
-                .filter(Boolean);
-            }
-
-            return [];
-          };
-
-          const reelShortRawId =
-            pickString(
-              "book_id",
-              "bookId",
-              "id",
-              "_id",
-              "seriesId",
-              "dramaId",
-              "drama_id",
-            ) || "";
-
-          const reelShortCode =
-            pickString("code", "bookCode", "contentCode", "shareCode") || "";
-
-          const reelShortSlug =
-            pickString("slug", "seriesSlug", "bookSlug", "book_slug") ||
-            (reelShortRawId ? `reelshort-${reelShortRawId}` : "");
-
-          const fallbackNumericId =
-            pickNumber(
-              "id",
-              "book_id",
-              "bookId",
-              "seriesId",
-              "dramaId",
-              "drama_id",
-            ) || Date.now() + index;
-
-          const normalizedId = reelShortRawId || String(fallbackNumericId);
-
-          const normalizedTitle =
-            pickString(
-              "title",
-              "book_title",
-              "name",
-              "bookName",
-              "book_name",
-              "dramaName",
-              "drama_name",
-              "seriesName",
-            ) || "Tanpa Judul";
-
-          const normalizedCoverImage = pickString(
-            "book_pic",
-            "pic",
-            "cover",
-            "coverWap",
-            "coverImage",
-            "cover_image",
-            "thumbnail",
-            "thumb",
-            "poster",
-            "posterImage",
-            "poster_image",
-            "image",
-            "imageUrl",
-            "image_url",
-            "verticalImageUrl",
-            "landscapeImageUrl",
-          );
-
-          const normalizedPosterImage =
-            pickString(
-              "book_pic",
-              "pic",
-              "posterImage",
-              "poster_image",
-              "poster",
-              "cover",
-              "coverWap",
-              "coverImage",
-              "cover_image",
-              "thumbnail",
-              "thumb",
-              "image",
-              "imageUrl",
-              "image_url",
-              "verticalImageUrl",
-              "landscapeImageUrl",
-            ) || normalizedCoverImage;
-
-          const normalizedDescription = pickString(
-            "desc",
-            "introduction",
-            "description",
-            "summary",
-            "intro",
-            "synopsis",
-          );
-
-          const normalizedTags = Array.from(
-            new Set([
-              ...normalizeStringArray(rawItem.theme),
-              ...normalizeStringArray(rawItem.tagNames),
-              ...normalizeStringArray(rawItem.tags),
-              ...normalizeStringArray(rawItem.category),
-              ...normalizeStringArray(rawItem.genre),
-              ...(reelShortTab === "Romance" ? ["Romance"] : []),
-              "Drama",
-            ]),
-          ).slice(0, 8);
-
-          const normalizedDrama = {
-            id: normalizedId as any,
-            source: "ReelShort",
-            sourceId: selectedSource?.id ?? "2",
-            sourceName: "ReelShort",
-            title: normalizedTitle,
-            episodes: pickNumber(
-              "chapters",
-              "chapterCount",
-              "episodes",
-              "episodeCount",
-              "episode_count",
-              "totalEpisodes",
-            ),
-            badge:
-              reelShortTab === "For You"
-                ? "For You"
-                : reelShortTab === "Trending"
-                  ? "Trending"
-                  : reelShortTab === "Romance"
-                    ? "Romance"
-                    : "ReelShort",
-            tags: normalizedTags,
-            posterClass: "from-[#1A102E] via-[#12131A] to-[#090B12]",
-            slug: reelShortSlug || `reelshort-${normalizedId}`,
-            description: normalizedDescription,
-            coverImage: normalizedCoverImage || undefined,
-            posterImage: normalizedPosterImage || undefined,
-            category: reelShortTab === "Romance" ? "Romance" : "Drama",
-            language: pickString("lang") || "in",
-            country: undefined,
-            isNew: reelShortTab === "Beranda",
-            isDubbed: normalizedTitle.toLowerCase().includes("versi dub"),
-            isTrending: reelShortTab === "Trending",
-            sortOrder: index,
-            rating: undefined,
-            releaseYear: undefined,
-            reelShortRawId: reelShortRawId || undefined,
-            reelShortCode: reelShortCode || undefined,
-            reelShortSlug: reelShortSlug || undefined,
-          } as Drama & ReelShortDramaMeta;
-
-          return normalizedDrama as Drama;
-        });
-        setLiveReelShortDramas(normalizedDramas);
-        setReelShortHasNextPage(
-          isPaginatedPayload
-            ? Boolean((data as { hasNextPage?: unknown }).hasNextPage)
-            : false,
+        setLiveReelShortDramas(
+          Array.isArray(dramas) ? dramas : [],
         );
+
+        setReelShortHasNextPage(false);
       } catch (error) {
         console.error("Gagal memuat feed ReelShort:", error);
 
@@ -4905,7 +4684,11 @@ const [selectedDramaboxCategory, setSelectedDramaboxCategory] =
     return () => {
       isMounted = false;
     };
-  }, [selectedSource, reelShortTab, reelShortPage, submittedSearchQuery]);
+  }, [
+    selectedSource,
+    selectedReelShortCategoryId,
+    submittedSearchQuery,
+  ]);
 
   useEffect(() => {
     if (liveReelShortDramas.length === 0) return;
@@ -9567,7 +9350,6 @@ const [selectedDramaboxCategory, setSelectedDramaboxCategory] =
     setSubmittedSearchQuery("");
 
     setSelectedDramaboxCategory("all");
-    setReelShortTab("Beranda");
     setMeloloTab("Beranda");
     setDramawaveTab("Terbaru");
     setNetshortTab("Beranda");
@@ -9964,6 +9746,10 @@ const [selectedDramaboxCategory, setSelectedDramaboxCategory] =
           selectedFlickreelsCategory={selectedFlickreelsCategory}
           onSelectFlickreelsCategory={setSelectedFlickreelsCategory}
 
+          reelShortCategories={reelShortCategories}
+          selectedReelShortCategory={selectedReelShortCategoryId}
+          onSelectReelShortCategory={setSelectedReelShortCategoryId}
+
           viglooCategories={viglooCategories}
           selectedViglooCategory={selectedViglooCategory}
           onSelectViglooCategory={setSelectedViglooCategory}
@@ -10008,8 +9794,7 @@ const [selectedDramaboxCategory, setSelectedDramaboxCategory] =
             setIdramaPage(1);
             setBilitvPage(1);
             setSelectedDramaboxCategory("all");
-            setReelShortTab("Beranda");
-            setMeloloTab("Beranda");
+                    setMeloloTab("Beranda");
             setDramawaveTab("Terbaru");
             setNetshortTab("Beranda");
             setShortmaxTab("Beranda");
@@ -10130,8 +9915,7 @@ const [selectedDramaboxCategory, setSelectedDramaboxCategory] =
           setSearchQuery("");
           setSubmittedSearchQuery("");
           setSelectedDramaboxCategory("all");
-          setReelShortTab("Beranda");
-          setMeloloTab("Beranda");
+                setMeloloTab("Beranda");
           setMeloloOffset(0);
           
           setReelShortPage(1);

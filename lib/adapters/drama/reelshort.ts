@@ -109,6 +109,7 @@ export function adaptReelShortDramas(payload: unknown): ReelShortDrama[] {
       pickString(
         record,
         "book_id",
+        "t_book_id",
         "bookId",
         "id",
         "_id",
@@ -136,6 +137,7 @@ export function adaptReelShortDramas(payload: unknown): ReelShortDrama[] {
     const title =
       pickString(
         record,
+        "book_title",
         "title",
         "name",
         "bookName",
@@ -147,6 +149,7 @@ export function adaptReelShortDramas(payload: unknown): ReelShortDrama[] {
 
     const coverImage = pickString(
       record,
+      "book_pic",
       "pic",
       "coverImage",
       "posterImage",
@@ -162,6 +165,7 @@ export function adaptReelShortDramas(payload: unknown): ReelShortDrama[] {
     const posterImage =
       pickString(
         record,
+        "book_pic",
         "pic",
         "posterImage",
         "coverImage",
@@ -176,6 +180,8 @@ export function adaptReelShortDramas(payload: unknown): ReelShortDrama[] {
 
     const description = pickString(
       record,
+      "special_desc",
+      "share_text",
       "desc",
       "description",
       "introduction",
@@ -187,6 +193,12 @@ export function adaptReelShortDramas(payload: unknown): ReelShortDrama[] {
     const tags = Array.from(
       new Set([
         ...normalizeStringArray(record.theme),
+
+        ...(Array.isArray(record.tag_list)
+          ? record.tag_list
+              .map((t: any) => String(t?.tag_name || "").trim())
+              .filter(Boolean)
+          : []),
         ...normalizeStringArray(record.tags),
         ...normalizeStringArray(record.genre),
         ...normalizeStringArray(record.category),
@@ -202,6 +214,7 @@ export function adaptReelShortDramas(payload: unknown): ReelShortDrama[] {
       title,
       episodes: pickNumber(
         record,
+        "chapter_count",
         "chapters",
         "chapterCount",
         "episodes",

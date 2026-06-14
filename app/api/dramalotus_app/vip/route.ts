@@ -12,7 +12,7 @@ type SourceConfig = {
 
 const SOURCES: SourceConfig[] = [
   { name: "DramaBox", path: "/api/dramabox/category/all" },
-  { name: "ReelShort", path: "/api/reelshort/romance" },
+  { name: "ReelShort", path: "/api/reelshort/category/44421" },
   { name: "Melolo", path: "/api/melolo/romance" },
   { name: "ShortMax", path: "/api/shortmax/hot" },
   { name: "iDrama", path: "/api/idrama/hot" },

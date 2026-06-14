@@ -51,6 +51,13 @@ type SourceScreenProps = {
   selectedFlickreelsCategory?: string;
   onSelectFlickreelsCategory?: (categoryId: string) => void;
 
+  reelShortCategories?: Array<{
+    categoryId: string;
+    name: string;
+  }>;
+  selectedReelShortCategory?: string;
+  onSelectReelShortCategory?: (categoryId: string) => void;
+
   viglooCategories?: Array<{
     categoryId: string;
     name: string;
@@ -76,13 +83,6 @@ type SourceScreenProps = {
 
 const dramaBoxTabs: Array<{ label: string; value: SourceTab }> = [
   { label: "Beranda", value: "Beranda" },
-];
-
-const reelShortTabs: Array<{ label: string; value: SourceTab }> = [
-  { label: "🏠 Beranda", value: "Beranda" },
-  { label: "✨ For You", value: "For You" },
-  { label: "🔥 Trending", value: "Trending" },
-  { label: "💞 Romance", value: "Romance" },
 ];
 
 const meloloTabs: Array<{ label: string; value: SourceTab }> = [
@@ -339,7 +339,6 @@ function isPineDramaSource(source: Source): boolean {
 }
 
 function getSourceTabs(selectedSource: Source) {
-  if (isReelShortSource(selectedSource)) return reelShortTabs;
   if (isMeloloSource(selectedSource)) return meloloTabs;
   if (isDramawaveSource(selectedSource)) return dramawaveTabs;
   if (isNetshortSource(selectedSource)) return netshortTabs;
@@ -548,6 +547,10 @@ export default function SourceScreen({
   selectedFlickreelsCategory,
   onSelectFlickreelsCategory,
 
+  reelShortCategories = [],
+  selectedReelShortCategory,
+  onSelectReelShortCategory,
+
   viglooCategories = [],
   selectedViglooCategory,
   onSelectViglooCategory,
@@ -594,6 +597,13 @@ export default function SourceScreen({
               label: item.name,
               value: item.categoryId as SourceTab,
             }))
+          : isReelShortSource(selectedSource) &&
+            reelShortCategories &&
+            reelShortCategories.length > 0
+            ? reelShortCategories.slice(0, 30).map((item) => ({
+                label: item.name,
+                value: item.categoryId as SourceTab,
+              }))
           : isViglooSource(selectedSource) &&
             viglooCategories.length > 0
             ? viglooCategories.slice(0, 30).map((item) => ({
@@ -606,7 +616,8 @@ export default function SourceScreen({
     isDramaBoxSource(selectedSource) ||
     isPineDramaSource(selectedSource) ||
     isFlickreelsSource(selectedSource) ||
-    isViglooSource(selectedSource)
+    isViglooSource(selectedSource) ||
+    isReelShortSource(selectedSource)
       ? sourceTabs.slice(0, 4)
       : sourceTabs;
 
@@ -815,7 +826,8 @@ export default function SourceScreen({
                 {isDramaBoxSource(selectedSource) ||
                   isPineDramaSource(selectedSource) ||
                   isFlickreelsSource(selectedSource) ||
-                  isViglooSource(selectedSource) ? (
+                  isViglooSource(selectedSource) ||
+                  isReelShortSource(selectedSource) ? (
                   <div className="grid grid-cols-2 gap-2">
                     {(showPinedramaCategories ? sourceTabs : visiblePinedramaTabs).map((tab) => {
                       const active =
@@ -825,7 +837,9 @@ export default function SourceScreen({
                             ? selectedPinedramaCategory === String(tab.value)
                             : isFlickreelsSource(selectedSource)
                               ? selectedFlickreelsCategory === String(tab.value)
-                              : selectedViglooCategory === String(tab.value);
+                              : isReelShortSource(selectedSource)
+                                ? selectedReelShortCategory === String(tab.value)
+                                : selectedViglooCategory === String(tab.value);
 
                       return (
                         <button
@@ -886,7 +900,8 @@ export default function SourceScreen({
             isDramaBoxSource(selectedSource) ||
             isPineDramaSource(selectedSource) ||
             isFlickreelsSource(selectedSource) ||
-            isViglooSource(selectedSource)
+            isViglooSource(selectedSource) ||
+            isReelShortSource(selectedSource)
               ? "pt-[280px] md:pt-[270px]"
               : "pt-[208px] md:pt-[200px]"
           } lg:px-6`}>
