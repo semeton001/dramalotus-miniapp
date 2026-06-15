@@ -2195,22 +2195,13 @@ if (isReelifeDrama) {
     }, 500);
   };
 
-  const handleVideoEnded = async () => {
+  const handleVideoEnded = () => {
     setIsPlaying(false);
     setProgress(100);
 
-    if (!nextEpisode) {
-      return;
+    if (nextEpisode) {
+      goToEpisode(nextEpisode, true);
     }
-
-    try {
-      if (selectedEpisodeNumber > 0 && selectedEpisodeNumber % 2 === 0) {
-      }
-    } catch (error) {
-      console.error("[AdsGram]", error);
-    }
-
-    goToEpisode(nextEpisode, true);
   };
 
   const handleVideoError = () => {

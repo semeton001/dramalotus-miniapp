@@ -39,6 +39,8 @@ export default function RootLayout({
           crossOrigin="anonymous"
           strategy="afterInteractive"
         />
+
+
       </head>
       <body>
         <Script

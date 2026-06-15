@@ -3196,7 +3196,7 @@ const [selectedDramaboxCategory, setSelectedDramaboxCategory] =
       try {
         setIsResolvingMembership(true);
 
-        if (isTelegramWebAppReady && canUseTelegramSync && telegramUserId) {
+        if (effectiveTelegramUserId) {
           const response = await fetch(
             `/api/user-membership?telegram_user_id=${effectiveTelegramUserId}`, {
                           method: "GET",
@@ -3249,7 +3249,7 @@ const [selectedDramaboxCategory, setSelectedDramaboxCategory] =
     return () => {
       isMounted = false;
     };
-  }, [isTelegramWebAppReady, canUseTelegramSync, telegramUserId]);
+  }, [effectiveTelegramUserId]);
 
   useEffect(() => {
     setHasLoadedServerFavorites(false);
@@ -9765,6 +9765,7 @@ const [selectedDramaboxCategory, setSelectedDramaboxCategory] =
           isSearchEnabled={
             isPineDramaSource(selectedSource) ||
             isFlickreelsSource(selectedSource) ||
+            isViglooSource(selectedSource) ||
             isDramaBoxSource(selectedSource) ||
             isReelShortSource(selectedSource) ||
             isMeloloSource(selectedSource) ||

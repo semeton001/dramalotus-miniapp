@@ -1057,7 +1057,12 @@ if (isReelifeDrama) {
       targetEpisodeNumber > 0 &&
       targetEpisodeNumber % 2 === 0
     ) {
-      await showEpisodeGateAd();
+      alert("TEST VAST START");
+      const played = await playImaPreroll();
+
+      if (!played) {
+        await showEpisodeGateAd();
+      }
     }
 
     continueNavigation();
@@ -2195,22 +2200,13 @@ if (isReelifeDrama) {
     }, 500);
   };
 
-  const handleVideoEnded = async () => {
+  const handleVideoEnded = () => {
     setIsPlaying(false);
     setProgress(100);
 
-    if (!nextEpisode) {
-      return;
+    if (nextEpisode) {
+      goToEpisode(nextEpisode, true);
     }
-
-    try {
-      if (selectedEpisodeNumber > 0 && selectedEpisodeNumber % 2 === 0) {
-      }
-    } catch (error) {
-      console.error("[AdsGram]", error);
-    }
-
-    goToEpisode(nextEpisode, true);
   };
 
   const handleVideoError = () => {
@@ -2248,7 +2244,15 @@ if (isReelifeDrama) {
     const google = window.google;
 
     if (!video || !adContainer || !google?.ima) {
-      console.warn("IMA not ready");
+      let reason = "";
+
+      if (!video) reason += "NO_VIDEO ";
+      if (!adContainer) reason += "NO_AD_CONTAINER ";
+      if (!google?.ima) reason += "NO_GOOGLE_IMA ";
+
+      alert("IMA NOT READY: " + reason.trim());
+
+      console.warn("IMA not ready", reason);
       return false;
     }
 

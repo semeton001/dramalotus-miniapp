@@ -97,6 +97,14 @@ export async function GET(request: NextRequest) {
         viglooSeasonId: seasonId,
         viglooEpisodeNumber: ep,
 
+        subtitleUrl:
+          `/api/vigloo/subtitle` +
+          `?seasonId=${encodeURIComponent(seasonId)}` +
+          `&ep=${ep}`,
+
+        subtitleLang: "id",
+        subtitleLabel: "Indonesian",
+
         videoUrl:
           `/api/vigloo/stream` +
           `?seasonId=${encodeURIComponent(seasonId)}` +
